@@ -20,11 +20,9 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _allOrders = [];
   String _searchQuery = '';
-  String _selectedPaymentFilter = 'All'; // 'All', 'Cash', 'Online'
-
-  double _totalRevenue = 0.0;
-  double _totalCash = 0.0;
-  double _totalOnline = 0.0;
+  String _selectedPaymentFilter = 'All'; // 'All', 'Cash', 'Online', 'Unpaid'
+  String _selectedDateFilter = 'All Time'; // 'All Time', 'Today', 'Yesterday', 'Custom'
+  DateTimeRange? _customDateRange;
 
   @override
   void initState() {
@@ -56,9 +54,6 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
       }
 
       List<Map<String, dynamic>> fetchedOrders = [];
-      double sumRevenue = 0.0;
-      double sumCash = 0.0;
-      double sumOnline = 0.0;
 
       for (var conv in conversations) {
         final custMobile = (conv['customer_mobile'] ?? '').toString().trim();
@@ -97,7 +92,7 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
             amount = (savedAmounts[idStr] as num?)?.toDouble() ?? 0.0;
           }
 
-          // Payment Status & Method (Cash vs Online)
+          // Payment Status & Method
           String payStatus = (msg['payment_status'] ?? '').toString().toLowerCase();
           String payUtr = (msg['payment_utr'] ?? '').toString().trim();
           String payMethod = (msg['payment_method'] ?? msg['payment_type'] ?? '').toString().toLowerCase();
@@ -143,16 +138,6 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
             'delivery_status': delStatus,
             'created_at': createdAt,
           });
-
-          // Aggregate summary stats (only active paid or cash orders)
-          if (!isCancelledOrDeleted) {
-            sumRevenue += amount;
-            if (paymentType == 'Online') {
-              sumOnline += amount;
-            } else if (paymentType == 'Cash') {
-              sumCash += amount;
-            }
-          }
         }
       }
 
@@ -166,9 +151,6 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
       if (mounted) {
         setState(() {
           _allOrders = fetchedOrders;
-          _totalRevenue = sumRevenue;
-          _totalCash = sumCash;
-          _totalOnline = sumOnline;
           _isLoading = false;
         });
       }
@@ -178,23 +160,200 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
     }
   }
 
+  DateTime? _parseDate(String str) {
+    if (str.trim().isEmpty) return null;
+    try {
+      return DateTime.parse(str.trim());
+    } catch (_) {
+      try {
+        final parts = str.trim().split(' ');
+        if (parts.isNotEmpty) return DateTime.parse(parts[0]);
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
   List<Map<String, dynamic>> get _filteredOrders {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+
     return _allOrders.where((order) {
       final custName = (order['customer_name'] ?? '').toString().toLowerCase();
       final orderNum = (order['order_number'] ?? '').toString().toLowerCase();
       final custMobile = (order['customer_mobile'] ?? '').toString().toLowerCase();
       final payType = (order['payment_type'] ?? '').toString();
+      final createdAtStr = (order['created_at'] ?? '').toString();
 
       final matchesQuery = _searchQuery.isEmpty ||
           custName.contains(_searchQuery.toLowerCase()) ||
           orderNum.contains(_searchQuery.toLowerCase()) ||
           custMobile.contains(_searchQuery.toLowerCase());
 
-      final matchesFilter = _selectedPaymentFilter == 'All' ||
+      final matchesPayment = _selectedPaymentFilter == 'All' ||
           payType.toLowerCase() == _selectedPaymentFilter.toLowerCase();
 
-      return matchesQuery && matchesFilter;
+      bool matchesDate = true;
+      final orderDate = _parseDate(createdAtStr);
+
+      if (_selectedDateFilter == 'Today') {
+        matchesDate = orderDate != null && _isSameDay(orderDate, today);
+      } else if (_selectedDateFilter == 'Yesterday') {
+        matchesDate = orderDate != null && _isSameDay(orderDate, yesterday);
+      } else if (_selectedDateFilter == 'Custom' && _customDateRange != null) {
+        if (orderDate == null) {
+          matchesDate = false;
+        } else {
+          final start = DateTime(_customDateRange!.start.year, _customDateRange!.start.month, _customDateRange!.start.day);
+          final end = DateTime(_customDateRange!.end.year, _customDateRange!.end.month, _customDateRange!.end.day, 23, 59, 59);
+          matchesDate = orderDate.isAfter(start.subtract(const Duration(seconds: 1))) &&
+              orderDate.isBefore(end.add(const Duration(seconds: 1)));
+        }
+      }
+
+      return matchesQuery && matchesPayment && matchesDate;
     }).toList();
+  }
+
+  double get _dynamicTotalRevenue {
+    double sum = 0.0;
+    for (var o in _filteredOrders) {
+      final payType = (o['payment_type'] ?? '').toString();
+      final amount = (o['amount'] as num?)?.toDouble() ?? 0.0;
+      if (payType == 'Cash' || payType == 'Online') {
+        sum += amount;
+      }
+    }
+    return sum;
+  }
+
+  double get _dynamicTotalCash {
+    double sum = 0.0;
+    for (var o in _filteredOrders) {
+      final payType = (o['payment_type'] ?? '').toString();
+      final amount = (o['amount'] as num?)?.toDouble() ?? 0.0;
+      if (payType == 'Cash') {
+        sum += amount;
+      }
+    }
+    return sum;
+  }
+
+  double get _dynamicTotalOnline {
+    double sum = 0.0;
+    for (var o in _filteredOrders) {
+      final payType = (o['payment_type'] ?? '').toString();
+      final amount = (o['amount'] as num?)?.toDouble() ?? 0.0;
+      if (payType == 'Online') {
+        sum += amount;
+      }
+    }
+    return sum;
+  }
+
+  Future<void> _openDateFilterMenu() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Row(
+                children: [
+                  Icon(Icons.filter_alt_rounded, color: Color(0xFF047857), size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Select Date Filter',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.today_rounded, color: Color(0xFF10B981)),
+                title: const Text('Today', style: TextStyle(fontWeight: FontWeight.w600)),
+                trailing: _selectedDateFilter == 'Today' ? const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981)) : null,
+                onTap: () => Navigator.pop(ctx, 'Today'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.history_rounded, color: Color(0xFF3B82F6)),
+                title: const Text('Yesterday', style: TextStyle(fontWeight: FontWeight.w600)),
+                trailing: _selectedDateFilter == 'Yesterday' ? const Icon(Icons.check_circle_rounded, color: Color(0xFF3B82F6)) : null,
+                onTap: () => Navigator.pop(ctx, 'Yesterday'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.date_range_rounded, color: Color(0xFF8B5CF6)),
+                title: const Text('Custom (Select From & To Date)', style: TextStyle(fontWeight: FontWeight.w600)),
+                trailing: _selectedDateFilter == 'Custom' ? const Icon(Icons.check_circle_rounded, color: Color(0xFF8B5CF6)) : null,
+                onTap: () => Navigator.pop(ctx, 'Custom'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.restart_alt_rounded, color: Color(0xFF64748B)),
+                title: const Text('All Time (Clear Filter)', style: TextStyle(fontWeight: FontWeight.w600)),
+                trailing: _selectedDateFilter == 'All Time' ? const Icon(Icons.check_circle_rounded, color: Color(0xFF64748B)) : null,
+                onTap: () => Navigator.pop(ctx, 'All Time'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (selected == null || !mounted) return;
+
+    if (selected == 'Custom') {
+      final picked = await showDateRangePicker(
+        context: context,
+        firstDate: DateTime(2020),
+        lastDate: DateTime.now().add(const Duration(days: 365)),
+        initialDateRange: _customDateRange ?? DateTimeRange(
+          start: DateTime.now().subtract(const Duration(days: 7)),
+          end: DateTime.now(),
+        ),
+        builder: (context, child) {
+          return Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: const ColorScheme.light(
+                primary: Color(0xFF047857),
+                onPrimary: Colors.white,
+                surface: Colors.white,
+                onSurface: Color(0xFF0F172A),
+              ),
+            ),
+            child: child!,
+          );
+        },
+      );
+      if (picked != null) {
+        setState(() {
+          _customDateRange = picked;
+          _selectedDateFilter = 'Custom';
+        });
+      }
+    } else {
+      setState(() {
+        _selectedDateFilter = selected;
+      });
+    }
   }
 
   @override
@@ -342,7 +501,7 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  '${_allOrders.length} Orders',
+                  '${_filteredOrders.length} Orders',
                   style: const TextStyle(color: Color(0xFF047857), fontSize: 11, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -351,7 +510,7 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              '₹${_totalRevenue.toStringAsFixed(2)}',
+              '₹${_dynamicTotalRevenue.toStringAsFixed(2)}',
               style: const TextStyle(
                 fontSize: 26,
                 fontWeight: FontWeight.w900,
@@ -395,7 +554,7 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
                               style: TextStyle(color: Color(0xFF065F46), fontSize: 11, fontWeight: FontWeight.w600),
                             ),
                             Text(
-                              '₹${_totalCash.toStringAsFixed(0)}',
+                              '₹${_dynamicTotalCash.toStringAsFixed(0)}',
                               style: const TextStyle(color: Color(0xFF047857), fontSize: 14, fontWeight: FontWeight.bold),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -435,7 +594,7 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
                               style: TextStyle(color: Color(0xFF1E40AF), fontSize: 11, fontWeight: FontWeight.w600),
                             ),
                             Text(
-                              '₹${_totalOnline.toStringAsFixed(0)}',
+                              '₹${_dynamicTotalOnline.toStringAsFixed(0)}',
                               style: const TextStyle(color: Color(0xFF1D4ED8), fontSize: 14, fontWeight: FontWeight.bold),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -454,34 +613,120 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
   }
 
   Widget _buildSearchAndFilterBar() {
+    String dateFilterText = _selectedDateFilter;
+    if (_selectedDateFilter == 'Custom' && _customDateRange != null) {
+      final s = _customDateRange!.start;
+      final e = _customDateRange!.end;
+      dateFilterText = '${s.day}/${s.month} - ${e.day}/${e.month}';
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Search Input
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
+        // Search Input & Filter Button Row
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: TextField(
+                  onChanged: (val) => setState(() => _searchQuery = val.trim()),
+                  decoration: const InputDecoration(
+                    hintText: 'Search customer name or order #...',
+                    hintStyle: TextStyle(fontSize: 12.5, color: Color(0xFF94A3B8)),
+                    prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 20),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+
+            // Filter Button
+            InkWell(
+              onTap: _openDateFilterMenu,
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                decoration: BoxDecoration(
+                  color: _selectedDateFilter != 'All Time'
+                      ? const Color(0xFFECFDF5)
+                      : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: _selectedDateFilter != 'All Time'
+                        ? const Color(0xFF10B981)
+                        : const Color(0xFFE2E8F0),
+                    width: 1.2,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.filter_list_rounded,
+                      size: 18,
+                      color: _selectedDateFilter != 'All Time'
+                          ? const Color(0xFF047857)
+                          : const Color(0xFF475569),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _selectedDateFilter == 'All Time' ? 'Filter' : dateFilterText,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.bold,
+                        color: _selectedDateFilter != 'All Time'
+                            ? const Color(0xFF047857)
+                            : const Color(0xFF475569),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (_selectedDateFilter != 'All Time') ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD1FAE5),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFA7F3D0)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Filter: $dateFilterText',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF047857)),
+                    ),
+                    const SizedBox(width: 6),
+                    InkWell(
+                      onTap: () => setState(() => _selectedDateFilter = 'All Time'),
+                      child: const Icon(Icons.close_rounded, size: 14, color: Color(0xFF047857)),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-          child: TextField(
-            onChanged: (val) => setState(() => _searchQuery = val.trim()),
-            decoration: const InputDecoration(
-              hintText: 'Search by Customer Name or Order #...',
-              hintStyle: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-              prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 20),
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(vertical: 12),
-            ),
-          ),
-        ),
+        ],
         const SizedBox(height: 10),
 
         // Payment Type Filter Segmented Bar
@@ -717,7 +962,7 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
           ),
           const SizedBox(height: 4),
           const Text(
-            'Try clearing your search query or selecting "All" filter.',
+            'Try clearing your search query or date filter.',
             style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
             textAlign: TextAlign.center,
           ),
