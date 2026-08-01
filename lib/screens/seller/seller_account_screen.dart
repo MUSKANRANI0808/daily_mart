@@ -304,12 +304,12 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFF0FDF4), // Soft Light Green Background
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFDDD6FE), width: 1.5),
+        border: Border.all(color: const Color(0xFFA7F3D0), width: 1.5), // Light Emerald Border
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF8B5CF6).withValues(alpha: 0.08),
+            color: const Color(0xFF10B981).withValues(alpha: 0.08),
             blurRadius: 14,
             offset: const Offset(0, 4),
           ),
@@ -328,7 +328,7 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF7C3AED),
+                      color: Color(0xFF047857), // Deep Emerald
                       letterSpacing: 1.0,
                     ),
                   ),
@@ -338,12 +338,12 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF3E8FF),
+                  color: const Color(0xFFD1FAE5),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   '${_allOrders.length} Orders',
-                  style: const TextStyle(color: Color(0xFF7C3AED), fontSize: 11, fontWeight: FontWeight.bold),
+                  style: const TextStyle(color: Color(0xFF047857), fontSize: 11, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -355,32 +355,32 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
               style: const TextStyle(
                 fontSize: 26,
                 fontWeight: FontWeight.w900,
-                color: Color(0xFF0F172A),
+                color: Color(0xFF064E3B), // Rich Dark Emerald
                 letterSpacing: 0.5,
               ),
             ),
           ),
           const SizedBox(height: 16),
-          const Divider(color: Color(0xFFF1F5F9), height: 1),
+          const Divider(color: Color(0xFFA7F3D0), height: 1),
           const SizedBox(height: 14),
 
-          // Breakdown: Cash vs Online (Light Tinted Cards)
+          // Breakdown: Cash vs Online
           Row(
             children: [
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFECFDF5),
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFA7F3D0)),
+                    border: Border.all(color: const Color(0xFF86EFAC)),
                   ),
                   child: Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(6),
                         decoration: const BoxDecoration(
-                          color: Color(0xFFD1FAE5),
+                          color: Color(0xFFDCFCE7),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(Icons.payments_rounded, color: Color(0xFF059669), size: 18),
@@ -411,7 +411,7 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF),
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: const Color(0xFFBFDBFE)),
                   ),
