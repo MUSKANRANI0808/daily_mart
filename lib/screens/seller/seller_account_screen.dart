@@ -304,16 +304,13 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0F172A), Color(0xFF1E1B4B)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFDDD6FE), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.15),
-            blurRadius: 12,
+            color: const Color(0xFF8B5CF6).withValues(alpha: 0.08),
+            blurRadius: 14,
             offset: const Offset(0, 4),
           ),
         ],
@@ -330,8 +327,8 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
                     'TOTAL REVENUE',
                     style: TextStyle(
                       fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFFA78BFA),
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF7C3AED),
                       letterSpacing: 1.0,
                     ),
                   ),
@@ -341,12 +338,12 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.12),
+                  color: const Color(0xFFF3E8FF),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   '${_allOrders.length} Orders',
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                  style: const TextStyle(color: Color(0xFF7C3AED), fontSize: 11, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -358,34 +355,35 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
               style: const TextStyle(
                 fontSize: 26,
                 fontWeight: FontWeight.w900,
-                color: Colors.white,
+                color: Color(0xFF0F172A),
                 letterSpacing: 0.5,
               ),
             ),
           ),
           const SizedBox(height: 16),
-          const Divider(color: Colors.white24, height: 1),
+          const Divider(color: Color(0xFFF1F5F9), height: 1),
           const SizedBox(height: 14),
 
-          // Breakdown: Cash vs Online
+          // Breakdown: Cash vs Online (Light Tinted Cards)
           Row(
             children: [
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.08),
+                    color: const Color(0xFFECFDF5),
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFA7F3D0)),
                   ),
                   child: Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFD1FAE5),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.payments_rounded, color: Color(0xFF34D399), size: 18),
+                        child: const Icon(Icons.payments_rounded, color: Color(0xFF059669), size: 18),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -393,12 +391,12 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              'Cash 💵',
-                              style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
+                              'Cash',
+                              style: TextStyle(color: Color(0xFF065F46), fontSize: 11, fontWeight: FontWeight.w600),
                             ),
                             Text(
                               '₹${_totalCash.toStringAsFixed(0)}',
-                              style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                              style: const TextStyle(color: Color(0xFF047857), fontSize: 14, fontWeight: FontWeight.bold),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],
@@ -413,18 +411,19 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.08),
+                    color: const Color(0xFFEFF6FF),
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFBFDBFE)),
                   ),
                   child: Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF3B82F6).withValues(alpha: 0.2),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFDBEAFE),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.credit_card_rounded, color: Color(0xFF60A5FA), size: 18),
+                        child: const Icon(Icons.credit_card_rounded, color: Color(0xFF2563EB), size: 18),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -432,12 +431,12 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              'Online 💳',
-                              style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
+                              'Online',
+                              style: TextStyle(color: Color(0xFF1E40AF), fontSize: 11, fontWeight: FontWeight.w600),
                             ),
                             Text(
                               '₹${_totalOnline.toStringAsFixed(0)}',
-                              style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                              style: const TextStyle(color: Color(0xFF1D4ED8), fontSize: 14, fontWeight: FontWeight.bold),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],
@@ -508,10 +507,6 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
 
   Widget _buildFilterTab(String filterName) {
     final isSelected = _selectedPaymentFilter == filterName;
-    String label = filterName;
-    if (filterName == 'Cash') label = 'Cash 💵';
-    if (filterName == 'Online') label = 'Online 💳';
-    if (filterName == 'Unpaid') label = 'Unpaid ⏳';
 
     return Expanded(
       child: InkWell(
@@ -524,7 +519,7 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
-            label,
+            filterName,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 12.5,
