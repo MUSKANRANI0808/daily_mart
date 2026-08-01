@@ -108,18 +108,29 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
             if (pInfo['payment_utr'] != null) payUtr = pInfo['payment_utr'].toString().trim();
           }
 
-          String paymentType = 'Cash'; // Default
-          if (payUtr.isNotEmpty && payUtr.toUpperCase() != 'CASH') {
-            paymentType = 'Online';
-          } else if (payMethod == 'online' || payMethod == 'upi' || payStatus == 'paid') {
-            paymentType = 'Online';
-          } else if (payUtr.toUpperCase() == 'CASH' || payMethod == 'cash' || payMethod == 'cod') {
-            paymentType = 'Cash';
-          }
-
           final orderStatus = (msg['order_status'] ?? '').toString().trim();
           final delStatus = (msg['delivery_status'] ?? '').toString().trim();
           final createdAt = (msg['created_at'] ?? '').toString().trim();
+
+          final isCancelledOrDeleted = orderStatus.toLowerCase() == 'cancelled' ||
+              orderStatus.toLowerCase() == 'rejected' ||
+              orderStatus.toLowerCase() == 'deleted' ||
+              delStatus.toLowerCase() == 'cancelled' ||
+              delStatus.toLowerCase() == 'deleted';
+
+          String paymentType = 'Unpaid';
+
+          if (isCancelledOrDeleted) {
+            paymentType = 'Cancelled';
+          } else if (payUtr.isNotEmpty && payUtr.toUpperCase() != 'CASH') {
+            paymentType = 'Online';
+          } else if (payMethod == 'online' || payMethod == 'upi' || payStatus == 'paid') {
+            paymentType = 'Online';
+          } else if (payUtr.toUpperCase() == 'CASH' || payMethod == 'cash' || payMethod == 'cod' || payStatus == 'cash_collected') {
+            paymentType = 'Cash';
+          } else {
+            paymentType = 'Unpaid';
+          }
 
           fetchedOrders.add({
             'id': msgId,
@@ -133,16 +144,12 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
             'created_at': createdAt,
           });
 
-          // Aggregate summary stats
-          final isCancelled = orderStatus.toLowerCase() == 'cancelled' ||
-              orderStatus.toLowerCase() == 'rejected' ||
-              delStatus.toLowerCase() == 'cancelled';
-
-          if (!isCancelled) {
+          // Aggregate summary stats (only active paid or cash orders)
+          if (!isCancelledOrDeleted) {
             sumRevenue += amount;
             if (paymentType == 'Online') {
               sumOnline += amount;
-            } else {
+            } else if (paymentType == 'Cash') {
               sumCash += amount;
             }
           }
@@ -491,6 +498,7 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
               _buildFilterTab('All'),
               _buildFilterTab('Cash'),
               _buildFilterTab('Online'),
+              _buildFilterTab('Unpaid'),
             ],
           ),
         ),
@@ -503,6 +511,7 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
     String label = filterName;
     if (filterName == 'Cash') label = 'Cash 💵';
     if (filterName == 'Online') label = 'Online 💳';
+    if (filterName == 'Unpaid') label = 'Unpaid ⏳';
 
     return Expanded(
       child: InkWell(
@@ -528,15 +537,65 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
     );
   }
 
+  Widget _buildPaymentBadge(String paymentType) {
+    Color bg = const Color(0xFFFEF3C7);
+    Color border = const Color(0xFFFDE68A);
+    Color fg = const Color(0xFFD97706);
+    IconData icon = Icons.hourglass_top_rounded;
+    String text = 'Unpaid ⏳';
+
+    if (paymentType == 'Online') {
+      bg = const Color(0xFFDBEAFE);
+      border = const Color(0xFF93C5FD);
+      fg = const Color(0xFF1D4ED8);
+      icon = Icons.credit_card_rounded;
+      text = 'Online';
+    } else if (paymentType == 'Cash') {
+      bg = const Color(0xFFDCFCE7);
+      border = const Color(0xFF86EFAC);
+      fg = const Color(0xFF15803D);
+      icon = Icons.payments_rounded;
+      text = 'Cash';
+    } else if (paymentType == 'Cancelled') {
+      bg = const Color(0xFFF1F5F9);
+      border = const Color(0xFFCBD5E1);
+      fg = const Color(0xFF64748B);
+      icon = Icons.block_rounded;
+      text = 'No Payment';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: fg),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: fg,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildOrderAccountCard(Map<String, dynamic> order) {
     final customerName = (order['customer_name'] ?? 'Customer').toString();
     final orderNum = (order['order_number'] ?? 'Order').toString();
     final amount = (order['amount'] as num?)?.toDouble() ?? 0.0;
-    final paymentType = (order['payment_type'] ?? 'Cash').toString();
+    final paymentType = (order['payment_type'] ?? 'Unpaid').toString();
     final createdAt = (order['created_at'] ?? '').toString();
     final orderStatus = (order['order_status'] ?? '').toString();
-
-    final isCash = paymentType == 'Cash';
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -595,44 +654,18 @@ class _SellerAccountScreenState extends State<SellerAccountScreen> {
                 children: [
                   Text(
                     '₹${amount.toStringAsFixed(2)}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15.5,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF10B981),
+                      color: paymentType == 'Cancelled'
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF10B981),
                     ),
                   ),
                   const SizedBox(height: 4),
 
-                  // Payment Badge (Cash 💵 vs Online 💳)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: isCash ? const Color(0xFFDCFCE7) : const Color(0xFFDBEAFE),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: isCash ? const Color(0xFF86EFAC) : const Color(0xFF93C5FD),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          isCash ? Icons.payments_rounded : Icons.credit_card_rounded,
-                          size: 11,
-                          color: isCash ? const Color(0xFF15803D) : const Color(0xFF1D4ED8),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          isCash ? 'Cash' : 'Online',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: isCash ? const Color(0xFF15803D) : const Color(0xFF1D4ED8),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  // Payment Badge (Cash vs Online vs Unpaid vs No Payment)
+                  _buildPaymentBadge(paymentType),
                 ],
               ),
             ],
