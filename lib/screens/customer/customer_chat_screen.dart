@@ -174,9 +174,6 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
     int selectedIdx = addresses.indexWhere((a) => a['isDefault'] == true);
     if (selectedIdx < 0 && addresses.isNotEmpty) selectedIdx = 0;
 
-    final distanceController = TextEditingController(text: '');
-    String? distanceErrorText;
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -231,7 +228,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                             ),
                             Text(
-                              'Choose address and enter distance to seller',
+                              'Choose your address to send order',
                               style: TextStyle(fontSize: 12, color: Colors.black54),
                             ),
                           ],
@@ -244,89 +241,6 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                     ],
                   ),
                   const Divider(height: 16),
-
-                  // Distance from Seller (in Km) Input Card
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: distanceErrorText != null ? const Color(0xFFFEF2F2) : const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: distanceErrorText != null ? const Color(0xFFEF4444) : const Color(0xFFCBD5E1),
-                        width: distanceErrorText != null ? 1.5 : 1,
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const CircleAvatar(
-                              radius: 16,
-                              backgroundColor: Color(0xFFE0F2FE),
-                              child: Icon(Icons.alt_route_rounded, color: Color(0xFF0284C7), size: 18),
-                            ),
-                            const SizedBox(width: 10),
-                            const Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Distance to Seller (Km) * 📏',
-                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                                  ),
-                                  Text(
-                                    'Distance in Km is required',
-                                    style: TextStyle(fontSize: 11, color: Colors.black54),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            SizedBox(
-                              width: 95,
-                              child: TextField(
-                                controller: distanceController,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                                onChanged: (val) {
-                                  if (distanceErrorText != null && val.trim().isNotEmpty) {
-                                    setModalState(() => distanceErrorText = null);
-                                  }
-                                },
-                                decoration: InputDecoration(
-                                  isDense: true,
-                                  hintText: 'e.g. 2.5',
-                                  hintStyle: const TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.normal),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                  suffixText: 'Km',
-                                  suffixStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF10B981)),
-                                  fillColor: Colors.white,
-                                  filled: true,
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF94A3B8))),
-                                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF10B981), width: 2)),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (distanceErrorText != null) ...[
-                          const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              const Icon(Icons.error_outline_rounded, color: Color(0xFFEF4444), size: 14),
-                              const SizedBox(width: 4),
-                              Text(
-                                distanceErrorText!,
-                                style: const TextStyle(fontSize: 11.5, color: Color(0xFFEF4444), fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
 
                   // Address List (or empty prompt)
                   if (addresses.isEmpty) ...[
@@ -356,7 +270,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                     ),
                   ] else ...[
                     ConstrainedBox(
-                      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.28),
+                      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.35),
                       child: ListView.builder(
                         shrinkWrap: true,
                         itemCount: addresses.length,
@@ -466,16 +380,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                     onPressed: (addresses.isEmpty || selectedIdx < 0)
                         ? null
                         : () async {
-                            final distVal = distanceController.text.trim();
-                            if (distVal.isEmpty) {
-                              setModalState(() {
-                                distanceErrorText = 'Please enter distance in Km';
-                              });
-                              return;
-                            }
-
                             final selectedAddress = addresses[selectedIdx];
-                            final distanceStr = '$distVal Km';
 
                             Navigator.pop(ctx);
                             _msgController.clear();
@@ -497,11 +402,11 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                             final cleanTag = nextOrderId.replaceAll('#', '').replaceAll('Order', '').trim();
                             deliveryDetailsMap[cleanTag] = {
                               'address': selectedAddress,
-                              'distance': distanceStr,
+                              'distance': '',
                             };
                             deliveryDetailsMap[nextOrderId] = {
                               'address': selectedAddress,
-                              'distance': distanceStr,
+                              'distance': '',
                             };
                             await prefs.setString('saved_order_delivery_details', jsonEncode(deliveryDetailsMap));
 
