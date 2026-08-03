@@ -214,28 +214,29 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                   Row(
                     children: [
                       const CircleAvatar(
-                        radius: 20,
+                        radius: 18,
                         backgroundColor: Color(0xFFDCFCE7),
-                        child: Icon(Icons.location_on_rounded, size: 22, color: Color(0xFF10B981)),
+                        child: Icon(Icons.location_on_rounded, size: 20, color: Color(0xFF10B981)),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10),
                       const Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Select Delivery Address 📍',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                              'Select Delivery Address',
+                              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                             ),
+                            SizedBox(height: 2),
                             Text(
-                              'Choose your address to send order',
-                              style: TextStyle(fontSize: 12, color: Colors.black54),
+                              'Choose address to place your order',
+                              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                             ),
                           ],
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close_rounded, color: Colors.grey),
+                        icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B), size: 22),
                         onPressed: () => Navigator.pop(ctx),
                       ),
                     ],
@@ -356,21 +357,21 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                   ],
                   const SizedBox(height: 10),
 
-                  // + Add New Address Button
+                  // Add New Address Button
                   OutlinedButton.icon(
                     onPressed: () {
                       Navigator.pop(ctx);
                       _openAddNewAddressDialog(rawOrderText, addresses);
                     },
-                    icon: const Icon(Icons.add_location_alt_rounded, color: Color(0xFF10B981)),
+                    icon: const Icon(Icons.add_rounded, color: Color(0xFF10B981), size: 20),
                     label: const Text(
-                      '+ Add New Delivery Address',
-                      style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold),
+                      'Add New Delivery Address',
+                      style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       side: const BorderSide(color: Color(0xFF10B981), width: 1.5),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -430,14 +431,15 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text('Failed to send order message.')),
-                              );
+                               );
                             }
                           }
                         },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF10B981),
+                    elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -445,7 +447,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                       Icon(Icons.send_rounded, color: Colors.white, size: 18),
                       SizedBox(width: 8),
                       Text(
-                        'Send Order with Address 🚀',
+                        'Send Order with Address',
                         style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
                       ),
                     ],
@@ -498,7 +500,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                       const Icon(Icons.add_location_alt_rounded, color: Color(0xFF10B981), size: 26),
                       const SizedBox(width: 8),
                       const Text(
-                        'Add New Delivery Address 📍',
+                        'Add New Delivery Address',
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                       ),
                       const Spacer(),
