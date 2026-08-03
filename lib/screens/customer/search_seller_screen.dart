@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
-import 'seller_orders_screen.dart';
 import 'customer_main_nav_screen.dart';
 
 class SearchSellerScreen extends StatefulWidget {
@@ -29,10 +28,12 @@ class _SearchSellerScreenState extends State<SearchSellerScreen> {
 
     final results = await AuthService.searchSellersByMobile(query);
 
-    setState(() {
-      _searchResults = results;
-      _isSearching = false;
-    });
+    if (mounted) {
+      setState(() {
+        _searchResults = results;
+        _isSearching = false;
+      });
+    }
   }
 
   @override
@@ -42,7 +43,7 @@ class _SearchSellerScreenState extends State<SearchSellerScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF0F172A), // Dark Black Header Contrast
         elevation: 1,
-        title: const Text('Find Seller by Mobile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text('Find Seller by Mobile / Location', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Padding(
@@ -57,7 +58,7 @@ class _SearchSellerScreenState extends State<SearchSellerScreen> {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
+                    color: Colors.black.withValues(alpha: 0.06),
                     blurRadius: 10,
                     offset: const Offset(0, 3),
                   ),
@@ -71,11 +72,11 @@ class _SearchSellerScreenState extends State<SearchSellerScreen> {
                   Expanded(
                     child: TextField(
                       controller: _searchController,
-                      keyboardType: TextInputType.phone,
+                      keyboardType: TextInputType.text, // Allows letters (location/name) and numbers (mobile)
                       style: const TextStyle(color: Color(0xFF0F172A), fontSize: 15, fontWeight: FontWeight.w600),
                       decoration: const InputDecoration(
-                        hintText: 'Enter Seller Mobile Number...',
-                        hintStyle: TextStyle(color: Colors.grey),
+                        hintText: 'Enter Mobile Number or Location...',
+                        hintStyle: TextStyle(color: Colors.grey, fontSize: 13),
                         border: InputBorder.none,
                       ),
                       onSubmitted: (_) => _performSearch(),
@@ -108,7 +109,7 @@ class _SearchSellerScreenState extends State<SearchSellerScreen> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
+                      color: Colors.black.withValues(alpha: 0.04),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -119,7 +120,7 @@ class _SearchSellerScreenState extends State<SearchSellerScreen> {
                     Icon(Icons.search_off_rounded, size: 48, color: Colors.grey),
                     SizedBox(height: 10),
                     Text(
-                      'No seller found with this mobile number.',
+                      'No seller found matching your mobile number or location search.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.black87, fontSize: 14),
                     ),
@@ -136,6 +137,7 @@ class _SearchSellerScreenState extends State<SearchSellerScreen> {
                     final name = seller['name'] ?? 'Seller Store';
                     final username = seller['username'] ?? '';
                     final mobile = seller['mobile'] ?? '';
+                    final location = (seller['location'] ?? seller['seller_location'] ?? '').toString();
 
                     return Container(
                       decoration: BoxDecoration(
@@ -143,7 +145,7 @@ class _SearchSellerScreenState extends State<SearchSellerScreen> {
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
+                            color: Colors.black.withValues(alpha: 0.05),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
@@ -159,31 +161,51 @@ class _SearchSellerScreenState extends State<SearchSellerScreen> {
                           name,
                           style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16),
                         ),
-                        subtitle: Text(
-                          'Mobile: +91 $mobile  •  ID: @$username',
-                          style: const TextStyle(color: Colors.black54, fontSize: 12),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Mobile: +91 $mobile  •  ID: @$username',
+                              style: const TextStyle(color: Colors.black54, fontSize: 12),
+                            ),
+                            if (location.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.location_on_rounded, size: 13, color: Color(0xFF10B981)),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    location,
+                                    style: const TextStyle(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
                         ),
                         trailing: ElevatedButton.icon(
                           onPressed: () async {
+                            final String custMob = widget.customer.mobile ?? '';
                             await AuthService.unmarkDeletedSeller(
                               sellerUsername: username,
-                              customerMobile: widget.customer.mobile ?? '',
+                              customerMobile: custMob,
                             );
                             await AuthService.saveLastSelectedSeller(
                               username: username,
                               name: name,
                               mobile: mobile.toString(),
-                              customerMobile: widget.customer.mobile ?? '',
+                              customerMobile: custMob,
                             );
-                            if (mounted) {
-                              Navigator.pushAndRemoveUntil(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => CustomerMainNavScreen(customer: widget.customer),
-                                ),
-                                (route) => false,
-                              );
-                            }
+                            if (!context.mounted) return;
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => CustomerMainNavScreen(customer: widget.customer),
+                              ),
+                              (route) => false,
+                            );
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF10B981),

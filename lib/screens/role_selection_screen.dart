@@ -102,34 +102,6 @@ class RoleSelectionScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
 
-                  // Select Portal Badge
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.touch_app_rounded, size: 14, color: Color(0xFF059669)),
-                          SizedBox(width: 6),
-                          Text(
-                            'SELECT PORTAL TO ENTER',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF334155),
-                              letterSpacing: 0.8,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
                   const Spacer(),
 
                   // Card 1: Customer Login
@@ -137,7 +109,7 @@ class RoleSelectionScreen extends StatelessWidget {
                     context: context,
                     title: 'Customer Login',
                     subtitle: 'Order fresh groceries & track live delivery',
-                    tagText: '⚡ 1-Tap Mobile OTP',
+                    tagText: '',
                     icon: Icons.person_pin_rounded,
                     accentColor: const Color(0xFF10B981),
                     gradientColors: [const Color(0xFF059669), const Color(0xFF10B981)],
@@ -155,7 +127,7 @@ class RoleSelectionScreen extends StatelessWidget {
                     context: context,
                     title: 'Seller Login',
                     subtitle: 'Manage store orders, products & deliveries',
-                    tagText: '🏪 Store & Partner Portal',
+                    tagText: '',
                     icon: Icons.storefront_rounded,
                     accentColor: const Color(0xFFF59E0B),
                     gradientColors: [const Color(0xFFD97706), const Color(0xFFF59E0B)],
@@ -183,7 +155,7 @@ class RoleSelectionScreen extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       const Text(
-                        'Daily Mart © 2026 • Pushpraj',
+                        'Daily Mart © 2026 • Apna Store',
                         style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8)),
                       ),
                     ],
@@ -259,22 +231,24 @@ class RoleSelectionScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Tag
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: accentColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          tagText,
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.bold,
-                            color: gradientColors[0],
+                      if (tagText.isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: accentColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            tagText,
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.bold,
+                              color: gradientColors[0],
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 6),
+                        const SizedBox(height: 6),
+                      ],
 
                       Text(
                         title,

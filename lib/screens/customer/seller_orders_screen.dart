@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../dashboards/customer_dashboard.dart';
@@ -10,7 +10,6 @@ import '../role_selection_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'customer_chat_screen.dart';
 import 'customer_main_nav_screen.dart';
-import 'search_seller_screen.dart';
 
 class AbstractPatternPainter extends CustomPainter {
   final String presetId;
@@ -112,8 +111,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
   bool _isLoading = true;
   int _currentSliderPage = 0;
   String _selectedOrderFilter = 'All'; // 'All', 'Pending', 'Delivered', 'Cancelled'
-  final PageController _sliderController = PageController();
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final PageController _sliderController = PageController(viewportFraction: 0.92);
 
   @override
   void initState() {
@@ -439,43 +437,63 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
               final titleCol = hexToColor(item['title_color']?.toString() ?? '#FFFFFF');
               final descCol = hexToColor(item['desc_color']?.toString() ?? '#E2E8F0');
 
-              return buildBannerBackground(
-                bg: bg,
+              final isSelected = _currentSliderPage == idx;
+
+              return AnimatedScale(
+                scale: isSelected ? 1.0 : 0.93,
+                duration: const Duration(milliseconds: 350),
+                curve: Curves.easeOutCubic,
                 child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: buildTagDecoration(tagShape, tagBg),
-                        child: Text(
-                          tag,
-                          style: TextStyle(
-                            color: tagShape.toLowerCase() == 'outline'
-                                ? tagBg
-                                : (tagBg.computeLuminance() > 0.5 ? Colors.black : Colors.white),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: titleCol, fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        desc,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: descCol, fontSize: 12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        blurRadius: 14,
+                        offset: const Offset(0, 6),
                       ),
                     ],
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: buildBannerBackground(
+                    bg: bg,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: buildTagDecoration(tagShape, tagBg),
+                            child: Text(
+                              tag,
+                              style: TextStyle(
+                                color: tagShape.toLowerCase() == 'outline'
+                                    ? tagBg
+                                    : (tagBg.computeLuminance() > 0.5 ? Colors.black : Colors.white),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: titleCol, fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            desc,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: descCol, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               );
@@ -495,7 +513,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                 width: _currentSliderPage == index ? 20 : 7,
                 height: 7,
                 decoration: BoxDecoration(
-                  color: _currentSliderPage == index ? const Color(0xFF10B981) : Colors.black26,
+                  color: _currentSliderPage == index ? const Color(0xFF8B5CF6) : Colors.white38,
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
@@ -576,124 +594,6 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
             color: isSelected ? Colors.white : const Color(0xFF475569),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSideDrawer() {
-    return Drawer(
-      backgroundColor: Colors.white, // Pure White Background
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Drawer Header
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 16, 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Options',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black, // Pure Black Text
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.black),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1, color: Color(0xFFE2E8F0)),
-            const SizedBox(height: 8),
-
-            // Menu Items (Pure Black Text & Black Icons)
-            _buildDrawerMenuItem(
-              title: 'Switch / Add Seller',
-              icon: Icons.swap_horiz_rounded,
-              onTap: () {
-                Navigator.pop(context);
-                _exitToSellerList();
-              },
-            ),
-            const Divider(height: 1, color: Color(0xFFF1F5F9)),
-
-            _buildDrawerMenuItem(
-              title: 'Remove Seller',
-              icon: Icons.delete_outline_rounded,
-              onTap: () {
-                Navigator.pop(context);
-                _disconnectAndDeleteSeller();
-              },
-            ),
-            const Divider(height: 1, color: Color(0xFFF1F5F9)),
-
-            _buildDrawerMenuItem(
-              title: 'Call Seller',
-              icon: Icons.phone_rounded,
-              onTap: () {
-                Navigator.pop(context);
-                _callSeller();
-              },
-            ),
-            const Divider(height: 1, color: Color(0xFFF1F5F9)),
-
-            _buildDrawerMenuItem(
-              title: 'Refresh Data',
-              icon: Icons.refresh_rounded,
-              onTap: () {
-                Navigator.pop(context);
-                _loadData();
-              },
-            ),
-            const Divider(height: 1, color: Color(0xFFF1F5F9)),
-
-            _buildDrawerMenuItem(
-              title: 'Logout App',
-              icon: Icons.logout_rounded,
-              onTap: () {
-                Navigator.pop(context);
-                _logout();
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDrawerMenuItem({
-    required String title,
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      splashColor: const Color(0xFFF1F5F9),
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14.0, horizontal: 16.0),
-        child: Row(
-          children: [
-            Icon(icon, color: Colors.black, size: 19), // Pure Black Icon
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black, // Pure Black Text
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -837,11 +737,13 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
 
     if (confirm == true && mounted) {
       await AuthService.clearLastSelectedSeller();
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (ctx) => RoleSelectionScreen()),
-        (route) => false,
-      );
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (ctx) => const RoleSelectionScreen()),
+          (route) => false,
+        );
+      }
     }
   }
 
@@ -1026,12 +928,12 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                 InkWell(
                   onTap: _callSeller,
                   child: const CircleAvatar(
-                    radius: 18,
+                    radius: 20,
                     backgroundColor: Color(0xFFDCFCE7),
-                    child: Icon(Icons.phone_rounded, color: Color(0xFF10B981), size: 16),
+                    child: Icon(Icons.phone_rounded, color: Color(0xFF10B981), size: 18),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
 
                 Expanded(
                   child: Column(
@@ -1045,17 +947,17 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
-                                fontSize: 14.5,
+                                fontSize: 16,
                                 color: Color(0xFF0F172A),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
                               color: badgeBgColor,
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(10),
                               border: badgeBorder,
                             ),
                             child: Text(
@@ -1063,22 +965,22 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                               style: TextStyle(
                                 color: badgeTextColor,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 9,
+                                fontSize: 10,
                               ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 4),
                       Text(
                         createdAt,
-                        style: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w500, fontSize: 11),
+                        style: const TextStyle(color: Color(0xFF475569), fontWeight: FontWeight.w600, fontSize: 12),
                       ),
                     ],
                   ),
                 ),
 
-                const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF64748B)),
+                const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Color(0xFF0F172A)),
               ],
             ),
           ),
@@ -1099,102 +1001,213 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
         }
       },
       child: Scaffold(
-        key: _scaffoldKey,
         backgroundColor: Colors.white,
-        endDrawer: _buildSideDrawer(),
-        appBar: AppBar(
-          backgroundColor: const Color(0xFF0F172A),
-          elevation: 1,
-          iconTheme: const IconThemeData(color: Colors.white),
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        body: SizedBox.expand(
+          child: Stack(
             children: [
-              Text(
-                widget.sellerName,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17),
-              ),
-              if (widget.sellerMobile.isNotEmpty)
-                Text(
-                  'Mobile: +91 ${widget.sellerMobile}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+              // Original Delivery Boy Background Image
+              Positioned(
+                right: -10,
+                bottom: 26,
+                top: 130,
+                width: 260,
+                child: Image.asset(
+                  'assets/images/delivery_boy.png',
+                  fit: BoxFit.contain,
+                  alignment: Alignment.bottomRight,
+                  errorBuilder: (ctx, err, stack) => const SizedBox.shrink(),
                 ),
-            ],
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.phone_in_talk_rounded, color: Color(0xFF10B981)),
-              tooltip: 'Call Seller 📞',
-              onPressed: _callSeller,
-            ),
-            IconButton(
-              icon: const Icon(Icons.exit_to_app_rounded, color: Colors.white),
-              tooltip: 'Exit to Seller List 🚪',
-              onPressed: _exitToSellerList,
-            ),
-            IconButton(
-              icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
-              tooltip: 'Options',
-              onPressed: () {
-                _scaffoldKey.currentState?.openEndDrawer();
-              },
-            ),
-          ],
-        ),
-      body: SizedBox.expand(
-        child: Stack(
-          children: [
-            Positioned(
-              right: -10,
-              bottom: 26,
-              top: 130,
-              width: 260,
-              child: Image.asset(
-                'assets/images/delivery_boy.png',
-                fit: BoxFit.contain,
-                alignment: Alignment.bottomRight,
-                errorBuilder: (ctx, err, stack) => const SizedBox.shrink(),
               ),
-            ),
 
-            Positioned.fill(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Fixed Top Banner Sliders Carousel
-                  if (_sliders.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-                      child: _buildSliderSection(),
-                    ),
+              // Main Content Layout
+              Positioned.fill(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Pro-Level Animated Organic Wave Header Container
+                    ClipPath(
+                      clipper: HeaderArcWaveClipper(),
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Color(0xFF0F172A), // Deep Midnight Obsidian Slate
+                              Color(0xFF1E1B4B), // Deep Corporate Royal Indigo
+                              Color(0xFF312E81), // Rich Business Sapphire Violet
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                        ),
+                        child: Stack(
+                          children: [
+                            // Floating Translucent Grocery Icons Background Particles
+                            const Positioned.fill(
+                              child: GroceryFloatingBackgroundParticles(),
+                            ),
 
-                  // Fixed Section Title Header
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 2.0),
-                    child: Text(
-                      'Recent Orders',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF0F172A),
+                            SafeArea(
+                              bottom: false,
+                              child: Column(
+                                children: [
+                                  // Top App Header Bar
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(16, 10, 8, 8),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                widget.sellerName,
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 17,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              if (widget.sellerMobile.isNotEmpty) ...[
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  'Mobile: +91 ${widget.sellerMobile}',
+                                                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                                ),
+                                              ],
+                                              const SizedBox(height: 4),
+                                              const PulsingStoreBadge(),
+                                            ],
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.phone_in_talk_rounded, color: Color(0xFF34D399)),
+                                          tooltip: 'Call Seller 📞',
+                                          onPressed: _callSeller,
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.exit_to_app_rounded, color: Colors.white),
+                                          tooltip: 'Exit to Seller List 🚪',
+                                          onPressed: _exitToSellerList,
+                                        ),
+                                        PopupMenuButton<String>(
+                                          icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+                                          color: Colors.white,
+                                          surfaceTintColor: Colors.white,
+                                          elevation: 4,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                          onSelected: (val) async {
+                                            if (val == 'switch_seller') {
+                                              _exitToSellerList();
+                                            } else if (val == 'delete_seller') {
+                                              _disconnectAndDeleteSeller();
+                                            } else if (val == 'call_seller') {
+                                              _callSeller();
+                                            } else if (val == 'logout') {
+                                              _logout();
+                                            } else if (val == 'refresh') {
+                                              _loadData();
+                                            }
+                                          },
+                                          itemBuilder: (ctx) => [
+                                            const PopupMenuItem(
+                                              value: 'switch_seller',
+                                              child: Row(
+                                                children: [
+                                                  Icon(Icons.swap_horiz_rounded, color: Color(0xFF0F172A), size: 20),
+                                                  SizedBox(width: 10),
+                                                  Text('Switch / Add Seller', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                                                ],
+                                              ),
+                                            ),
+                                            const PopupMenuItem(
+                                              value: 'delete_seller',
+                                              child: Row(
+                                                children: [
+                                                  Icon(Icons.delete_outline_rounded, color: Color(0xFF0F172A), size: 20),
+                                                  SizedBox(width: 10),
+                                                  Text('Remove Seller', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                                                ],
+                                              ),
+                                            ),
+                                            const PopupMenuItem(
+                                              value: 'call_seller',
+                                              child: Row(
+                                                children: [
+                                                  Icon(Icons.phone_rounded, color: Color(0xFF0F172A), size: 20),
+                                                  SizedBox(width: 10),
+                                                  Text('Call Seller', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                                                ],
+                                              ),
+                                            ),
+                                            const PopupMenuItem(
+                                              value: 'refresh',
+                                              child: Row(
+                                                children: [
+                                                  Icon(Icons.refresh_rounded, color: Color(0xFF0F172A), size: 20),
+                                                  SizedBox(width: 10),
+                                                  Text('Refresh Data', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                                                ],
+                                              ),
+                                            ),
+                                            const PopupMenuItem(
+                                              value: 'logout',
+                                              child: Row(
+                                                children: [
+                                                  Icon(Icons.logout_rounded, color: Color(0xFF0F172A), size: 20),
+                                                  SizedBox(width: 10),
+                                                  Text('Logout App', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                  // Top Banner 3D Carousel Slider & Indicator Dots
+                                  if (_sliders.isNotEmpty) ...[
+                                    _buildSliderSection(),
+                                    const SizedBox(height: 28),
+                                  ] else
+                                    const SizedBox(height: 20),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
 
-                  // Premium Unified Segmented Filter Bar Track
-                  _buildSegmentedFilterBar(),
+                    // Section Title Header
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 2.0),
+                      child: Text(
+                        'Recent Orders',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ),
 
-                  // Independently Scrollable Orders List Only
-                  Expanded(
-                    child: _isLoading
-                        ? const Center(child: Padding(padding: EdgeInsets.all(30), child: CircularProgressIndicator(color: Color(0xFF10B981))))
-                        : _buildRecentOrdersList(),
-                  ),
-                ],
+                    // Premium Segmented Filter Bar Track
+                    _buildSegmentedFilterBar(),
+
+                    // Orders List inside Expanded for scrollability over delivery boy image
+                    Expanded(
+                      child: _isLoading
+                          ? const Center(child: Padding(padding: EdgeInsets.all(30), child: CircularProgressIndicator(color: Color(0xFF8B5CF6))))
+                          : _buildRecentOrdersList(),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
 
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
@@ -1279,4 +1292,189 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
     ),
   );
  }
+}
+
+/// Organic Arc Wave Clipper for Pro Header
+class HeaderArcWaveClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.lineTo(0, size.height - 24);
+    path.quadraticBezierTo(
+      size.width / 2,
+      size.height + 16,
+      size.width,
+      size.height - 24,
+    );
+    path.lineTo(size.width, 0);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
+}
+
+/// Continuous Pulsing Live Store Status Badge Widget
+class PulsingStoreBadge extends StatefulWidget {
+  const PulsingStoreBadge({super.key});
+
+  @override
+  State<PulsingStoreBadge> createState() => _PulsingStoreBadgeState();
+}
+
+class _PulsingStoreBadgeState extends State<PulsingStoreBadge> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    _scaleAnim = Tween<double>(begin: 0.85, end: 1.15).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFF10B981).withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF34D399).withValues(alpha: 0.45), width: 1.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ScaleTransition(
+            scale: _scaleAnim,
+            child: Container(
+              width: 7,
+              height: 7,
+              decoration: const BoxDecoration(
+                color: Color(0xFF34D399),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0xFF34D399),
+                    blurRadius: 5,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          const Text(
+            'Express 30-Min Delivery',
+            style: TextStyle(
+              color: Color(0xFFECFDF5),
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.2,
+              shadows: [
+                Shadow(color: Colors.black87, blurRadius: 4, offset: Offset(0, 1)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Floating Grocery Background Icons Animation
+class GroceryFloatingBackgroundParticles extends StatefulWidget {
+  const GroceryFloatingBackgroundParticles({super.key});
+
+  @override
+  State<GroceryFloatingBackgroundParticles> createState() => _GroceryFloatingBackgroundParticlesState();
+}
+
+class _GroceryFloatingBackgroundParticlesState extends State<GroceryFloatingBackgroundParticles>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  final List<Map<String, dynamic>> _particles = [
+    {'icon': Icons.shopping_cart_rounded, 'top': 15.0, 'left': 15.0, 'size': 20.0, 'dx': 12.0, 'dy': 8.0, 'phase': 0.0, 'opacity': 0.95},
+    {'icon': Icons.apple_rounded, 'top': 35.0, 'right': 20.0, 'size': 18.0, 'dx': -14.0, 'dy': 10.0, 'phase': 1.0, 'opacity': 0.90},
+    {'icon': Icons.eco_rounded, 'bottom': 45.0, 'left': 25.0, 'size': 21.0, 'dx': 10.0, 'dy': -12.0, 'phase': 2.0, 'opacity': 0.92},
+    {'icon': Icons.shopping_bag_rounded, 'top': 25.0, 'left': 160.0, 'size': 18.0, 'dx': -8.0, 'dy': 14.0, 'phase': 3.0, 'opacity': 0.90},
+    {'icon': Icons.storefront_rounded, 'bottom': 55.0, 'right': 35.0, 'size': 20.0, 'dx': 14.0, 'dy': -9.0, 'phase': 4.0, 'opacity': 0.95},
+    {'icon': Icons.bakery_dining_rounded, 'top': 75.0, 'left': 75.0, 'size': 17.0, 'dx': -10.0, 'dy': -8.0, 'phase': 1.5, 'opacity': 0.88},
+    {'icon': Icons.local_grocery_store_rounded, 'bottom': 30.0, 'right': 140.0, 'size': 19.0, 'dx': 11.0, 'dy': 11.0, 'phase': 2.5, 'opacity': 0.92},
+    {'icon': Icons.rice_bowl_rounded, 'top': 100.0, 'right': 110.0, 'size': 17.0, 'dx': 9.0, 'dy': -13.0, 'phase': 0.5, 'opacity': 0.90},
+    {'icon': Icons.fastfood_rounded, 'bottom': 70.0, 'left': 130.0, 'size': 18.0, 'dx': -12.0, 'dy': 7.0, 'phase': 3.5, 'opacity': 0.85},
+    {'icon': Icons.icecream_rounded, 'top': 45.0, 'left': 260.0, 'size': 16.0, 'dx': 13.0, 'dy': -10.0, 'phase': 4.5, 'opacity': 0.90},
+    {'icon': Icons.water_drop_rounded, 'bottom': 20.0, 'left': 210.0, 'size': 15.0, 'dx': -11.0, 'dy': 12.0, 'phase': 1.2, 'opacity': 0.92},
+    {'icon': Icons.egg_alt_rounded, 'top': 110.0, 'left': 30.0, 'size': 26.0, 'dx': 8.0, 'dy': -14.0, 'phase': 2.8, 'opacity': 0.88},
+    {'icon': Icons.set_meal_rounded, 'bottom': 80.0, 'right': 190.0, 'size': 19.0, 'dx': -15.0, 'dy': 9.0, 'phase': 0.8, 'opacity': 0.90},
+    {'icon': Icons.takeout_dining_rounded, 'top': 130.0, 'right': 40.0, 'size': 18.0, 'dx': 10.0, 'dy': 10.0, 'phase': 3.8, 'opacity': 0.88},
+    {'icon': Icons.breakfast_dining_rounded, 'top': 15.0, 'right': 180.0, 'size': 19.0, 'dx': -7.0, 'dy': -11.0, 'phase': 4.2, 'opacity': 0.92},
+    {'icon': Icons.local_cafe_rounded, 'bottom': 15.0, 'left': 90.0, 'size': 17.0, 'dx': 14.0, 'dy': -8.0, 'phase': 1.8, 'opacity': 0.88},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 7),
+      vsync: this,
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final val = _controller.value * 2 * math.pi;
+
+        return Stack(
+          children: _particles.map((p) {
+            final phase = (p['phase'] as double);
+            final offsetX = math.sin(val + phase) * (p['dx'] as double);
+            final offsetY = math.cos(val + phase) * (p['dy'] as double);
+
+            return Positioned(
+              top: p['top'] != null ? (p['top'] as double) + offsetY : null,
+              bottom: p['bottom'] != null ? (p['bottom'] as double) + offsetY : null,
+              left: p['left'] != null ? (p['left'] as double) + offsetX : null,
+              right: p['right'] != null ? (p['right'] as double) + offsetX : null,
+              child: Icon(
+                p['icon'] as IconData,
+                size: p['size'] as double,
+                color: Colors.white.withValues(alpha: p['opacity'] as double),
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
 }

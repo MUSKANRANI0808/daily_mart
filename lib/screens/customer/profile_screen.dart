@@ -1,8 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
+import '../../vps_api_service.dart';
 import '../dashboards/customer_dashboard.dart';
 import '../role_selection_screen.dart';
 import 'customer_addresses_screen.dart';
@@ -19,7 +22,7 @@ class CustomerProfileScreen extends StatefulWidget {
   State<CustomerProfileScreen> createState() => _CustomerProfileScreenState();
 }
 
-class _CustomerProfileScreenState extends State<CustomerProfileScreen> with SingleTickerProviderStateMixin {
+class _CustomerProfileScreenState extends State<CustomerProfileScreen> with TickerProviderStateMixin {
   String _addressSubtitle = 'Home, Work, Other';
   late String _currentName;
   String _selectedSellerUsername = '';
@@ -27,6 +30,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Sing
   String _selectedSellerMobile = '';
 
   late AnimationController _flipController;
+  late AnimationController _shimmerController;
   late Animation<double> _flipAnimation;
   bool _isFlipped = false;
   FlipAxis _currentFlipAxis = FlipAxis.horizontal;
@@ -34,7 +38,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Sing
   @override
   void initState() {
     super.initState();
-    _currentName = widget.customer.name ?? 'Customer';
+    _currentName = widget.customer.name.isNotEmpty ? widget.customer.name : 'Customer';
     _loadProfileAndAddress();
 
     _flipController = AnimationController(
@@ -44,11 +48,17 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Sing
     _flipAnimation = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _flipController, curve: Curves.easeInOutBack),
     );
+
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    )..repeat();
   }
 
   @override
   void dispose() {
     _flipController.dispose();
+    _shimmerController.dispose();
     super.dispose();
   }
 
@@ -411,6 +421,39 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Sing
                 ],
               ),
             ),
+            // Continuous Glass Sheen Light Sweep Beam
+            Positioned.fill(
+              child: IgnorePointer(
+                child: AnimatedBuilder(
+                  animation: _shimmerController,
+                  builder: (context, child) {
+                    final progress = _shimmerController.value;
+                    final double left = -1.5 + (progress * 4.0);
+
+                    return FractionallySizedBox(
+                      widthFactor: 0.35,
+                      alignment: Alignment(left, 0),
+                      child: Transform(
+                        transform: Matrix4.skewX(-0.35),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.white.withValues(alpha: 0.0),
+                                Colors.white.withValues(alpha: 0.08),
+                                Colors.white.withValues(alpha: 0.35),
+                                Colors.white.withValues(alpha: 0.08),
+                                Colors.white.withValues(alpha: 0.0),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -558,6 +601,39 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Sing
                 ],
               ),
             ),
+            // Continuous Glass Sheen Light Sweep Beam
+            Positioned.fill(
+              child: IgnorePointer(
+                child: AnimatedBuilder(
+                  animation: _shimmerController,
+                  builder: (context, child) {
+                    final progress = _shimmerController.value;
+                    final double left = -1.5 + (progress * 4.0);
+
+                    return FractionallySizedBox(
+                      widthFactor: 0.35,
+                      alignment: Alignment(left, 0),
+                      child: Transform(
+                        transform: Matrix4.skewX(-0.35),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.white.withValues(alpha: 0.0),
+                                Colors.white.withValues(alpha: 0.08),
+                                Colors.white.withValues(alpha: 0.35),
+                                Colors.white.withValues(alpha: 0.08),
+                                Colors.white.withValues(alpha: 0.0),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -685,7 +761,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Sing
                     icon: Icons.help_outline_rounded,
                     title: 'Help & Customer Care',
                     subtitle: '24/7 Support Desk',
-                    onTap: () {},
+                    onTap: _showHelpSupportModal,
                   ),
                 ],
               ),
@@ -800,11 +876,351 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Sing
             ),
 
             const SizedBox(height: 16),
-            const Text('Daily Mart App v2.4 • Powered by AntiGravity', style: TextStyle(color: Colors.black45, fontSize: 11)),
+            const Text('Daily Mart • Powered by Apna Store', style: TextStyle(color: Colors.black45, fontSize: 11.5, fontWeight: FontWeight.w600)),
             const SizedBox(height: 24),
           ],
         ),
       ),
+    );
+  }
+
+  void _showHelpSupportModal() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedEmail = prefs.getString('customer_support_email_${widget.customer.mobile}') ?? '';
+
+    final nameController = TextEditingController(text: _currentName);
+    final mobileController = TextEditingController(text: widget.customer.mobile ?? '');
+    final emailController = TextEditingController(text: savedEmail);
+    final messageController = TextEditingController();
+
+    final formKey = GlobalKey<FormState>();
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        bool isSubmitting = false;
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+                left: 20,
+                right: 20,
+                top: 16,
+              ),
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Drag Handle
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Title Header
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFDCFCE7),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.help_center_rounded, color: Color(0xFF10B981), size: 24),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Help & Customer Care 🎧',
+                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                                ),
+                                Text(
+                                  'Direct Support Desk: Daily_mart',
+                                  style: TextStyle(fontSize: 11.5, color: Colors.black54),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded, color: Colors.grey),
+                            onPressed: () => Navigator.pop(ctx),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 20),
+
+                      // Name Field
+                      const Text('Your Name', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: nameController,
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter your name' : null,
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.person_rounded, color: Color(0xFF64748B), size: 20),
+                          hintText: 'Enter your name',
+                          fillColor: const Color(0xFFF8FAFC),
+                          filled: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF10B981), width: 2)),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Mobile Field
+                      const Text('Mobile Number', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: mobileController,
+                        keyboardType: TextInputType.phone,
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter mobile number' : null,
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.phone_rounded, color: Color(0xFF64748B), size: 20),
+                          hintText: 'Enter mobile number',
+                          fillColor: const Color(0xFFF8FAFC),
+                          filled: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF10B981), width: 2)),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Email Field
+                      const Text('Email Address', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return 'Please enter email address';
+                          if (!v.contains('@') || !v.contains('.')) return 'Please enter a valid email';
+                          return null;
+                        },
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.email_rounded, color: Color(0xFF64748B), size: 20),
+                          hintText: 'e.g. user@gmail.com',
+                          fillColor: const Color(0xFFF8FAFC),
+                          filled: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF10B981), width: 2)),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Message Field
+                      const Text('Message / Query', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: messageController,
+                        maxLines: 4,
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter your message' : null,
+                        decoration: InputDecoration(
+                          hintText: 'Type your message or issue description here...',
+                          fillColor: const Color(0xFFF8FAFC),
+                          filled: true,
+                          contentPadding: const EdgeInsets.all(14),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF10B981), width: 2)),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Direct Submit Button
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0F172A),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 2,
+                        ),
+                        icon: isSubmitting
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              )
+                            : const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                        label: Text(
+                          isSubmitting ? 'Sending Message...' : 'Send Message 🚀',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                        onPressed: isSubmitting
+                            ? null
+                            : () async {
+                                if (!formKey.currentState!.validate()) return;
+
+                                setModalState(() => isSubmitting = true);
+
+                                final name = nameController.text.trim();
+                                final mobile = mobileController.text.trim();
+                                final email = emailController.text.trim();
+                                final msg = messageController.text.trim();
+
+                                // Save email persistently for next time
+                                prefs.setString('customer_support_email_${widget.customer.mobile}', email);
+
+                                // 1. Background Silent HTTP POST to FormSubmit (With Browser User-Agent & Headers)
+                                try {
+                                  await http.post(
+                                    Uri.parse('https://formsubmit.co/ajax/infopushpraj343@gmail.com'),
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                      'Accept': 'application/json',
+                                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, Gecko) Chrome/120.0.0.0 Safari/537.36',
+                                      'Origin': 'https://formsubmit.co',
+                                      'Referer': 'https://formsubmit.co/',
+                                    },
+                                    body: jsonEncode({
+                                      'name': name,
+                                      'mobile': mobile,
+                                      'email': email,
+                                      'message': 'Customer Query: $msg\nReply Email: $email\nMobile: +91 $mobile',
+                                      '_subject': 'Daily Mart Support - $name ($mobile)',
+                                      '_captcha': 'false',
+                                      '_template': 'table',
+                                    }),
+                                  ).timeout(const Duration(seconds: 8));
+                                } catch (e) {
+                                  debugPrint('FormSubmit mailer error: $e');
+                                }
+
+                                // 2. Instant Backup POST to Web3Forms API
+                                try {
+                                  await http.post(
+                                    Uri.parse('https://api.web3forms.com/submit'),
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                      'Accept': 'application/json',
+                                    },
+                                    body: jsonEncode({
+                                      'access_key': 'e4d92415-4676-476c-bd48-c84cb1c33f23',
+                                      'email': email,
+                                      'name': name,
+                                      'subject': 'Daily Mart Support - $name ($mobile)',
+                                      'message': 'Customer Name: $name\nMobile Number: +91 $mobile\nCustomer Email: $email\n\nQuery:\n$msg',
+                                      'to_email': 'infopushpraj343@gmail.com',
+                                    }),
+                                  ).timeout(const Duration(seconds: 8));
+                                } catch (e) {
+                                  debugPrint('Web3Forms mailer error: $e');
+                                }
+
+                                // 3. Sync to VPS API Database
+                                try {
+                                  await VpsApiService.post('submit-support-ticket', {
+                                    'name': name,
+                                    'mobile': mobile,
+                                    'email': email,
+                                    'message': msg,
+                                  });
+                                } catch (_) {}
+
+                                if (!mounted) return;
+                                Navigator.pop(ctx); // Close Form BottomSheet
+
+                                // 3. Show Direct In-App Success Alert Dialog (Zero external redirects!)
+                                showDialog(
+                                  context: context,
+                                  builder: (dialogCtx) => AlertDialog(
+                                    backgroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                    title: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: const BoxDecoration(
+                                            color: Color(0xFFDCFCE7),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 28),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        const Expanded(
+                                          child: Text(
+                                            'Message Sent! 🎉',
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF0F172A)),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    content: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Thank you $name!',
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        const Text(
+                                          'Your message has been sent directly to Daily_mart.',
+                                          style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.4),
+                                        ),
+                                        const SizedBox(height: 10),
+                                        Container(
+                                          padding: const EdgeInsets.all(10),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFF1F5F9),
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: Text(
+                                            '📩 Reply target: $email\n📞 Contact: +91 $mobile',
+                                            style: const TextStyle(fontSize: 12, color: Color(0xFF334155), fontWeight: FontWeight.w600),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    actions: [
+                                      ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF10B981),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        ),
+                                        onPressed: () => Navigator.pop(dialogCtx),
+                                        child: const Text('OK 👍', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 

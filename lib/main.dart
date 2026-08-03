@@ -3,19 +3,24 @@ import 'models/user_model.dart';
 import 'services/auth_service.dart';
 import 'screens/role_selection_screen.dart';
 import 'screens/dashboards/admin_dashboard.dart';
-import 'screens/dashboards/customer_dashboard.dart';
+import 'screens/dashboards/delivery_boy_dashboard.dart';
 import 'screens/seller/seller_main_nav_screen.dart';
 import 'screens/customer/customer_main_nav_screen.dart';
 
+import 'services/notification_service.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService.initialize();
+  final currentDeliveryBoy = await AuthService.getDeliveryBoySession();
   final currentUser = await AuthService.getCurrentUser();
-  runApp(DailyMartApp(initialUser: currentUser));
+  runApp(DailyMartApp(initialUser: currentUser, initialDeliveryBoy: currentDeliveryBoy));
 }
 
 class DailyMartApp extends StatelessWidget {
   final UserModel? initialUser;
-  const DailyMartApp({super.key, this.initialUser});
+  final Map<String, dynamic>? initialDeliveryBoy;
+  const DailyMartApp({super.key, this.initialUser, this.initialDeliveryBoy});
 
   @override
   Widget build(BuildContext context) {
@@ -33,6 +38,9 @@ class DailyMartApp extends StatelessWidget {
   }
 
   Widget _getHomeScreen() {
+    if (initialDeliveryBoy != null) {
+      return DeliveryBoyDashboardScreen(deliveryBoy: initialDeliveryBoy!);
+    }
     if (initialUser != null) {
       switch (initialUser!.role) {
         case UserRole.admin:

@@ -36,6 +36,7 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
     setState(() => _isLoading = false);
 
     if (deliveryBoy != null && mounted) {
+      await AuthService.saveDeliveryBoySession(deliveryBoy);
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(

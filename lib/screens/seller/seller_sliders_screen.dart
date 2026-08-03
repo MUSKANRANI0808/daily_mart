@@ -17,59 +17,59 @@ class AbstractPatternPainter extends CustomPainter {
 
     switch (presetId) {
       case 'preset_1': // Purple Pink Bokeh Circles
-        paint.color = Colors.white.withOpacity(0.09);
+        paint.color = Colors.white.withValues(alpha: 0.09);
         canvas.drawCircle(Offset(width * 0.85, height * 0.8), 70, paint);
         canvas.drawCircle(Offset(width * 0.75, height * 0.4), 100, paint);
         canvas.drawCircle(Offset(width * 0.3, height * 0.2), 90, paint);
         canvas.drawCircle(Offset(width * 0.5, height * 0.7), 60, paint);
         break;
       case 'preset_2': // Ocean Waves
-        paint.color = Colors.cyan.withOpacity(0.12);
+        paint.color = Colors.cyan.withValues(alpha: 0.12);
         canvas.drawCircle(Offset(width * 0.9, height * 0.1), 120, paint);
         canvas.drawCircle(Offset(width * 0.1, height * 0.9), 110, paint);
         break;
       case 'preset_3': // Sunset Flare
-        paint.color = Colors.amber.withOpacity(0.15);
+        paint.color = Colors.amber.withValues(alpha: 0.15);
         canvas.drawCircle(Offset(width * 0.2, height * 0.3), 80, paint);
         canvas.drawCircle(Offset(width * 0.8, height * 0.7), 130, paint);
         break;
       case 'preset_4': // Cyberpunk
-        paint.color = const Color(0xFFA855F7).withOpacity(0.15);
+        paint.color = const Color(0xFFA855F7).withValues(alpha: 0.15);
         canvas.drawCircle(Offset(width * 0.95, height * 0.5), 140, paint);
         canvas.drawCircle(Offset(width * 0.15, height * 0.8), 75, paint);
         break;
       case 'preset_5': // Emerald Mesh
-        paint.color = const Color(0xFF34D399).withOpacity(0.15);
+        paint.color = const Color(0xFF34D399).withValues(alpha: 0.15);
         canvas.drawCircle(Offset(width * 0.7, height * 0.2), 110, paint);
         canvas.drawCircle(Offset(width * 0.2, height * 0.7), 90, paint);
         break;
       case 'preset_6': // Golden Luxury
-        paint.color = const Color(0xFFFBBF24).withOpacity(0.12);
+        paint.color = const Color(0xFFFBBF24).withValues(alpha: 0.12);
         canvas.drawCircle(Offset(width * 0.8, height * 0.3), 100, paint);
         canvas.drawCircle(Offset(width * 0.3, height * 0.8), 85, paint);
         break;
       case 'preset_7': // Neon Party
-        paint.color = const Color(0xFFF43F5E).withOpacity(0.15);
+        paint.color = const Color(0xFFF43F5E).withValues(alpha: 0.15);
         canvas.drawCircle(Offset(width * 0.85, height * 0.7), 120, paint);
         canvas.drawCircle(Offset(width * 0.25, height * 0.3), 95, paint);
         break;
       case 'preset_8': // Royal Indigo
-        paint.color = const Color(0xFFC084FC).withOpacity(0.15);
+        paint.color = const Color(0xFFC084FC).withValues(alpha: 0.15);
         canvas.drawCircle(Offset(width * 0.1, height * 0.2), 100, paint);
         canvas.drawCircle(Offset(width * 0.9, height * 0.8), 110, paint);
         break;
       case 'preset_9': // Cosmic Dark
-        paint.color = const Color(0xFF38BDF8).withOpacity(0.12);
+        paint.color = const Color(0xFF38BDF8).withValues(alpha: 0.12);
         canvas.drawCircle(Offset(width * 0.5, height * 0.2), 90, paint);
         canvas.drawCircle(Offset(width * 0.85, height * 0.7), 115, paint);
         break;
       case 'preset_10': // Coral Sunrise
-        paint.color = const Color(0xFFFDE047).withOpacity(0.18);
+        paint.color = const Color(0xFFFDE047).withValues(alpha: 0.18);
         canvas.drawCircle(Offset(width * 0.3, height * 0.8), 130, paint);
         canvas.drawCircle(Offset(width * 0.8, height * 0.2), 80, paint);
         break;
       default:
-        paint.color = Colors.white.withOpacity(0.1);
+        paint.color = Colors.white.withValues(alpha: 0.1);
         canvas.drawCircle(Offset(width * 0.8, height * 0.5), 90, paint);
         break;
     }
@@ -244,7 +244,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
           borderRadius: borderRadius ?? BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: colors.last.withOpacity(0.2),
+              color: colors.last.withValues(alpha: 0.2),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -296,7 +296,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
         image: decImg,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.12),
+            color: Colors.black.withValues(alpha: 0.12),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -317,13 +317,15 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
     }
   }
 
+  // ULTRA-CLEAN, PROFESSIONAL & STEPPED SLIDER CREATOR DIALOG WITH LIVE PREVIEW
   Future<void> _showAddSliderDialog({Map<String, dynamic>? existingSlider}) async {
     final isEditing = existingSlider != null;
-    final tagCtrl = TextEditingController(text: existingSlider?['tag'] ?? 'SEASON OFFER 🏷️');
-    final titleCtrl = TextEditingController(text: existingSlider?['title'] ?? '');
-    final descCtrl = TextEditingController(text: existingSlider?['description'] ?? '');
+    final tagCtrl = TextEditingController(text: existingSlider?['tag'] ?? 'SPECIAL OFFER 🏷️');
+    final titleCtrl = TextEditingController(text: existingSlider?['title'] ?? 'Fresh Delivery Right to Your Door!');
+    final descCtrl = TextEditingController(text: existingSlider?['description'] ?? 'Fastest delivery with guaranteed premium quality items.');
     String selectedImageData = existingSlider?['bg_image_url'] ?? 'preset_1';
     bool isPickingImage = false;
+    int selectedTab = 0; // 0: Text Content, 1: Style & Colors, 2: Background Image
 
     String selectedTagBgColor = existingSlider?['tag_bg_color'] ?? '#10B981';
     String selectedTagShape = existingSlider?['tag_shape'] ?? 'pill';
@@ -338,48 +340,36 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
       {'name': 'Purple', 'hex': '#8B5CF6'},
       {'name': 'Black', 'hex': '#0F172A'},
       {'name': 'Orange', 'hex': '#F97316'},
-      {'name': 'Neon Lime', 'hex': '#84CC16'},
-      {'name': 'Hot Pink', 'hex': '#EC4899'},
-      {'name': 'Teal Cyan', 'hex': '#06B6D4'},
+      {'name': 'Cyan', 'hex': '#06B6D4'},
+      {'name': 'Pink', 'hex': '#EC4899'},
     ];
 
     final tagShapes = [
       {'label': 'Pill (Oval)', 'val': 'pill'},
-      {'label': 'Circle (Round)', 'val': 'circle'},
-      {'label': 'Square Box', 'val': 'square'},
-      {'label': 'Rounded Card', 'val': 'rounded'},
-      {'label': 'Badge Tag', 'val': 'badge'},
-      {'label': 'Outline Border', 'val': 'outline'},
-      {'label': 'Ribbon Flag', 'val': 'ribbon'},
-      {'label': 'Diagonal Cut', 'val': 'stadium'},
+      {'label': 'Rounded', 'val': 'rounded'},
+      {'label': 'Square', 'val': 'square'},
+      {'label': 'Badge', 'val': 'badge'},
+      {'label': 'Outline', 'val': 'outline'},
+      {'label': 'Ribbon', 'val': 'ribbon'},
     ];
 
     final titleColors = [
-      {'name': 'Pure White', 'hex': '#FFFFFF'},
-      {'name': 'Pitch Black', 'hex': '#000000'},
-      {'name': 'Dark Charcoal', 'hex': '#0F172A'},
-      {'name': 'Gold Yellow', 'hex': '#FDE047'},
-      {'name': 'Electric Cyan', 'hex': '#22D3EE'},
-      {'name': 'Mint Green', 'hex': '#6EE7B7'},
-      {'name': 'Neon Lime', 'hex': '#A3E635'},
-      {'name': 'Soft Pink', 'hex': '#F472B6'},
-      {'name': 'Crimson Red', 'hex': '#F87171'},
-      {'name': 'Vibrant Orange', 'hex': '#FB923C'},
-      {'name': 'Royal Blue', 'hex': '#60A5FA'},
-      {'name': 'Lavender', 'hex': '#C084FC'},
+      {'name': 'White', 'hex': '#FFFFFF'},
+      {'name': 'Black', 'hex': '#000000'},
+      {'name': 'Yellow', 'hex': '#FDE047'},
+      {'name': 'Cyan', 'hex': '#22D3EE'},
+      {'name': 'Mint', 'hex': '#6EE7B7'},
+      {'name': 'Pink', 'hex': '#F472B6'},
+      {'name': 'Orange', 'hex': '#FB923C'},
     ];
 
     final descColors = [
       {'name': 'Soft White', 'hex': '#E2E8F0'},
       {'name': 'Pure White', 'hex': '#FFFFFF'},
-      {'name': 'Pitch Black', 'hex': '#000000'},
-      {'name': 'Slate Gray', 'hex': '#334155'},
+      {'name': 'Slate Black', 'hex': '#000000'},
       {'name': 'Light Yellow', 'hex': '#FEF08A'},
       {'name': 'Sky Blue', 'hex': '#BAE6FD'},
       {'name': 'Pastel Mint', 'hex': '#A7F3D0'},
-      {'name': 'Pastel Pink', 'hex': '#FBCFE8'},
-      {'name': 'Peach Orange', 'hex': '#FFEDD5'},
-      {'name': 'Light Gray', 'hex': '#94A3B8'},
     ];
 
     await showDialog(
@@ -404,7 +394,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                   });
                 }
               } catch (e) {
-                if (mounted) {
+                if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Failed to pick image: $e')),
                   );
@@ -414,423 +404,528 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
               }
             }
 
+            final tagBg = hexToColor(selectedTagBgColor);
+            final titleCol = hexToColor(selectedTitleColor);
+            final descCol = hexToColor(selectedDescColor);
+
             return Dialog(
-              insetPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
+              insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
               backgroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               child: Container(
                 width: double.infinity,
                 constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.90,
+                  maxHeight: MediaQuery.of(context).size.height * 0.92,
                 ),
-                padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Header Row with Title & Close Button
+                    // DIALOG TITLE HEADER
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.palette_rounded, color: Color(0xFF8B5CF6)),
+                            const Icon(Icons.style_rounded, color: Color(0xFF059669), size: 22),
                             const SizedBox(width: 8),
                             Text(
-                              isEditing ? 'Edit Banner Slider' : 'Design Custom Slider',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF0F172A)),
+                              isEditing ? 'Edit Banner Slider' : 'Banner Creator 🎨',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Color(0xFF0F172A)),
                             ),
                           ],
                         ),
                         IconButton(
                           onPressed: () => Navigator.pop(ctx),
-                          icon: const Icon(Icons.close_rounded, color: Colors.grey),
+                          icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
                         ),
                       ],
                     ),
-                    const Divider(height: 1),
                     const SizedBox(height: 12),
 
-                    // Scrollable Form Body
-                    Expanded(
-                      child: SingleChildScrollView(
-                        physics: const BouncingScrollPhysics(),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Offer Tag Text
-                            const Text('Offer Tag Text *', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Colors.grey)),
-                            const SizedBox(height: 4),
-                            TextField(
-                              controller: tagCtrl,
-                              decoration: InputDecoration(
-                                hintText: 'e.g. SEASON OFFER 🏷️',
-                                filled: true,
-                                fillColor: const Color(0xFFF8FAFC),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                              ),
+                    // LIVE BANNER PREVIEW CARD (REALTIME STICKY PREVIEW)
+                    Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.vertical(top: Radius.circular(13)),
                             ),
-                            const SizedBox(height: 12),
-
-                            // 1. Tag Background Color Selector
-                            const Text('1. Offer Tag Color', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
-                            const SizedBox(height: 6),
-                            SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: tagBgColors.map((c) {
-                                  final isSelected = selectedTagBgColor == c['hex'];
-                                  final color = hexToColor(c['hex']!);
-                                  return GestureDetector(
-                                    onTap: () => setDialogState(() => selectedTagBgColor = c['hex']!),
-                                    child: Container(
-                                      margin: const EdgeInsets.only(right: 8),
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                                      decoration: BoxDecoration(
-                                        color: color,
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: isSelected ? Border.all(color: Colors.black, width: 2) : null,
-                                      ),
-                                      child: Text(
-                                        c['name']!,
-                                        style: TextStyle(
-                                          color: color.computeLuminance() > 0.5 ? Colors.black : Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 11,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
+                            child: Row(
+                              children: const [
+                                Icon(Icons.remove_red_eye_rounded, size: 13, color: Color(0xFF64748B)),
+                                SizedBox(width: 4),
+                                Text(
+                                  'LIVE BANNER PREVIEW',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B), letterSpacing: 0.8),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 12),
-
-                            // 2. Tag Shape Selector (8 Unique Shapes)
-                            const Text('2. Offer Tag Shape (Round, Square, Ribbon...)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
-                            const SizedBox(height: 6),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: tagShapes.map((s) {
-                                final isSelected = selectedTagShape == s['val'];
-                                final tagBg = hexToColor(selectedTagBgColor);
-                                return GestureDetector(
-                                  onTap: () => setDialogState(() => selectedTagShape = s['val']!),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                                    decoration: buildTagDecoration(s['val']!, isSelected ? tagBg : Colors.grey.shade300),
+                          ),
+                          buildBannerBackground(
+                            bg: selectedImageData,
+                            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(13)),
+                            child: Padding(
+                              padding: const EdgeInsets.all(14.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: buildTagDecoration(selectedTagShape, tagBg),
                                     child: Text(
-                                      s['label']!,
+                                      tagCtrl.text.isEmpty ? 'TAG PREVIEW' : tagCtrl.text,
                                       style: TextStyle(
-                                        color: s['val'] == 'outline'
-                                            ? (isSelected ? tagBg : Colors.black87)
-                                            : (isSelected
-                                                ? (tagBg.computeLuminance() > 0.5 ? Colors.black : Colors.white)
-                                                : Colors.black87),
+                                        color: selectedTagShape.toLowerCase() == 'outline'
+                                            ? tagBg
+                                            : (tagBg.computeLuminance() > 0.5 ? Colors.black : Colors.white),
                                         fontWeight: FontWeight.bold,
-                                        fontSize: 11,
+                                        fontSize: 10.5,
                                       ),
                                     ),
                                   ),
-                                );
-                              }).toList(),
-                            ),
-                            const SizedBox(height: 14),
-
-                            // Heading Text
-                            const Text('Heading / Title *', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Colors.grey)),
-                            const SizedBox(height: 4),
-                            TextField(
-                              controller: titleCtrl,
-                              decoration: InputDecoration(
-                                hintText: 'e.g. Enjoy Fresh Delivery Today!',
-                                filled: true,
-                                fillColor: const Color(0xFFF8FAFC),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-
-                            // 3. Heading Color Selector
-                            const Text('3. Heading Text Color', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
-                            const SizedBox(height: 6),
-                            SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: titleColors.map((c) {
-                                  final isSelected = selectedTitleColor == c['hex'];
-                                  final color = hexToColor(c['hex']!);
-                                  return GestureDetector(
-                                    onTap: () => setDialogState(() => selectedTitleColor = c['hex']!),
-                                    child: Container(
-                                      margin: const EdgeInsets.only(right: 8),
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: isSelected ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: isSelected ? Border.all(color: const Color(0xFF8B5CF6), width: 1.8) : Border.all(color: Colors.black12),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Container(
-                                            width: 13,
-                                            height: 13,
-                                            decoration: BoxDecoration(
-                                              color: color,
-                                              shape: BoxShape.circle,
-                                              border: Border.all(color: color == Colors.black ? Colors.white : Colors.black26, width: 1),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            c['name']!,
-                                            style: TextStyle(
-                                              color: isSelected ? Colors.white : const Color(0xFF334155),
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-
-                            // Paragraph Description Text
-                            const Text('Paragraph / Description *', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Colors.grey)),
-                            const SizedBox(height: 4),
-                            TextField(
-                              controller: descCtrl,
-                              maxLines: 2,
-                              decoration: InputDecoration(
-                                hintText: 'e.g. Premium quality items delivered fast to your doorstep.',
-                                filled: true,
-                                fillColor: const Color(0xFFF8FAFC),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-
-                            // 4. Paragraph Color Selector
-                            const Text('4. Paragraph Text Color', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
-                            const SizedBox(height: 6),
-                            SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: descColors.map((c) {
-                                  final isSelected = selectedDescColor == c['hex'];
-                                  final color = hexToColor(c['hex']!);
-                                  return GestureDetector(
-                                    onTap: () => setDialogState(() => selectedDescColor = c['hex']!),
-                                    child: Container(
-                                      margin: const EdgeInsets.only(right: 8),
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: isSelected ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: isSelected ? Border.all(color: const Color(0xFF8B5CF6), width: 1.8) : Border.all(color: Colors.black12),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Container(
-                                            width: 13,
-                                            height: 13,
-                                            decoration: BoxDecoration(
-                                              color: color,
-                                              shape: BoxShape.circle,
-                                              border: Border.all(color: color == Colors.black ? Colors.white : Colors.black26, width: 1),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            c['name']!,
-                                            style: TextStyle(
-                                              color: isSelected ? Colors.white : const Color(0xFF334155),
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-
-                            // 5. 10 Default Preset Abstract Background Designs (Circles, Waves, Gradients)
-                            const Text('5. Default Abstract Cards (10 Designs)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
-                            const SizedBox(height: 6),
-                            SizedBox(
-                              height: 65,
-                              child: ListView.separated(
-                                scrollDirection: Axis.horizontal,
-                                itemCount: presetThemes.length,
-                                separatorBuilder: (ctx, idx) => const SizedBox(width: 8),
-                                itemBuilder: (ctx, idx) {
-                                  final p = presetThemes[idx];
-                                  final isSelected = selectedImageData == p['id'];
-                                  final colors = List<Color>.from(p['colors']);
-                                  return GestureDetector(
-                                    onTap: () => setDialogState(() => selectedImageData = p['id']),
-                                    child: Container(
-                                      width: 110,
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: colors,
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        ),
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: isSelected ? Border.all(color: Colors.white, width: 2.5) : Border.all(color: Colors.black12),
-                                        boxShadow: isSelected
-                                            ? [BoxShadow(color: colors.last.withOpacity(0.5), blurRadius: 8, offset: const Offset(0, 3))]
-                                            : null,
-                                      ),
-                                      child: CustomPaint(
-                                        painter: AbstractPatternPainter(p['id']),
-                                        child: Center(
-                                          child: Text(
-                                            p['name'],
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 10,
-                                              shadows: [Shadow(color: Colors.black45, blurRadius: 4)],
-                                            ),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-
-                            // OR Choose Custom Photo from Phone Gallery
-                            Row(
-                              children: const [
-                                Expanded(child: Divider()),
-                                Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 8),
-                                  child: Text('OR Upload Photo from Phone', style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
-                                ),
-                                Expanded(child: Divider()),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-
-                            // Recommended Size Guide Badge
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFEF3C7),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: const Color(0xFFFDE047)),
-                              ),
-                              child: Row(
-                                children: const [
-                                  Icon(Icons.aspect_ratio_rounded, size: 16, color: Color(0xFFD97706)),
-                                  SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      'Recommended Size: 800 x 400 px (Ratio 2:1)',
-                                      style: TextStyle(color: Color(0xFFB45309), fontWeight: FontWeight.bold, fontSize: 11),
-                                    ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    titleCtrl.text.isEmpty ? 'Your Banner Title' : titleCtrl.text,
+                                    style: TextStyle(color: titleCol, fontWeight: FontWeight.bold, fontSize: 15),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    descCtrl.text.isEmpty ? 'Your description text will appear here.' : descCtrl.text,
+                                    style: TextStyle(color: descCol, fontSize: 11.5),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 8),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
 
-                            selectedImageData.isNotEmpty && !selectedImageData.startsWith('preset_')
-                                ? Stack(
-                                    children: [
-                                      Container(
-                                        height: 110,
-                                        width: double.infinity,
+                    // SEGMENTED CONTROL TABS (Clean 3 Steps)
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          _buildTabItem(0, '📝 Content', selectedTab, () => setDialogState(() => selectedTab = 0)),
+                          _buildTabItem(1, '🎨 Colors', selectedTab, () => setDialogState(() => selectedTab = 1)),
+                          _buildTabItem(2, '🖼️ Image', selectedTab, () => setDialogState(() => selectedTab = 2)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // TAB CONTENT BODY (Clean & Spaced)
+                    Expanded(
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        child: IndexedStack(
+                          index: selectedTab,
+                          children: [
+                            // TAB 0: CONTENT TEXT FIELDS
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Offer Tag Text', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                                const SizedBox(height: 4),
+                                TextField(
+                                  controller: tagCtrl,
+                                  onChanged: (_) => setDialogState(() {}),
+                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                  decoration: InputDecoration(
+                                    hintText: 'e.g. SPECIAL OFFER 🏷️',
+                                    filled: true,
+                                    fillColor: const Color(0xFFF8FAFC),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+
+                                const Text('Heading / Title *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                                const SizedBox(height: 4),
+                                TextField(
+                                  controller: titleCtrl,
+                                  onChanged: (_) => setDialogState(() {}),
+                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                                  decoration: InputDecoration(
+                                    hintText: 'e.g. Fresh Delivery Right to Your Door!',
+                                    filled: true,
+                                    fillColor: const Color(0xFFF8FAFC),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+
+                                const Text('Paragraph / Description *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                                const SizedBox(height: 4),
+                                TextField(
+                                  controller: descCtrl,
+                                  onChanged: (_) => setDialogState(() {}),
+                                  maxLines: 2,
+                                  style: const TextStyle(fontSize: 12.5),
+                                  decoration: InputDecoration(
+                                    hintText: 'e.g. Premium quality items delivered fast.',
+                                    filled: true,
+                                    fillColor: const Color(0xFFF8FAFC),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            // TAB 1: COLORS & STYLES
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Tag Background Color', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                                const SizedBox(height: 6),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: tagBgColors.map((c) {
+                                    final isSelected = selectedTagBgColor == c['hex'];
+                                    final color = hexToColor(c['hex']!);
+                                    return GestureDetector(
+                                      onTap: () => setDialogState(() => selectedTagBgColor = c['hex']!),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                         decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(12),
-                                          image: DecorationImage(
-                                            image: MemoryImage(base64Decode(selectedImageData.split(',').last)),
-                                            fit: BoxFit.cover,
+                                          color: color,
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: isSelected ? Border.all(color: Colors.black, width: 2) : null,
+                                        ),
+                                        child: Text(
+                                          c['name']!,
+                                          style: TextStyle(
+                                            color: color.computeLuminance() > 0.5 ? Colors.black : Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 11,
                                           ),
                                         ),
                                       ),
-                                      Positioned(
-                                        top: 6,
-                                        right: 6,
-                                        child: CircleAvatar(
-                                          radius: 14,
-                                          backgroundColor: Colors.black54,
-                                          child: IconButton(
-                                            padding: EdgeInsets.zero,
-                                            icon: const Icon(Icons.close, color: Colors.white, size: 16),
-                                            onPressed: () {
-                                              setDialogState(() => selectedImageData = 'preset_1');
-                                            },
+                                    );
+                                  }).toList(),
+                                ),
+                                const SizedBox(height: 14),
+
+                                const Text('Tag Shape Style', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                                const SizedBox(height: 6),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: tagShapes.map((s) {
+                                    final isSelected = selectedTagShape == s['val'];
+                                    return GestureDetector(
+                                      onTap: () => setDialogState(() => selectedTagShape = s['val']!),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                        decoration: BoxDecoration(
+                                          color: isSelected ? const Color(0xFF059669) : const Color(0xFFF1F5F9),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(
+                                            color: isSelected ? const Color(0xFF059669) : const Color(0xFFCBD5E1),
                                           ),
+                                        ),
+                                        child: Text(
+                                          s['label']!,
+                                          style: TextStyle(
+                                            color: isSelected ? Colors.white : const Color(0xFF334155),
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                                const SizedBox(height: 14),
+
+                                const Text('Heading Text Color', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                                const SizedBox(height: 6),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: titleColors.map((c) {
+                                    final isSelected = selectedTitleColor == c['hex'];
+                                    final color = hexToColor(c['hex']!);
+                                    return GestureDetector(
+                                      onTap: () => setDialogState(() => selectedTitleColor = c['hex']!),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                                        decoration: BoxDecoration(
+                                          color: isSelected ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: isSelected ? Border.all(color: const Color(0xFF059669), width: 1.5) : Border.all(color: const Color(0xFFE2E8F0)),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Container(
+                                              width: 10,
+                                              height: 10,
+                                              decoration: BoxDecoration(
+                                                color: color,
+                                                shape: BoxShape.circle,
+                                                border: Border.all(color: color == Colors.black ? Colors.white : Colors.black26, width: 1),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 5),
+                                            Text(
+                                              c['name']!,
+                                              style: TextStyle(
+                                                color: isSelected ? Colors.white : const Color(0xFF334155),
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 10.5,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                                const SizedBox(height: 14),
+
+                                const Text('Paragraph Text Color', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                                const SizedBox(height: 6),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: descColors.map((c) {
+                                    final isSelected = selectedDescColor == c['hex'];
+                                    final color = hexToColor(c['hex']!);
+                                    return GestureDetector(
+                                      onTap: () => setDialogState(() => selectedDescColor = c['hex']!),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                                        decoration: BoxDecoration(
+                                          color: isSelected ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: isSelected ? Border.all(color: const Color(0xFF059669), width: 1.5) : Border.all(color: const Color(0xFFE2E8F0)),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Container(
+                                              width: 10,
+                                              height: 10,
+                                              decoration: BoxDecoration(
+                                                color: color,
+                                                shape: BoxShape.circle,
+                                                border: Border.all(color: color == Colors.black ? Colors.white : Colors.black26, width: 1),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 5),
+                                            Text(
+                                              c['name']!,
+                                              style: TextStyle(
+                                                color: isSelected ? Colors.white : const Color(0xFF334155),
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 10.5,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ],
+                            ),
+
+                            // TAB 2: BACKGROUND IMAGE / PRESETS
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Choose Abstract Theme Card', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                                const SizedBox(height: 6),
+                                SizedBox(
+                                  height: 60,
+                                  child: ListView.separated(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: presetThemes.length,
+                                    separatorBuilder: (ctx, idx) => const SizedBox(width: 8),
+                                    itemBuilder: (ctx, idx) {
+                                      final p = presetThemes[idx];
+                                      final isSelected = selectedImageData == p['id'];
+                                      final colors = List<Color>.from(p['colors']);
+                                      return GestureDetector(
+                                        onTap: () => setDialogState(() => selectedImageData = p['id']),
+                                        child: Container(
+                                          width: 100,
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              colors: colors,
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                            ),
+                                            borderRadius: BorderRadius.circular(10),
+                                            border: isSelected ? Border.all(color: Colors.white, width: 2.5) : Border.all(color: Colors.black12),
+                                          ),
+                                          child: CustomPaint(
+                                            painter: AbstractPatternPainter(p['id']),
+                                            child: Center(
+                                              child: Text(
+                                                p['name'],
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 10,
+                                                  shadows: [Shadow(color: Colors.black45, blurRadius: 4)],
+                                                ),
+                                                textAlign: TextAlign.center,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+
+                                Row(
+                                  children: const [
+                                    Expanded(child: Divider()),
+                                    Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 8),
+                                      child: Text('OR Upload Photo from Phone', style: TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+                                    ),
+                                    Expanded(child: Divider()),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEF3C7),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: const Color(0xFFFDE047)),
+                                  ),
+                                  child: Row(
+                                    children: const [
+                                      Icon(Icons.aspect_ratio_rounded, size: 15, color: Color(0xFFD97706)),
+                                      SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          'Recommended Size: 800 x 400 px (Ratio 2:1)',
+                                          style: TextStyle(color: Color(0xFFB45309), fontWeight: FontWeight.bold, fontSize: 10.5),
                                         ),
                                       ),
                                     ],
-                                  )
-                                : InkWell(
-                                    onTap: isPickingImage ? null : pickGalleryImage,
-                                    child: Container(
-                                      width: double.infinity,
-                                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFF1F5F9),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: const Color(0xFFCBD5E1), style: BorderStyle.solid),
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+
+                                selectedImageData.isNotEmpty && !selectedImageData.startsWith('preset_')
+                                    ? Stack(
                                         children: [
-                                          isPickingImage
-                                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF8B5CF6)))
-                                              : const Icon(Icons.photo_library_rounded, color: Color(0xFF8B5CF6)),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            isPickingImage ? 'Opening Gallery...' : 'Choose Image from Gallery 🖼️',
-                                            style: const TextStyle(color: Color(0xFF475569), fontWeight: FontWeight.bold, fontSize: 13),
+                                          Container(
+                                            height: 100,
+                                            width: double.infinity,
+                                            decoration: BoxDecoration(
+                                              borderRadius: BorderRadius.circular(12),
+                                              image: DecorationImage(
+                                                image: MemoryImage(base64Decode(selectedImageData.split(',').last)),
+                                                fit: BoxFit.cover,
+                                              ),
+                                            ),
+                                          ),
+                                          Positioned(
+                                            top: 6,
+                                            right: 6,
+                                            child: CircleAvatar(
+                                              radius: 13,
+                                              backgroundColor: Colors.black54,
+                                              child: IconButton(
+                                                padding: EdgeInsets.zero,
+                                                icon: const Icon(Icons.close, color: Colors.white, size: 15),
+                                                onPressed: () {
+                                                  setDialogState(() => selectedImageData = 'preset_1');
+                                                },
+                                              ),
+                                            ),
                                           ),
                                         ],
+                                      )
+                                    : InkWell(
+                                        onTap: isPickingImage ? null : pickGalleryImage,
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: Container(
+                                          width: double.infinity,
+                                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFF1F5F9),
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(color: const Color(0xFFCBD5E1)),
+                                          ),
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              isPickingImage
+                                                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF059669)))
+                                                  : const Icon(Icons.photo_library_rounded, color: Color(0xFF059669)),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                isPickingImage ? 'Opening Gallery...' : 'Choose Image from Gallery 🖼️',
+                                                style: const TextStyle(color: Color(0xFF475569), fontWeight: FontWeight.bold, fontSize: 12.5),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                  ),
+                              ],
+                            ),
                           ],
                         ),
                       ),
                     ),
-
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     const Divider(height: 1),
                     const SizedBox(height: 10),
 
-                    // Fixed Action Buttons Footer
+                    // DIALOG ACTION BUTTONS FOOTER
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         TextButton(
                           onPressed: () => Navigator.pop(ctx),
-                          child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                          child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 8),
                         ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF8B5CF6),
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            backgroundColor: const Color(0xFF059669),
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           ),
                           onPressed: () async {
                             final tag = tagCtrl.text.trim();
@@ -850,7 +945,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                               success = await AuthService.updateSellerSlider(
                                 sliderId: existingSlider['id'],
                                 sellerUsername: widget.seller.username ?? '',
-                                tag: tag.isEmpty ? 'OFFER 🏷️' : tag,
+                                tag: tag.isEmpty ? 'SPECIAL OFFER 🏷️' : tag,
                                 title: title,
                                 description: desc,
                                 bgImageUrl: selectedImageData,
@@ -862,7 +957,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                             } else {
                               success = await AuthService.addSellerSlider(
                                 sellerUsername: widget.seller.username ?? '',
-                                tag: tag.isEmpty ? 'OFFER 🏷️' : tag,
+                                tag: tag.isEmpty ? 'SPECIAL OFFER 🏷️' : tag,
                                 title: title,
                                 description: desc,
                                 bgImageUrl: selectedImageData,
@@ -875,14 +970,17 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
 
                             if (success) {
                               await _loadSliders();
-                              if (mounted) {
+                              if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(content: Text(isEditing ? 'Slider updated successfully!' : 'Custom Styled Slider added!')),
                                 );
                               }
                             }
                           },
-                          child: Text(isEditing ? 'Update Banner' : 'Save Banner', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          child: Text(
+                            isEditing ? 'Update Banner' : 'Save Banner',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ],
                     ),
@@ -893,6 +991,41 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
           },
         );
       },
+    );
+  }
+
+  Widget _buildTabItem(int index, String title, int selectedTab, VoidCallback onTap) {
+    final isSelected = selectedTab == index;
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : [],
+          ),
+          child: Text(
+            title,
+            style: TextStyle(
+              color: isSelected ? const Color(0xFF059669) : const Color(0xFF64748B),
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+              fontSize: 11.5,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
     );
   }
 
@@ -918,7 +1051,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF8B5CF6)))
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF059669)))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -928,29 +1061,29 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEDE9FE),
+                      color: const Color(0xFFECFDF5),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFC4B5FD)),
+                      border: Border.all(color: const Color(0xFFA7F3D0)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: const [
-                            Icon(Icons.palette_rounded, color: Color(0xFF7C3AED)),
+                            Icon(Icons.palette_rounded, color: Color(0xFF059669)),
                             SizedBox(width: 10),
                             Expanded(
                               child: Text(
                                 'Create Custom Promo Banners & Sliders',
-                                style: TextStyle(color: Color(0xFF5B21B6), fontSize: 14, fontWeight: FontWeight.bold),
+                                style: TextStyle(color: Color(0xFF064E3B), fontSize: 14, fontWeight: FontWeight.bold),
                               ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 8),
                         const Text(
-                          '🎨 10 Preset Abstract Card Designs included!\n📐 Recommended Image Size: 800 x 400 px (Ratio 2:1)',
-                          style: TextStyle(color: Color(0xFF6D28D9), fontSize: 12, fontWeight: FontWeight.w500),
+                          '🎨 Live Realtime Preview & 10 Preset Abstract Card Designs included!\n📐 Recommended Image Size: 800 x 400 px (Ratio 2:1)',
+                          style: TextStyle(color: Color(0xFF047857), fontSize: 12, fontWeight: FontWeight.w500),
                         ),
                       ],
                     ),
@@ -967,10 +1100,10 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                       ),
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF8B5CF6),
+                          backgroundColor: const Color(0xFF059669),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        onPressed: _showAddSliderDialog,
+                        onPressed: () => _showAddSliderDialog(),
                         icon: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
                         label: const Text('Add Slider', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                       ),
@@ -1005,7 +1138,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                           separatorBuilder: (ctx, idx) => const SizedBox(height: 16),
                           itemBuilder: (ctx, idx) {
                             final slider = _sliders[idx];
-                            final tag = slider['tag'] ?? 'OFFER 🏷️';
+                            final tag = slider['tag'] ?? 'SPECIAL OFFER 🏷️';
                             final title = slider['title'] ?? '';
                             final desc = slider['description'] ?? '';
                             final bg = slider['bg_image_url'] ?? 'preset_1';

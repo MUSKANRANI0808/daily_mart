@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
+import '../../services/notification_service.dart';
 import '../../widgets/order_card_widget.dart';
 
 class CustomerChatScreen extends StatefulWidget {
@@ -513,14 +514,13 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                             );
 
                           if (success) {
-                            AuthService.createPopupNotification(
-                              targetRole: 'seller',
-                              targetUser: widget.sellerUsername,
-                              title: '📦 New Order Received!',
-                              body: 'Customer ${widget.customer.name ?? widget.customer.mobile} placed order #$nextOrderId.',
-                              type: 'new_order',
-                            );
                             _loadMessages();
+                            NotificationService.notifySellerNewOrder(
+                              sellerUsername: widget.sellerUsername,
+                              customerName: widget.customer.name ?? 'Customer',
+                              customerMobile: widget.customer.mobile ?? '',
+                              orderId: nextOrderId,
+                            );
                           } else {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(

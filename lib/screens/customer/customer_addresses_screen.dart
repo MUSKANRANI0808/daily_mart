@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/user_model.dart';
+import '../../services/auth_service.dart';
 
 class CustomerAddressesScreen extends StatefulWidget {
   final UserModel customer;
@@ -63,8 +64,7 @@ class _CustomerAddressesScreenState extends State<CustomerAddressesScreen> {
   }
 
   Future<void> _saveAddressesToPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefsKey, jsonEncode(_addresses));
+    await AuthService.saveCustomerAddresses(widget.customer.mobile ?? '', _addresses);
   }
 
   void _openAddEditDialog([Map<String, dynamic>? existingAddress]) {

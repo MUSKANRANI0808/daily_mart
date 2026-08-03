@@ -49,6 +49,7 @@ class _SellerLoginScreenState extends State<SellerLoginScreen> {
       // 2. Check Delivery Boy credentials
       final deliveryBoy = await AuthService.loginDeliveryBoy(idText, passText);
       if (deliveryBoy != null && mounted) {
+        await AuthService.saveDeliveryBoySession(deliveryBoy);
         setState(() => _isLoading = false);
         Navigator.pushAndRemoveUntil(
           context,
@@ -224,6 +225,7 @@ class _SellerLoginScreenState extends State<SellerLoginScreen> {
                             );
                           } else if (deliveryBoy != null) {
                             // Only Delivery Boy registered
+                            await AuthService.saveDeliveryBoySession(deliveryBoy);
                             Navigator.pushAndRemoveUntil(
                               context,
                               MaterialPageRoute(builder: (_) => DeliveryBoyDashboardScreen(deliveryBoy: deliveryBoy)),
@@ -357,13 +359,16 @@ class _SellerLoginScreenState extends State<SellerLoginScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                onPressed: () {
-                  Navigator.pop(bCtx);
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(builder: (_) => DeliveryBoyDashboardScreen(deliveryBoy: deliveryBoy)),
-                    (route) => false,
-                  );
+                onPressed: () async {
+                  await AuthService.saveDeliveryBoySession(deliveryBoy);
+                  if (context.mounted) {
+                    Navigator.pop(bCtx);
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (_) => DeliveryBoyDashboardScreen(deliveryBoy: deliveryBoy)),
+                      (route) => false,
+                    );
+                  }
                 },
               ),
               const SizedBox(height: 12),

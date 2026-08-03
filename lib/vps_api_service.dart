@@ -14,8 +14,8 @@ class VpsApiService {
   /// Test connection to VPS server
   static Future<bool> testConnection() async {
     try {
-      final response = await http.get(Uri.parse(baseUrl)).timeout(
-            const Duration(seconds: 5),
+      final response = await http.get(Uri.parse('$baseUrl?action=sellers')).timeout(
+            const Duration(seconds: 8),
           );
       return response.statusCode == 200;
     } catch (_) {
@@ -23,7 +23,7 @@ class VpsApiService {
     }
   }
 
-  /// Generic GET request with automatic URI Encoding for parameters
+  /// Generic GET request
   static Future<dynamic> get(String action) async {
     try {
       final String fullUrl = '$baseUrl?action=$action';
@@ -31,7 +31,7 @@ class VpsApiService {
       final response = await http.get(
         uri,
         headers: _headers,
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 8));
       return _handleResponse(response);
     } catch (e) {
       return null;
@@ -47,7 +47,7 @@ class VpsApiService {
         uri,
         headers: _headers,
         body: jsonEncode(data),
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 8));
       return _handleResponse(response);
     } catch (e) {
       return null;
@@ -57,7 +57,11 @@ class VpsApiService {
   static dynamic _handleResponse(http.Response response) {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (response.body.isEmpty) return null;
-      return jsonDecode(response.body);
+      try {
+        return jsonDecode(response.body);
+      } catch (_) {
+        return null;
+      }
     } else {
       return null;
     }

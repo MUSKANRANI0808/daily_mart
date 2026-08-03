@@ -1,7 +1,21 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
+import '../../services/notification_service.dart';
+import '../../utils/csv_exporter.dart';
 import '../role_selection_screen.dart';
+
+class AppScrollBehavior extends MaterialScrollBehavior {
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+        PointerDeviceKind.stylus,
+      };
+}
 
 class AdminDashboard extends StatefulWidget {
   final UserModel user;
@@ -11,165 +25,409 @@ class AdminDashboard extends StatefulWidget {
   State<AdminDashboard> createState() => _AdminDashboardState();
 }
 
-class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _AdminDashboardState extends State<AdminDashboard> {
+  int _selectedIndex = 0; // 0: Sellers, 1: Delivery Boys, 2: Order Details
   List<Map<String, dynamic>> _sellers = [];
   List<Map<String, dynamic>> _deliveryBoys = [];
+  List<Map<String, dynamic>> _flatOrdersList = [];
   bool _isLoading = true;
+
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _selectedDelayMinutes = 0; // 0 = All Times, 15, 30, 45, 60, 120
+  String _selectedStatusFilter = 'All'; // 'All', 'Pending', 'Pickup', 'Delivered', 'Cancelled'
+  String _tableSearchQuery = '';
+  final TextEditingController _tableSearchController = TextEditingController();
+
+  final ScrollController _horizontalScrollController = ScrollController();
+  double _dragStartX = 0.0;
+
+  Timer? _pollingTimer;
+  final Set<String> _knownOrderIds = {};
+  bool _isFirstLoad = true;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    final today = DateTime.now();
+    _startDate = DateTime(today.year, today.month, today.day);
+    _endDate = DateTime(today.year, today.month, today.day);
     _loadAllData();
+    _startAdminOrderPolling();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _pollingTimer?.cancel();
+    _horizontalScrollController.dispose();
+    _tableSearchController.dispose();
     super.dispose();
+  }
+
+  void _startAdminOrderPolling() {
+    _pollingTimer?.cancel();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 8), (_) async {
+      final freshOrders = await AuthService.getAllOrdersFlatListForAdmin();
+      if (!mounted) return;
+
+      bool hasNewOrder = false;
+      for (var ord in freshOrders) {
+        final orderId = (ord['order_no'] ?? '').toString();
+        if (orderId.isNotEmpty && !_knownOrderIds.contains(orderId)) {
+          _knownOrderIds.add(orderId);
+          if (!_isFirstLoad) {
+            hasNewOrder = true;
+            // Popup Push Notification ONLY for NEW Customer Orders!
+            NotificationService.showSystemNotification(
+              id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+              title: '🛍️ New Order Placed!',
+              body: 'Customer ${ord['customer_name']} placed ${ord['order_no']} for ${ord['seller_name']}. Amount: ₹${ord['amount']}',
+              payload: 'admin_new_order',
+            );
+          }
+        }
+      }
+
+      if (_isFirstLoad) {
+        _isFirstLoad = false;
+      }
+
+      if (hasNewOrder && mounted) {
+        setState(() {
+          _flatOrdersList = freshOrders;
+        });
+      }
+    });
   }
 
   Future<void> _loadAllData() async {
     setState(() => _isLoading = true);
     final sellers = await AuthService.getSellersList();
     final deliveryBoys = await AuthService.getDeliveryBoys();
+    final flatOrders = await AuthService.getAllOrdersFlatListForAdmin();
     if (mounted) {
       setState(() {
         _sellers = sellers;
         _deliveryBoys = deliveryBoys;
+        _flatOrdersList = flatOrders;
         _isLoading = false;
       });
     }
   }
 
-  void _showAddSellerDialog() {
-    final nameController = TextEditingController();
-    final usernameController = TextEditingController();
-    final passwordController = TextEditingController();
-    final mobileController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
+  List<Map<String, dynamic>> get _filteredOrders {
+    return _flatOrdersList.where((ord) {
+      // 1. Date Range Filter
+      final DateTime dt = ord['raw_date'] ?? DateTime.now();
+      if (_startDate != null) {
+        final startOfDay = DateTime(_startDate!.year, _startDate!.month, _startDate!.day);
+        if (dt.isBefore(startOfDay)) return false;
+      }
+      if (_endDate != null) {
+        final endOfDay = DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59);
+        if (dt.isAfter(endOfDay)) return false;
+      }
 
-    showDialog(
+      // 2. Order Status Dropdown Filter
+      if (_selectedStatusFilter != 'All') {
+        final ordStatus = (ord['order_status'] ?? '').toString().toLowerCase();
+        final filterLower = _selectedStatusFilter.toLowerCase();
+        if (ordStatus != filterLower) return false;
+      }
+
+      // 3. Clock Delay Time Filter (pickup to delivered duration > X minutes)
+      if (_selectedDelayMinutes > 0) {
+        final DateTime? pDt = ord['raw_pickup_time'];
+        final DateTime? dDt = ord['raw_delivered_time'];
+        if (pDt == null || dDt == null) return false;
+
+        final int diffMins = dDt.difference(pDt).inMinutes;
+        if (diffMins <= _selectedDelayMinutes) return false;
+      }
+
+      // 4. Global Search Query Filter (Live Row Filtering)
+      if (_tableSearchQuery.isNotEmpty) {
+        final q = _tableSearchQuery;
+        final orderNo = (ord['order_no'] ?? '').toString().toLowerCase();
+        final custName = (ord['customer_name'] ?? '').toString().toLowerCase();
+        final sellerName = (ord['seller_name'] ?? '').toString().toLowerCase();
+        final sellerLoc = (ord['seller_location'] ?? '').toString().toLowerCase();
+        final delBoy = (ord['delivery_boy'] ?? '').toString().toLowerCase();
+        final status = (ord['order_status'] ?? '').toString().toLowerCase();
+        final payMode = (ord['payment_mode'] ?? '').toString().toLowerCase();
+        final payStatus = (ord['payment_status'] ?? '').toString().toLowerCase();
+        final amount = (ord['amount'] ?? '').toString().toLowerCase();
+        final sendTime = (ord['order_send_time'] ?? '').toString().toLowerCase();
+        final date = (ord['date'] ?? '').toString().toLowerCase();
+
+        final matches = orderNo.contains(q) ||
+            custName.contains(q) ||
+            sellerName.contains(q) ||
+            sellerLoc.contains(q) ||
+            delBoy.contains(q) ||
+            status.contains(q) ||
+            payMode.contains(q) ||
+            payStatus.contains(q) ||
+            amount.contains(q) ||
+            sendTime.contains(q) ||
+            date.contains(q);
+
+        if (!matches) return false;
+      }
+
+      return true;
+    }).toList();
+  }
+
+  Future<String?> _showAddNewLocationDialog() async {
+    final textController = TextEditingController();
+    return showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        scrollable: true,
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.storefront_rounded, color: Colors.cyanAccent),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Create Seller Account',
-                style: TextStyle(color: Colors.white, fontSize: 17),
-              ),
-            ),
+        title: Row(
+          children: const [
+            Icon(Icons.add_location_alt_rounded, color: Color(0xFF10B981)),
+            SizedBox(width: 8),
+            Text('Add New Location', style: TextStyle(color: Color(0xFF0F172A), fontSize: 16, fontWeight: FontWeight.bold)),
           ],
         ),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: nameController,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Seller Store/Owner Name',
-                  labelStyle: TextStyle(color: Colors.grey),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
-                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.cyanAccent)),
-                ),
-                validator: (val) => val == null || val.trim().isEmpty ? 'Enter Store Name' : null,
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: mobileController,
-                keyboardType: TextInputType.phone,
-                maxLength: 10,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Seller Mobile Number',
-                  labelStyle: TextStyle(color: Colors.grey),
-                  counterText: '',
-                  prefixText: '+91 ',
-                  prefixStyle: TextStyle(color: Colors.white),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
-                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.cyanAccent)),
-                ),
-                validator: (val) => val == null || val.trim().length < 10 ? 'Enter 10-digit Mobile' : null,
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: usernameController,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Seller ID / Username',
-                  labelStyle: TextStyle(color: Colors.grey),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
-                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.cyanAccent)),
-                ),
-                validator: (val) => val == null || val.trim().isEmpty ? 'Enter Username' : null,
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: passwordController,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Seller Password',
-                  labelStyle: TextStyle(color: Colors.grey),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
-                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.cyanAccent)),
-                ),
-                validator: (val) => val == null || val.trim().isEmpty ? 'Enter Password' : null,
-              ),
-            ],
+        content: TextField(
+          controller: textController,
+          style: const TextStyle(color: Color(0xFF0F172A)),
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Enter Location Name (e.g. Sector 5)',
+            hintStyle: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFCBD5E1))),
+            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF10B981))),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan.shade700),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
             onPressed: () async {
-              if (formKey.currentState!.validate()) {
-                final result = await AuthService.createSellerResult(
-                  name: nameController.text,
-                  username: usernameController.text,
-                  password: passwordController.text,
-                  mobile: mobileController.text,
-                );
-
-                if (context.mounted) {
-                  Navigator.pop(ctx);
-                  final bool success = result['success'] == true;
-                  final String msg = result['message'] ?? 'Action completed';
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(msg),
-                      backgroundColor: success ? const Color(0xFF10B981) : Colors.redAccent,
-                    ),
-                  );
-
-                  if (success) {
-                    _loadAllData();
-                  }
-                }
+              final locName = textController.text.trim();
+              if (locName.isNotEmpty) {
+                await AuthService.addLocation(locName);
+                if (ctx.mounted) Navigator.pop(ctx, locName);
               }
             },
-            child: const Text('Create Seller', style: TextStyle(color: Colors.white)),
+            child: const Text('Add Location', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
   }
 
-  void _showAddDeliveryBoyDialog() {
+  void _showAddSellerDialog() async {
+    final nameController = TextEditingController();
+    final usernameController = TextEditingController();
+    final passwordController = TextEditingController();
+    final mobileController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    List<String> locations = await AuthService.getLocations();
+    String selectedLocation = locations.isNotEmpty ? locations.first : 'Main Market';
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            scrollable: true,
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: const [
+                Icon(Icons.storefront_rounded, color: Color(0xFF0EA5E9)),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Create Seller Account',
+                    style: TextStyle(color: Color(0xFF0F172A), fontSize: 17, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            content: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextFormField(
+                    controller: nameController,
+                    style: const TextStyle(color: Color(0xFF0F172A)),
+                    decoration: const InputDecoration(
+                      labelText: 'Seller Store/Owner Name',
+                      labelStyle: TextStyle(color: Color(0xFF64748B)),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFCBD5E1))),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF0EA5E9))),
+                    ),
+                    validator: (val) => val == null || val.trim().isEmpty ? 'Enter Store Name' : null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: mobileController,
+                    keyboardType: TextInputType.phone,
+                    maxLength: 10,
+                    style: const TextStyle(color: Color(0xFF0F172A)),
+                    decoration: const InputDecoration(
+                      labelText: 'Seller Mobile Number',
+                      labelStyle: TextStyle(color: Color(0xFF64748B)),
+                      counterText: '',
+                      prefixText: '+91 ',
+                      prefixStyle: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFCBD5E1))),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF0EA5E9))),
+                    ),
+                    validator: (val) => val == null || val.trim().length < 10 ? 'Enter 10-digit Mobile' : null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: usernameController,
+                    style: const TextStyle(color: Color(0xFF0F172A)),
+                    decoration: const InputDecoration(
+                      labelText: 'Seller ID / Username',
+                      labelStyle: TextStyle(color: Color(0xFF64748B)),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFCBD5E1))),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF0EA5E9))),
+                    ),
+                    validator: (val) => val == null || val.trim().isEmpty ? 'Enter Username' : null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: passwordController,
+                    style: const TextStyle(color: Color(0xFF0F172A)),
+                    decoration: const InputDecoration(
+                      labelText: 'Seller Password',
+                      labelStyle: TextStyle(color: Color(0xFF64748B)),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFCBD5E1))),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF0EA5E9))),
+                    ),
+                    validator: (val) => val == null || val.trim().isEmpty ? 'Enter Password' : null,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Location Selection Row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Location:',
+                        style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                      ),
+                      GestureDetector(
+                        onTap: () async {
+                          final newLoc = await _showAddNewLocationDialog();
+                          if (newLoc != null && newLoc.isNotEmpty) {
+                            final updated = await AuthService.getLocations();
+                            setDialogState(() {
+                              locations = updated;
+                              selectedLocation = newLoc;
+                            });
+                          }
+                        },
+                        child: Row(
+                          children: const [
+                            Icon(Icons.add_location_alt_rounded, color: Color(0xFF0EA5E9), size: 14),
+                            SizedBox(width: 4),
+                            Text('+ Add New Location', style: TextStyle(color: Color(0xFF0EA5E9), fontSize: 11, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  DropdownButtonFormField<String>(
+                    initialValue: locations.contains(selectedLocation) ? selectedLocation : (locations.isNotEmpty ? locations.first : null),
+                    dropdownColor: Colors.white,
+                    style: const TextStyle(color: Color(0xFF0F172A), fontSize: 13.5),
+                    decoration: const InputDecoration(
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFCBD5E1))),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF0EA5E9))),
+                    ),
+                    items: locations.map((loc) {
+                      return DropdownMenuItem<String>(
+                        value: loc,
+                        child: Row(
+                          children: [
+                            const Icon(Icons.location_on_rounded, color: Color(0xFF0EA5E9), size: 15),
+                            const SizedBox(width: 6),
+                            Text(loc, style: const TextStyle(color: Color(0xFF0F172A))),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setDialogState(() => selectedLocation = val);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0EA5E9),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () async {
+                  if (formKey.currentState!.validate()) {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final nav = Navigator.of(ctx);
+
+                    final result = await AuthService.createSellerResult(
+                      name: nameController.text,
+                      username: usernameController.text,
+                      password: passwordController.text,
+                      mobile: mobileController.text,
+                      location: selectedLocation,
+                    );
+
+                    final bool success = result['success'] == true;
+                    final String msg = result['message'] ?? 'Action completed';
+
+                    if (success) {
+                      nav.pop();
+                      _loadAllData();
+                    }
+
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(msg),
+                        backgroundColor: success ? const Color(0xFF10B981) : Colors.redAccent,
+                      ),
+                    );
+                  }
+                },
+                child: const Text('Create Seller', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _showAddDeliveryBoyDialog() async {
     final nameController = TextEditingController();
     final usernameController = TextEditingController();
     final passwordController = TextEditingController();
@@ -177,133 +435,599 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
     final vehicleController = TextEditingController(text: 'Bike');
     final formKey = GlobalKey<FormState>();
 
+    List<String> locations = await AuthService.getLocations();
+    String selectedLocation = locations.isNotEmpty ? locations.first : 'Main Market';
+
+    if (!mounted) return;
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        scrollable: true,
-        backgroundColor: const Color(0xFF1E293B),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.two_wheeler_rounded, color: Color(0xFFA78BFA)),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Create Delivery Boy Account',
-                style: TextStyle(color: Colors.white, fontSize: 16),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            scrollable: true,
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: const [
+                Icon(Icons.two_wheeler_rounded, color: Color(0xFF8B5CF6)),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Create Delivery Boy Account',
+                    style: TextStyle(color: Color(0xFF0F172A), fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            content: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextFormField(
+                    controller: nameController,
+                    style: const TextStyle(color: Color(0xFF0F172A)),
+                    decoration: const InputDecoration(
+                      labelText: 'Delivery Boy Name',
+                      labelStyle: TextStyle(color: Color(0xFF64748B)),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFCBD5E1))),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF8B5CF6))),
+                    ),
+                    validator: (val) => val == null || val.trim().isEmpty ? 'Enter Name' : null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: mobileController,
+                    keyboardType: TextInputType.phone,
+                    maxLength: 10,
+                    style: const TextStyle(color: Color(0xFF0F172A)),
+                    decoration: const InputDecoration(
+                      labelText: 'Mobile Number',
+                      labelStyle: TextStyle(color: Color(0xFF64748B)),
+                      counterText: '',
+                      prefixText: '+91 ',
+                      prefixStyle: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFCBD5E1))),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF8B5CF6))),
+                    ),
+                    validator: (val) => val == null || val.trim().length < 10 ? 'Enter 10-digit Mobile' : null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: usernameController,
+                    style: const TextStyle(color: Color(0xFF0F172A)),
+                    decoration: const InputDecoration(
+                      labelText: 'Delivery Boy ID / Username',
+                      labelStyle: TextStyle(color: Color(0xFF64748B)),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFCBD5E1))),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF8B5CF6))),
+                    ),
+                    validator: (val) => val == null || val.trim().isEmpty ? 'Enter Username' : null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: passwordController,
+                    style: const TextStyle(color: Color(0xFF0F172A)),
+                    decoration: const InputDecoration(
+                      labelText: 'Password',
+                      labelStyle: TextStyle(color: Color(0xFF64748B)),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFCBD5E1))),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF8B5CF6))),
+                    ),
+                    validator: (val) => val == null || val.trim().isEmpty ? 'Enter Password' : null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: vehicleController,
+                    style: const TextStyle(color: Color(0xFF0F172A)),
+                    decoration: const InputDecoration(
+                      labelText: 'Vehicle (Bike / Scooter / E-rickshaw)',
+                      labelStyle: TextStyle(color: Color(0xFF64748B)),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFCBD5E1))),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF8B5CF6))),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Location Selection Row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Location:',
+                        style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                      ),
+                      GestureDetector(
+                        onTap: () async {
+                          final newLoc = await _showAddNewLocationDialog();
+                          if (newLoc != null && newLoc.isNotEmpty) {
+                            final updated = await AuthService.getLocations();
+                            setDialogState(() {
+                              locations = updated;
+                              selectedLocation = newLoc;
+                            });
+                          }
+                        },
+                        child: Row(
+                          children: const [
+                            Icon(Icons.add_location_alt_rounded, color: Color(0xFF8B5CF6), size: 14),
+                            SizedBox(width: 4),
+                            Text('+ Add New Location', style: TextStyle(color: Color(0xFF8B5CF6), fontSize: 11, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  DropdownButtonFormField<String>(
+                    initialValue: locations.contains(selectedLocation) ? selectedLocation : (locations.isNotEmpty ? locations.first : null),
+                    dropdownColor: Colors.white,
+                    style: const TextStyle(color: Color(0xFF0F172A), fontSize: 13.5),
+                    decoration: const InputDecoration(
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFCBD5E1))),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF8B5CF6))),
+                    ),
+                    items: locations.map((loc) {
+                      return DropdownMenuItem<String>(
+                        value: loc,
+                        child: Row(
+                          children: [
+                            const Icon(Icons.location_on_rounded, color: Color(0xFF8B5CF6), size: 15),
+                            const SizedBox(width: 6),
+                            Text(loc, style: const TextStyle(color: Color(0xFF0F172A))),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setDialogState(() => selectedLocation = val);
+                      }
+                    },
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: nameController,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Delivery Boy Name',
-                  labelStyle: TextStyle(color: Colors.grey),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
-                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFA78BFA))),
-                ),
-                validator: (val) => val == null || val.trim().isEmpty ? 'Enter Name' : null,
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
               ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: mobileController,
-                keyboardType: TextInputType.phone,
-                maxLength: 10,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Mobile Number',
-                  labelStyle: TextStyle(color: Colors.grey),
-                  counterText: '',
-                  prefixText: '+91 ',
-                  prefixStyle: TextStyle(color: Colors.white),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
-                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFA78BFA))),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF8B5CF6),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                validator: (val) => val == null || val.trim().length < 10 ? 'Enter 10-digit Mobile' : null,
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: usernameController,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Delivery Boy ID / Username',
-                  labelStyle: TextStyle(color: Colors.grey),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
-                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFA78BFA))),
-                ),
-                validator: (val) => val == null || val.trim().isEmpty ? 'Enter Username' : null,
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: passwordController,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  labelStyle: TextStyle(color: Colors.grey),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
-                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFA78BFA))),
-                ),
-                validator: (val) => val == null || val.trim().isEmpty ? 'Enter Password' : null,
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: vehicleController,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Vehicle (Bike / Scooter / E-rickshaw)',
-                  labelStyle: TextStyle(color: Colors.grey),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
-                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFA78BFA))),
-                ),
+                onPressed: () async {
+                  if (formKey.currentState!.validate()) {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final nav = Navigator.of(ctx);
+
+                    final result = await AuthService.createDeliveryBoyResult(
+                      name: nameController.text,
+                      username: usernameController.text,
+                      password: passwordController.text,
+                      mobile: mobileController.text,
+                      vehicle: vehicleController.text,
+                      location: selectedLocation,
+                    );
+
+                    final bool success = result['success'] == true;
+                    final String msg = result['message'] ?? 'Action completed';
+
+                    if (success) {
+                      nav.pop();
+                      _loadAllData();
+                    }
+
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(msg),
+                        backgroundColor: success ? const Color(0xFF10B981) : Colors.redAccent,
+                      ),
+                    );
+                  }
+                },
+                child: const Text('Create Delivery Boy', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B5CF6)),
-            onPressed: () async {
-              if (formKey.currentState!.validate()) {
-                final result = await AuthService.createDeliveryBoyResult(
-                  name: nameController.text,
-                  username: usernameController.text,
-                  password: passwordController.text,
-                  mobile: mobileController.text,
-                  vehicle: vehicleController.text,
-                );
+          );
+        },
+      ),
+    );
+  }
 
-                if (context.mounted) {
-                  Navigator.pop(ctx);
-                  final bool success = result['success'] == true;
-                  final String msg = result['message'] ?? 'Action completed';
+  void _showEditSellerDialog(Map<String, dynamic> seller) async {
+    final nameController = TextEditingController(text: seller['name'] ?? '');
+    final mobileController = TextEditingController(text: seller['mobile'] ?? '');
+    final passwordController = TextEditingController(text: seller['password'] ?? '');
+    final username = (seller['username'] ?? '').toString();
+    final formKey = GlobalKey<FormState>();
 
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(msg),
-                      backgroundColor: success ? const Color(0xFF10B981) : Colors.redAccent,
+    List<String> locations = await AuthService.getLocations();
+    String selectedLocation = (seller['location'] ?? '').toString().trim();
+    if (selectedLocation.isEmpty && locations.isNotEmpty) {
+      selectedLocation = locations.first;
+    }
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            scrollable: true,
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                const Icon(Icons.edit_rounded, color: Color(0xFF0EA5E9)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Edit Seller ($username)',
+                    style: const TextStyle(color: Color(0xFF0F172A), fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            content: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextFormField(
+                    controller: nameController,
+                    style: const TextStyle(color: Color(0xFF0F172A)),
+                    decoration: const InputDecoration(
+                      labelText: 'Seller Store/Owner Name',
+                      labelStyle: TextStyle(color: Color(0xFF64748B)),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFCBD5E1))),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF0EA5E9))),
                     ),
-                  );
+                    validator: (val) => val == null || val.trim().isEmpty ? 'Enter Store Name' : null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: mobileController,
+                    keyboardType: TextInputType.phone,
+                    maxLength: 10,
+                    style: const TextStyle(color: Color(0xFF0F172A)),
+                    decoration: const InputDecoration(
+                      labelText: 'Seller Mobile Number',
+                      labelStyle: TextStyle(color: Color(0xFF64748B)),
+                      counterText: '',
+                      prefixText: '+91 ',
+                      prefixStyle: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFCBD5E1))),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF0EA5E9))),
+                    ),
+                    validator: (val) => val == null || val.trim().length < 10 ? 'Enter 10-digit Mobile' : null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: passwordController,
+                    style: const TextStyle(color: Color(0xFF0F172A)),
+                    decoration: const InputDecoration(
+                      labelText: 'Seller Password',
+                      labelStyle: TextStyle(color: Color(0xFF64748B)),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFCBD5E1))),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF0EA5E9))),
+                    ),
+                    validator: (val) => val == null || val.trim().isEmpty ? 'Enter Password' : null,
+                  ),
+                  const SizedBox(height: 14),
 
-                  if (success) {
-                    _loadAllData();
+                  // Location Selection Row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Location:',
+                        style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                      ),
+                      GestureDetector(
+                        onTap: () async {
+                          final newLoc = await _showAddNewLocationDialog();
+                          if (newLoc != null && newLoc.isNotEmpty) {
+                            final updated = await AuthService.getLocations();
+                            setDialogState(() {
+                              locations = updated;
+                              selectedLocation = newLoc;
+                            });
+                          }
+                        },
+                        child: Row(
+                          children: const [
+                            Icon(Icons.add_location_alt_rounded, color: Color(0xFF0EA5E9), size: 14),
+                            SizedBox(width: 4),
+                            Text('+ Add New Location', style: TextStyle(color: Color(0xFF0EA5E9), fontSize: 11, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  DropdownButtonFormField<String>(
+                    initialValue: locations.contains(selectedLocation) ? selectedLocation : (locations.isNotEmpty ? locations.first : null),
+                    dropdownColor: Colors.white,
+                    style: const TextStyle(color: Color(0xFF0F172A), fontSize: 13.5),
+                    decoration: const InputDecoration(
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFCBD5E1))),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF0EA5E9))),
+                    ),
+                    items: locations.map((loc) {
+                      return DropdownMenuItem<String>(
+                        value: loc,
+                        child: Row(
+                          children: [
+                            const Icon(Icons.location_on_rounded, color: Color(0xFF0EA5E9), size: 15),
+                            const SizedBox(width: 6),
+                            Text(loc, style: const TextStyle(color: Color(0xFF0F172A))),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setDialogState(() => selectedLocation = val);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0EA5E9),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () async {
+                  if (formKey.currentState!.validate()) {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final nav = Navigator.of(ctx);
+
+                    final result = await AuthService.updateSellerResult(
+                      username: username,
+                      name: nameController.text,
+                      password: passwordController.text,
+                      mobile: mobileController.text,
+                      location: selectedLocation,
+                    );
+
+                    final bool success = result['success'] == true;
+                    final String msg = result['message'] ?? 'Action completed';
+
+                    if (success) {
+                      nav.pop();
+                      _loadAllData();
+                    }
+
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(msg),
+                        backgroundColor: success ? const Color(0xFF10B981) : Colors.redAccent,
+                      ),
+                    );
                   }
-                }
-              }
-            },
-            child: const Text('Create Delivery Boy', style: TextStyle(color: Colors.white)),
-          ),
-        ],
+                },
+                child: const Text('Update Seller', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _showEditDeliveryBoyDialog(Map<String, dynamic> deliveryBoy) async {
+    final nameController = TextEditingController(text: deliveryBoy['name'] ?? '');
+    final mobileController = TextEditingController(text: deliveryBoy['mobile'] ?? '');
+    final passwordController = TextEditingController(text: deliveryBoy['password'] ?? '');
+    final vehicleController = TextEditingController(text: deliveryBoy['vehicle'] ?? 'Bike');
+    final username = (deliveryBoy['username'] ?? '').toString();
+    final formKey = GlobalKey<FormState>();
+
+    List<String> locations = await AuthService.getLocations();
+    String selectedLocation = (deliveryBoy['location'] ?? '').toString().trim();
+    if (selectedLocation.isEmpty && locations.isNotEmpty) {
+      selectedLocation = locations.first;
+    }
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            scrollable: true,
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                const Icon(Icons.edit_rounded, color: Color(0xFF8B5CF6)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Edit Delivery Boy ($username)',
+                    style: const TextStyle(color: Color(0xFF0F172A), fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            content: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextFormField(
+                    controller: nameController,
+                    style: const TextStyle(color: Color(0xFF0F172A)),
+                    decoration: const InputDecoration(
+                      labelText: 'Delivery Boy Name',
+                      labelStyle: TextStyle(color: Color(0xFF64748B)),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFCBD5E1))),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF8B5CF6))),
+                    ),
+                    validator: (val) => val == null || val.trim().isEmpty ? 'Enter Name' : null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: mobileController,
+                    keyboardType: TextInputType.phone,
+                    maxLength: 10,
+                    style: const TextStyle(color: Color(0xFF0F172A)),
+                    decoration: const InputDecoration(
+                      labelText: 'Mobile Number',
+                      labelStyle: TextStyle(color: Color(0xFF64748B)),
+                      counterText: '',
+                      prefixText: '+91 ',
+                      prefixStyle: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFCBD5E1))),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF8B5CF6))),
+                    ),
+                    validator: (val) => val == null || val.trim().length < 10 ? 'Enter 10-digit Mobile' : null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: passwordController,
+                    style: const TextStyle(color: Color(0xFF0F172A)),
+                    decoration: const InputDecoration(
+                      labelText: 'Password',
+                      labelStyle: TextStyle(color: Color(0xFF64748B)),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFCBD5E1))),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF8B5CF6))),
+                    ),
+                    validator: (val) => val == null || val.trim().isEmpty ? 'Enter Password' : null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: vehicleController,
+                    style: const TextStyle(color: Color(0xFF0F172A)),
+                    decoration: const InputDecoration(
+                      labelText: 'Vehicle (Bike / Scooter / E-rickshaw)',
+                      labelStyle: TextStyle(color: Color(0xFF64748B)),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFCBD5E1))),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF8B5CF6))),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Location Selection Row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Location:',
+                        style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                      ),
+                      GestureDetector(
+                        onTap: () async {
+                          final newLoc = await _showAddNewLocationDialog();
+                          if (newLoc != null && newLoc.isNotEmpty) {
+                            final updated = await AuthService.getLocations();
+                            setDialogState(() {
+                              locations = updated;
+                              selectedLocation = newLoc;
+                            });
+                          }
+                        },
+                        child: Row(
+                          children: const [
+                            Icon(Icons.add_location_alt_rounded, color: Color(0xFF8B5CF6), size: 14),
+                            SizedBox(width: 4),
+                            Text('+ Add New Location', style: TextStyle(color: Color(0xFF8B5CF6), fontSize: 11, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  DropdownButtonFormField<String>(
+                    initialValue: locations.contains(selectedLocation) ? selectedLocation : (locations.isNotEmpty ? locations.first : null),
+                    dropdownColor: Colors.white,
+                    style: const TextStyle(color: Color(0xFF0F172A), fontSize: 13.5),
+                    decoration: const InputDecoration(
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFCBD5E1))),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF8B5CF6))),
+                    ),
+                    items: locations.map((loc) {
+                      return DropdownMenuItem<String>(
+                        value: loc,
+                        child: Row(
+                          children: [
+                            const Icon(Icons.location_on_rounded, color: Color(0xFF8B5CF6), size: 15),
+                            const SizedBox(width: 6),
+                            Text(loc, style: const TextStyle(color: Color(0xFF0F172A))),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setDialogState(() => selectedLocation = val);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF8B5CF6),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () async {
+                  if (formKey.currentState!.validate()) {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final nav = Navigator.of(ctx);
+
+                    final result = await AuthService.updateDeliveryBoyResult(
+                      username: username,
+                      name: nameController.text,
+                      password: passwordController.text,
+                      mobile: mobileController.text,
+                      vehicle: vehicleController.text,
+                      location: selectedLocation,
+                    );
+
+                    final bool success = result['success'] == true;
+                    final String msg = result['message'] ?? 'Action completed';
+
+                    if (success) {
+                      nav.pop();
+                      _loadAllData();
+                    }
+
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(msg),
+                        backgroundColor: success ? const Color(0xFF10B981) : Colors.redAccent,
+                      ),
+                    );
+                  }
+                },
+                child: const Text('Update Delivery Boy', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -312,26 +1036,29 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
+        title: Row(
+          children: const [
             Icon(Icons.delete_forever_rounded, color: Colors.redAccent),
             SizedBox(width: 10),
-            Text('Delete Seller?', style: TextStyle(color: Colors.white, fontSize: 18)),
+            Text('Delete Seller?', style: TextStyle(color: Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Text(
           'Are you sure you want to delete seller "$name" ($username)?',
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: Color(0xFF334155)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
             onPressed: () async {
               Navigator.pop(ctx);
               await AuthService.deleteSeller(username);
@@ -345,7 +1072,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                 _loadAllData();
               }
             },
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+            child: const Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -356,26 +1083,29 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
+        title: Row(
+          children: const [
             Icon(Icons.delete_forever_rounded, color: Colors.redAccent),
             SizedBox(width: 10),
-            Text('Delete Delivery Partner?', style: TextStyle(color: Colors.white, fontSize: 17)),
+            Text('Delete Delivery Partner?', style: TextStyle(color: Color(0xFF0F172A), fontSize: 17, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Text(
           'Are you sure you want to delete delivery partner "$name" ($username)?',
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: Color(0xFF334155)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
             onPressed: () async {
               Navigator.pop(ctx);
               await AuthService.deleteDeliveryBoy(username);
@@ -389,7 +1119,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                 _loadAllData();
               }
             },
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+            child: const Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -409,86 +1139,451 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth >= 650;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
-        elevation: 2,
-        title: const Row(
-          children: [
-            Icon(Icons.admin_panel_settings_rounded, color: Colors.cyanAccent),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Admin Dashboard',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
-                overflow: TextOverflow.ellipsis,
+      backgroundColor: const Color(0xFFF8FAFC), // Modern Light Background
+      appBar: isDesktop
+          ? null
+          : AppBar(
+              backgroundColor: const Color(0xFF0F172A),
+              elevation: 2,
+              leading: Builder(
+                builder: (ctx) => IconButton(
+                  icon: const Icon(Icons.menu_rounded, color: Colors.white),
+                  tooltip: 'Open Menu',
+                  onPressed: () => Scaffold.of(ctx).openDrawer(),
+                ),
+              ),
+              title: Text(
+                _selectedIndex == 0
+                    ? 'Manage Sellers'
+                    : (_selectedIndex == 1 ? 'Manage Delivery' : 'Order Details'),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17),
+              ),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.refresh_rounded, color: Color(0xFF0EA5E9)),
+                  tooltip: 'Refresh Data',
+                  onPressed: _loadAllData,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+                  tooltip: 'Logout',
+                  onPressed: _handleLogout,
+                ),
+              ],
+            ),
+      drawer: isDesktop ? null : _buildMobileDrawer(),
+      body: Row(
+        children: [
+          // Permanent Sidebar for Desktop/Web view
+          if (isDesktop) _buildDesktopSidebar(),
+
+          // Main Active Screen Content
+          Expanded(
+            child: Container(
+              color: const Color(0xFFF8FAFC),
+              child: SafeArea(
+                child: Column(
+                  children: [
+                    // Desktop Header Bar
+                    if (isDesktop) _buildDesktopHeaderBar(),
+
+                    // Content Area
+                    Expanded(
+                      child: _selectedIndex == 0
+                          ? _buildSellersTab()
+                          : (_selectedIndex == 1 ? _buildDeliveryBoysTab() : _buildOrderDetailsTab()),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
-            tooltip: 'Logout',
-            onPressed: _handleLogout,
           ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.cyanAccent,
-          labelColor: Colors.cyanAccent,
-          unselectedLabelColor: Colors.grey,
-          isScrollable: true,
-          tabs: const [
-            Tab(icon: Icon(Icons.storefront_rounded), text: 'Manage Sellers'),
-            Tab(icon: Icon(Icons.two_wheeler_rounded), text: 'Manage Delivery Boys'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          // Tab 1: Manage Sellers
-          _buildSellersTab(),
-          // Tab 2: Manage Delivery Boys
-          _buildDeliveryBoysTab(),
         ],
       ),
     );
   }
 
-  Widget _buildSellersTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
+  /// Build Left Sidebar Menu for Desktop/Web view
+  Widget _buildDesktopSidebar() {
+    return Container(
+      width: 250,
+      decoration: const BoxDecoration(
+        color: Color(0xFF0F172A), // Sleek Navy Sidebar
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x0F000000),
+            blurRadius: 10,
+            offset: Offset(2, 0),
+          ),
+        ],
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Registered Sellers',
-                  style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+          // Branding Header
+          Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0EA5E9),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 24),
                 ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        'Daily Mart 🛍️',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        'Admin Control Portal',
+                        style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const Divider(color: Color(0xFF1E293B), height: 1),
+          const SizedBox(height: 16),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            child: Text(
+              'MAIN MENU',
+              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade500, letterSpacing: 1.2),
+            ),
+          ),
+
+          // Menu Option 1: Manage Sellers
+          _buildSidebarMenuItem(
+            index: 0,
+            title: 'Manage Sellers',
+            subtitle: '${_sellers.length} Stores Registered',
+            icon: Icons.storefront_rounded,
+            activeColor: const Color(0xFF0EA5E9),
+          ),
+
+          const SizedBox(height: 6),
+
+          // Menu Option 2: Manage Delivery Boys
+          _buildSidebarMenuItem(
+            index: 1,
+            title: 'Manage Delivery Boys',
+            subtitle: '${_deliveryBoys.length} Partners Registered',
+            icon: Icons.two_wheeler_rounded,
+            activeColor: const Color(0xFF8B5CF6),
+          ),
+
+          const SizedBox(height: 6),
+
+          // Menu Option 3: Order Details
+          _buildSidebarMenuItem(
+            index: 2,
+            title: 'Order Details',
+            subtitle: '${_flatOrdersList.length} Total Orders',
+            icon: Icons.inventory_2_rounded,
+            activeColor: const Color(0xFF10B981),
+          ),
+
+          const Spacer(),
+
+          const Divider(color: Color(0xFF1E293B), height: 1),
+
+          // Admin User Details & Logout Button at Bottom of Sidebar
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(12),
               ),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0EA5E9),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  const CircleAvatar(
+                    radius: 16,
+                    backgroundColor: Color(0xFF0EA5E9),
+                    child: Icon(Icons.person_rounded, color: Colors.white, size: 18),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.user.name.isNotEmpty ? widget.user.name : 'Administrator',
+                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const Text(
+                          'System Admin',
+                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.logout_rounded, color: Color(0xFFEF4444), size: 18),
+                    tooltip: 'Logout',
+                    onPressed: _handleLogout,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Single Item in Sidebar
+  Widget _buildSidebarMenuItem({
+    required int index,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color activeColor,
+  }) {
+    final isSelected = _selectedIndex == index;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      child: Material(
+        color: isSelected ? activeColor.withValues(alpha: 0.15) : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => setState(() => _selectedIndex = index),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: isSelected ? Border.all(color: activeColor.withValues(alpha: 0.4)) : null,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  color: isSelected ? activeColor : const Color(0xFF94A3B8),
+                  size: 20,
                 ),
-                icon: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
-                label: const Text('Add Seller', style: TextStyle(color: Colors.white, fontSize: 12)),
-                onPressed: _showAddSellerDialog,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : const Color(0xFFCBD5E1),
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          fontSize: 13.5,
+                        ),
+                      ),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: isSelected ? activeColor.withValues(alpha: 0.9) : const Color(0xFF64748B),
+                          fontSize: 10.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (isSelected)
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: activeColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Header Bar for Desktop View
+  Widget _buildDesktopHeaderBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+      ),
+      child: Row(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _selectedIndex == 0
+                    ? 'Sellers Management'
+                    : (_selectedIndex == 1 ? 'Delivery Partners Management' : 'Order Details Overview'),
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+              ),
+              Text(
+                _selectedIndex == 0
+                    ? 'Overview of all registered sellers and store details'
+                    : (_selectedIndex == 1
+                        ? 'Overview of active delivery partners and assignments'
+                        : 'View all orders in tabular format with date range filtering'),
+                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const Spacer(),
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: Color(0xFF0EA5E9)),
+            tooltip: 'Refresh Data',
+            onPressed: _loadAllData,
+          ),
+          const SizedBox(width: 8),
+          if (_selectedIndex != 2)
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _selectedIndex == 0 ? const Color(0xFF0EA5E9) : const Color(0xFF8B5CF6),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                elevation: 1,
+              ),
+              icon: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+              label: Text(
+                _selectedIndex == 0 ? '+ Add New Seller' : '+ Add Delivery Boy',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              onPressed: _selectedIndex == 0 ? _showAddSellerDialog : _showAddDeliveryBoyDialog,
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Mobile Drawer for Mobile Views
+  Widget _buildMobileDrawer() {
+    return Drawer(
+      backgroundColor: const Color(0xFF0F172A),
+      child: Column(
+        children: [
+          DrawerHeader(
+            decoration: const BoxDecoration(color: Color(0xFF1E293B)),
+            child: Row(
+              children: const [
+                Icon(Icons.admin_panel_settings_rounded, color: Color(0xFF0EA5E9), size: 36),
+                SizedBox(width: 12),
+                Text('Admin Dashboard', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+              ],
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.storefront_rounded, color: Color(0xFF0EA5E9)),
+            title: const Text('Manage Sellers', style: TextStyle(color: Colors.white)),
+            selected: _selectedIndex == 0,
+            onTap: () {
+              setState(() => _selectedIndex = 0);
+              Navigator.pop(context);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.two_wheeler_rounded, color: Color(0xFF8B5CF6)),
+            title: const Text('Manage Delivery Boys', style: TextStyle(color: Colors.white)),
+            selected: _selectedIndex == 1,
+            onTap: () {
+              setState(() => _selectedIndex = 1);
+              Navigator.pop(context);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.inventory_2_rounded, color: Color(0xFF10B981)),
+            title: const Text('Order Details', style: TextStyle(color: Colors.white)),
+            selected: _selectedIndex == 2,
+            onTap: () {
+              setState(() => _selectedIndex = 2);
+              Navigator.pop(context);
+            },
+          ),
+          const Spacer(),
+          ListTile(
+            leading: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+            title: const Text('Logout', style: TextStyle(color: Colors.redAccent)),
+            onTap: _handleLogout,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Sellers Tab View
+  Widget _buildSellersTab() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth >= 650;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (!isDesktop) ...[
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Registered Sellers',
+                    style: TextStyle(color: Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0EA5E9),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  icon: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                  label: const Text('Add Seller', style: TextStyle(color: Colors.white, fontSize: 12)),
+                  onPressed: _showAddSellerDialog,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
           _isLoading
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
               : _sellers.isEmpty
-                  ? const Center(
-                      child: Text('No sellers found.', style: TextStyle(color: Colors.grey)),
+                  ? Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(32),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          children: const [
+                            Icon(Icons.storefront_rounded, size: 48, color: Color(0xFF94A3B8)),
+                            SizedBox(height: 12),
+                            Text('No sellers found.', style: TextStyle(color: Color(0xFF64748B), fontSize: 14)),
+                          ],
+                        ),
+                      ),
                     )
                   : ListView.builder(
                       shrinkWrap: true,
@@ -499,21 +1594,57 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                         final name = s['name'] ?? 'Seller Store';
                         final username = s['username'] ?? '';
                         final mobile = s['mobile'] ?? '';
+                        final location = (s['location'] ?? '').toString().trim();
 
-                        return Card(
-                          color: const Color(0xFF1E293B),
+                        return Container(
                           margin: const EdgeInsets.only(bottom: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          decoration: BoxDecoration(
+                            color: Colors.white, // Clean Light Card
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0x0A000000),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
                           child: ListTile(
-                            leading: const CircleAvatar(
-                              backgroundColor: Color(0xFF0EA5E9),
-                              child: Icon(Icons.storefront_rounded, color: Colors.white),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            leading: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0EA5E9).withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.storefront_rounded, color: Color(0xFF0EA5E9), size: 22),
                             ),
-                            title: Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                            subtitle: Text('ID: $username  •  +91 $mobile', style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                              onPressed: () => _confirmDeleteSeller(username, name),
+                            title: Text(
+                              name,
+                              style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                            subtitle: Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                'ID: $username  •  +91 $mobile${location.isNotEmpty ? '  •  📍 $location' : ''}',
+                                style: const TextStyle(color: Color(0xFF64748B), fontSize: 12.5),
+                              ),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit_outlined, color: Color(0xFF0EA5E9)),
+                                  tooltip: 'Edit Seller',
+                                  onPressed: () => _showEditSellerDialog(s),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                                  tooltip: 'Delete Seller',
+                                  onPressed: () => _confirmDeleteSeller(username, name),
+                                ),
+                              ],
                             ),
                           ),
                         );
@@ -524,39 +1655,56 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
     );
   }
 
+  /// Delivery Boys Tab View
   Widget _buildDeliveryBoysTab() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth >= 650;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.all(20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Delivery Partners',
-                  style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+          if (!isDesktop) ...[
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Delivery Partners',
+                    style: TextStyle(color: Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
                 ),
-              ),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF8B5CF6),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF8B5CF6),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  icon: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                  label: const Text('Add Delivery Boy', style: TextStyle(color: Colors.white, fontSize: 12)),
+                  onPressed: _showAddDeliveryBoyDialog,
                 ),
-                icon: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
-                label: const Text('Add Delivery Boy', style: TextStyle(color: Colors.white, fontSize: 12)),
-                onPressed: _showAddDeliveryBoyDialog,
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
           _isLoading
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
               : _deliveryBoys.isEmpty
-                  ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(30.0),
-                        child: Text('No delivery boys created yet.', style: TextStyle(color: Colors.grey)),
+                  ? Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(32),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          children: const [
+                            Icon(Icons.two_wheeler_rounded, size: 48, color: Color(0xFF94A3B8)),
+                            SizedBox(height: 12),
+                            Text('No delivery boys created yet.', style: TextStyle(color: Color(0xFF64748B), fontSize: 14)),
+                          ],
+                        ),
                       ),
                     )
                   : ListView.builder(
@@ -569,26 +1717,691 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                         final username = d['username'] ?? '';
                         final mobile = d['mobile'] ?? '';
                         final vehicle = d['vehicle'] ?? 'Bike';
+                        final location = (d['location'] ?? '').toString().trim();
 
-                        return Card(
-                          color: const Color(0xFF1E293B),
+                        return Container(
                           margin: const EdgeInsets.only(bottom: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          decoration: BoxDecoration(
+                            color: Colors.white, // Clean Light Card
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0x0A000000),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
                           child: ListTile(
-                            leading: const CircleAvatar(
-                              backgroundColor: Color(0xFF8B5CF6),
-                              child: Icon(Icons.two_wheeler_rounded, color: Colors.white),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            leading: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.two_wheeler_rounded, color: Color(0xFF8B5CF6), size: 22),
                             ),
-                            title: Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                            subtitle: Text('ID: $username  •  +91 $mobile  •  $vehicle', style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                              onPressed: () => _confirmDeleteDeliveryBoy(username, name),
+                            title: Text(
+                              name,
+                              style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                            subtitle: Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                'ID: $username  •  +91 $mobile  •  $vehicle${location.isNotEmpty ? '  •  📍 $location' : ''}',
+                                style: const TextStyle(color: Color(0xFF64748B), fontSize: 12.5),
+                              ),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit_outlined, color: Color(0xFF8B5CF6)),
+                                  tooltip: 'Edit Delivery Boy',
+                                  onPressed: () => _showEditDeliveryBoyDialog(d),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                                  tooltip: 'Delete Delivery Boy',
+                                  onPressed: () => _confirmDeleteDeliveryBoy(username, name),
+                                ),
+                              ],
                             ),
                           ),
                         );
                       },
                     ),
+        ],
+      ),
+    );
+  }
+
+  /// Order Details Tab View (10-Column Data Table with Date Range Filter)
+  Widget _buildOrderDetailsTab() {
+    final filtered = _filteredOrders;
+
+    double totalCash = 0.0;
+    double totalOnline = 0.0;
+
+    for (var ord in filtered) {
+      final double amt = double.tryParse(ord['amount']?.toString() ?? '') ?? 0.0;
+      final String payStatus = (ord['payment_status_display'] ?? '').toString().toLowerCase();
+      final String payMode = (ord['payment_mode_display'] ?? '').toString().toLowerCase();
+
+      if (payStatus == 'paid') {
+        if (payMode.contains('online') || payMode.contains('upi') || payMode.contains('paytm')) {
+          totalOnline += amt;
+        } else {
+          totalCash += amt;
+        }
+      }
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Date Range Filter Bar
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x0A000000),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                )
+              ],
+            ),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.filter_alt_rounded, color: Color(0xFF0EA5E9), size: 20),
+                    SizedBox(width: 6),
+                    Text('Date Range Filter:', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14)),
+                  ],
+                ),
+
+                // Start Date Input
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    side: const BorderSide(color: Color(0xFFCBD5E1)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.calendar_today_rounded, size: 16, color: Color(0xFF0EA5E9)),
+                  label: Text(
+                    _startDate == null ? 'Start Date' : 'From: ${_startDate!.day}/${_startDate!.month}/${_startDate!.year}',
+                    style: TextStyle(color: _startDate == null ? const Color(0xFF64748B) : const Color(0xFF0F172A), fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _startDate ?? DateTime.now(),
+                      firstDate: DateTime(2024),
+                      lastDate: DateTime(2030),
+                    );
+                    if (picked != null) {
+                      setState(() => _startDate = picked);
+                    }
+                  },
+                ),
+
+                const Text('to', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+
+                // End Date Input
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    side: const BorderSide(color: Color(0xFFCBD5E1)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.event_rounded, size: 16, color: Color(0xFF0EA5E9)),
+                  label: Text(
+                    _endDate == null ? 'End Date' : 'To: ${_endDate!.day}/${_endDate!.month}/${_endDate!.year}',
+                    style: TextStyle(color: _endDate == null ? const Color(0xFF64748B) : const Color(0xFF0F172A), fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _endDate ?? DateTime.now(),
+                      firstDate: DateTime(2024),
+                      lastDate: DateTime(2030),
+                    );
+                    if (picked != null) {
+                      setState(() => _endDate = picked);
+                    }
+                  },
+                ),
+
+                // Preset Buttons
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF1F5F9),
+                    foregroundColor: const Color(0xFF0F172A),
+                    elevation: 0,
+                  ),
+                  onPressed: () {
+                    final today = DateTime.now();
+                    setState(() {
+                      _startDate = DateTime(today.year, today.month, today.day);
+                      _endDate = DateTime(today.year, today.month, today.day);
+                    });
+                  },
+                  child: const Text('Today', style: TextStyle(fontSize: 12)),
+                ),
+
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF1F5F9),
+                    foregroundColor: const Color(0xFF0F172A),
+                    elevation: 0,
+                  ),
+                  onPressed: () {
+                    final today = DateTime.now();
+                    setState(() {
+                      _startDate = today.subtract(const Duration(days: 7));
+                      _endDate = today;
+                    });
+                  },
+                  child: const Text('Last 7 Days', style: TextStyle(fontSize: 12)),
+                ),
+
+                if (_startDate != null || _endDate != null)
+                  TextButton.icon(
+                    icon: const Icon(Icons.clear_rounded, size: 16, color: Colors.redAccent),
+                    label: const Text('Clear Filter', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+                    onPressed: () => setState(() {
+                      _startDate = null;
+                      _endDate = null;
+                    }),
+                  ),
+
+                const SizedBox(width: 12),
+                // Live Row Search Bar Filter
+                Container(
+                  width: 280,
+                  height: 38,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.search_rounded, size: 18, color: Color(0xFF0EA5E9)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: TextField(
+                          controller: _tableSearchController,
+                          onChanged: (val) {
+                            setState(() {
+                              _tableSearchQuery = val.trim().toLowerCase();
+                            });
+                          },
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF0F172A), fontWeight: FontWeight.w600),
+                          decoration: const InputDecoration(
+                            hintText: 'Search Order #, Customer, Seller, Location...',
+                            hintStyle: TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8)),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ),
+                      if (_tableSearchQuery.isNotEmpty)
+                        GestureDetector(
+                          onTap: () {
+                            _tableSearchController.clear();
+                            setState(() {
+                              _tableSearchQuery = '';
+                            });
+                          },
+                          child: const Icon(Icons.close_rounded, size: 16, color: Color(0xFF64748B)),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Scroll Controls & Table Title Header with Total Cash & Total Online Badges
+          Wrap(
+            spacing: 12,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            alignment: WrapAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.table_chart_rounded, size: 18, color: Color(0xFF0EA5E9)),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Orders Table (${filtered.length} Records)',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A)),
+                  ),
+                ],
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Total Cash Badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FDF4),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFBBF7D0)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.payments_rounded, size: 15, color: Color(0xFF16A34A)),
+                        const SizedBox(width: 5),
+                        const Text('Total Cash: ', style: TextStyle(fontSize: 12, color: Color(0xFF15803D), fontWeight: FontWeight.w600)),
+                        Text('₹${totalCash.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, color: Color(0xFF166534), fontWeight: FontWeight.w800)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Total Online Badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0F9FF),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFBAE6FD)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.credit_card_rounded, size: 15, color: Color(0xFF0284C7)),
+                        const SizedBox(width: 5),
+                        const Text('Total Online: ', style: TextStyle(fontSize: 12, color: Color(0xFF0369A1), fontWeight: FontWeight.w600)),
+                        Text('₹${totalOnline.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, color: Color(0xFF075985), fontWeight: FontWeight.w800)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Total Collection Badge (Total Cash + Total Online in BOLD)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3E8FF),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFE9D5FF)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.account_balance_wallet_rounded, size: 15, color: Color(0xFF9333EA)),
+                        const SizedBox(width: 5),
+                        const Text('Total Collection: ', style: TextStyle(fontSize: 12, color: Color(0xFF7E22CE), fontWeight: FontWeight.bold)),
+                        Text('₹${(totalCash + totalOnline).toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, color: Color(0xFF581C87), fontWeight: FontWeight.w900)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Export Excel Button
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF16A34A),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 1,
+                    ),
+                    icon: const Icon(Icons.file_download_rounded, size: 16, color: Colors.white),
+                    label: const Text('Export Excel', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    onPressed: () {
+                      if (filtered.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('No order data available to export.')),
+                        );
+                        return;
+                      }
+                      CsvExporter.exportOrders(filtered);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('${filtered.length} orders downloaded successfully as Excel/CSV!'),
+                          backgroundColor: const Color(0xFF16A34A),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  // Clock Delay Time Filter Button
+                  PopupMenuButton<int>(
+                    tooltip: 'Filter by Delivery Delay Time',
+                    initialValue: _selectedDelayMinutes,
+                    onSelected: (val) {
+                      setState(() {
+                        _selectedDelayMinutes = val;
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: _selectedDelayMinutes > 0 ? const Color(0xFFFEF3C7) : Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _selectedDelayMinutes > 0 ? const Color(0xFFF59E0B) : const Color(0xFFCBD5E1),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.access_time_rounded,
+                            size: 16,
+                            color: _selectedDelayMinutes > 0 ? const Color(0xFFD97706) : const Color(0xFF0EA5E9),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            _selectedDelayMinutes == 0
+                                ? 'Delay Time'
+                                : _selectedDelayMinutes >= 60
+                                    ? '> ${(_selectedDelayMinutes / 60).toStringAsFixed(_selectedDelayMinutes % 60 == 0 ? 0 : 1)} Hr'
+                                    : '> ${_selectedDelayMinutes}m',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: _selectedDelayMinutes > 0 ? const Color(0xFFB45309) : const Color(0xFF0F172A),
+                            ),
+                          ),
+                          const Icon(Icons.arrow_drop_down_rounded, size: 18, color: Color(0xFF64748B)),
+                        ],
+                      ),
+                    ),
+                    itemBuilder: (context) => [
+                      const PopupMenuItem<int>(
+                        value: 0,
+                        child: Text('All Delivery Times'),
+                      ),
+                      const PopupMenuItem<int>(
+                        value: 15,
+                        child: Text('> 15 Mins Delay'),
+                      ),
+                      const PopupMenuItem<int>(
+                        value: 30,
+                        child: Text('> 30 Mins Delay'),
+                      ),
+                      const PopupMenuItem<int>(
+                        value: 45,
+                        child: Text('> 45 Mins Delay'),
+                      ),
+                      const PopupMenuItem<int>(
+                        value: 60,
+                        child: Text('> 1 Hour Delay'),
+                      ),
+                      const PopupMenuItem<int>(
+                        value: 120,
+                        child: Text('> 2 Hours Delay'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 8),
+                  // Order Status Dropdown Filter
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: _selectedStatusFilter != 'All' ? const Color(0xFFF0F9FF) : Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: _selectedStatusFilter != 'All' ? const Color(0xFF0EA5E9) : const Color(0xFFCBD5E1),
+                      ),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedStatusFilter,
+                        icon: const Icon(Icons.filter_list_rounded, size: 16, color: Color(0xFF0EA5E9)),
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() {
+                              _selectedStatusFilter = val;
+                            });
+                          }
+                        },
+                        items: const [
+                          DropdownMenuItem(value: 'All', child: Text('All Statuses')),
+                          DropdownMenuItem(value: 'Pending', child: Text('Pending')),
+                          DropdownMenuItem(value: 'Pickup', child: Text('Pickup')),
+                          DropdownMenuItem(value: 'Delivered', child: Text('Delivered')),
+                          DropdownMenuItem(value: 'Cancelled', child: Text('Cancelled')),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // 10-Column Data Table Container with Prominent Visible Scrollbar
+          _isLoading
+              ? const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
+              : filtered.isEmpty
+                  ? Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(32),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          children: [
+                            const Icon(Icons.inventory_2_rounded, size: 48, color: Color(0xFF94A3B8)),
+                            const SizedBox(height: 12),
+                            Text(
+                              _flatOrdersList.isEmpty
+                                  ? 'No real orders found in database yet.\nPlace an order from Customer App to view it live here.'
+                                  : 'No orders match the selected date range.',
+                              style: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x0A000000),
+                            blurRadius: 8,
+                            offset: Offset(0, 2),
+                          )
+                        ],
+                      ),
+                      child: Listener(
+                        onPointerDown: (event) {
+                          _dragStartX = event.position.dx;
+                        },
+                        onPointerMove: (event) {
+                          if (_horizontalScrollController.hasClients) {
+                            final double deltaX = event.position.dx - _dragStartX;
+                            _dragStartX = event.position.dx;
+                            final double targetOffset = (_horizontalScrollController.offset - deltaX)
+                                .clamp(0.0, _horizontalScrollController.position.maxScrollExtent);
+                            _horizontalScrollController.jumpTo(targetOffset);
+                          }
+                        },
+                        child: ScrollConfiguration(
+                          behavior: AppScrollBehavior(),
+                          child: SingleChildScrollView(
+                            controller: _horizontalScrollController,
+                            scrollDirection: Axis.horizontal,
+                            physics: const BouncingScrollPhysics(),
+                            child: DataTable(
+                            headingRowColor: WidgetStateProperty.all(const Color(0xFF0F172A)),
+                            dataRowMinHeight: 52,
+                            dataRowMaxHeight: 60,
+                            horizontalMargin: 16,
+                            columnSpacing: 20,
+                            columns: const [
+                              DataColumn(label: Text('S.N.', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text('Date', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text('Customer Name', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text('Order No.', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text('Order Send Date Time', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text('Amount', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text('Seller Name', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text('Seller Location', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text('Pickup Date Time', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text('Delivered Date Time', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text('Order Status', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text('Delivery Boy Name', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text('Status Date Time', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text('Payment Status', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text('Payment Mode', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                            ],
+                            rows: List.generate(filtered.length, (idx) {
+                              final ord = filtered[idx];
+                              final status = (ord['order_status'] ?? 'Pending').toString();
+
+                              Color statusBg = const Color(0xFFFEF3C7);
+                              Color statusFg = const Color(0xFFB45309);
+                              if (status == 'Delivered') {
+                                statusBg = const Color(0xFFDCFCE7);
+                                statusFg = const Color(0xFF15803D);
+                              } else if (status == 'Pickup') {
+                                statusBg = const Color(0xFFDBEAFE);
+                                statusFg = const Color(0xFF1D4ED8);
+                              } else if (status == 'Cancelled') {
+                                statusBg = const Color(0xFFFEE2E2);
+                                statusFg = const Color(0xFFB91C1C);
+                              }
+
+                              final double amt = double.tryParse(ord['amount']?.toString() ?? '') ?? 0.0;
+
+                              final String payStatus = (ord['payment_status_display'] ?? 'Unpaid').toString();
+                              final bool isPaid = payStatus.toLowerCase() == 'paid';
+
+                              final String payMode = (ord['payment_mode_display'] ?? 'Cash').toString();
+                              final bool isOnline = payMode.toLowerCase().contains('online') ||
+                                  payMode.toLowerCase().contains('upi') ||
+                                  payMode.toLowerCase().contains('paytm');
+
+                              return DataRow(
+                                color: WidgetStateProperty.all(idx % 2 == 0 ? Colors.white : const Color(0xFFF8FAFC)),
+                                cells: [
+                                  DataCell(Text('${idx + 1}', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF64748B)))),
+                                  DataCell(Text((ord['date'] ?? '').toString(), style: const TextStyle(color: Color(0xFF0F172A)))),
+                                  DataCell(Text((ord['customer_name'] ?? '').toString(), style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w600))),
+                                  DataCell(Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFFFDBA74))),
+                                    child: Text((ord['order_no'] ?? '').toString(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFC2410C))),
+                                  )),
+                                  DataCell(Text((ord['order_send_time'] ?? '').toString(), style: const TextStyle(color: Color(0xFF475569), fontSize: 12))),
+                                  DataCell(Text('₹${amt.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A)))),
+                                  DataCell(Text((ord['seller_name'] ?? '').toString(), style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w500))),
+                                  DataCell(Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFFCBD5E1))),
+                                    child: Text((ord['seller_location'] ?? '-').toString(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+                                  )),
+                                  DataCell((() {
+                                    final String pTime = (ord['pickup_time'] ?? '').toString().trim();
+                                    return pTime.isEmpty
+                                        ? const Text('-', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))
+                                        : Text(pTime, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12));
+                                  })()),
+                                  DataCell((() {
+                                    final String dTime = (ord['delivered_time'] ?? '').toString().trim();
+                                    return dTime.isEmpty
+                                        ? const Text('-', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))
+                                        : Text(dTime, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12));
+                                  })()),
+                                  DataCell(Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(color: statusBg, borderRadius: BorderRadius.circular(6)),
+                                    child: Text(status, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: statusFg)),
+                                  )),
+                                  DataCell(Text((ord['delivery_boy_name'] ?? '').toString(), style: const TextStyle(color: Color(0xFF475569)))),
+                                  DataCell((() {
+                                    final String stTime = (ord['status_time'] ?? '').toString().trim();
+                                    return stTime.isEmpty
+                                        ? const Text('-', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))
+                                        : Text(stTime, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12));
+                                  })()),
+                                  DataCell(Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: isPaid ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: isPaid ? const Color(0xFF86EFAC) : const Color(0xFFFDE68A)),
+                                    ),
+                                    child: Text(
+                                      payStatus,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: isPaid ? const Color(0xFF15803D) : const Color(0xFFB45309),
+                                      ),
+                                    ),
+                                  )),
+                                  DataCell(
+                                    payMode.isEmpty
+                                        ? const Text('-', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))
+                                        : Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: isOnline ? const Color(0xFFF0F9FF) : const Color(0xFFF8FAFC),
+                                              borderRadius: BorderRadius.circular(6),
+                                              border: Border.all(color: isOnline ? const Color(0xFFBAE6FD) : const Color(0xFFE2E8F0)),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  isOnline ? Icons.credit_card_rounded : Icons.payments_rounded,
+                                                  size: 13,
+                                                  color: isOnline ? const Color(0xFF0284C7) : const Color(0xFF475569),
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  payMode,
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: isOnline ? const Color(0xFF0369A1) : const Color(0xFF334155),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                  ),
+                                ],
+                              );
+                            }),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
         ],
       ),
     );

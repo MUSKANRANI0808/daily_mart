@@ -1,0 +1,24 @@
+{
+  "functions": {
+    "source": "functions"
+  },
+  "hosting": {
+    "site": "daily-mart-raniganj",
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/api/**",
+        "function": "api"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

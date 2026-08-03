@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
@@ -80,10 +79,37 @@ class AuthService {
     await prefs.remove(_lastSellerMobileKey);
   }
 
+  static const String _currentDeliveryBoyKey = 'current_delivery_boy';
+
+  /// Save logged in Delivery Boy session
+  static Future<void> saveDeliveryBoySession(Map<String, dynamic> deliveryBoy) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_currentDeliveryBoyKey, jsonEncode(deliveryBoy));
+  }
+
+  /// Get active logged-in Delivery Boy session
+  static Future<Map<String, dynamic>?> getDeliveryBoySession() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = prefs.getString(_currentDeliveryBoyKey);
+    if (jsonStr != null && jsonStr.isNotEmpty) {
+      try {
+        return Map<String, dynamic>.from(jsonDecode(jsonStr));
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  /// Clear active logged-in Delivery Boy session
+  static Future<void> clearDeliveryBoySession() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_currentDeliveryBoyKey);
+  }
+
   /// Logout current user
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_currentUserKey);
+    await prefs.remove(_currentDeliveryBoyKey);
     await clearLastSelectedSeller();
   }
 
@@ -198,120 +224,100 @@ class AuthService {
     return sellerUser;
   }
 
-  /// Get Saved Customer Profile Data (Name, etc.)
+  /// Fetch and Sync Customer Profile & Addresses from VPS Server Database
+  static Future<Map<String, dynamic>?> fetchAndSyncCustomerProfileFromVps(String mobile) async {
+    final trimmedMobile = mobile.trim();
+    if (trimmedMobile.isEmpty) return null;
+
+    try {
+      final res = await VpsApiService.get('get-customer-profile&mobile=$trimmedMobile');
+      if (res != null && res['success'] == true) {
+        final prefs = await SharedPreferences.getInstance();
+
+        final String name = (res['name'] ?? '').toString().trim();
+        if (name.isNotEmpty && !name.startsWith('Customer')) {
+          final profileData = {'mobile': trimmedMobile, 'name': name};
+          await prefs.setString('customer_profile_$trimmedMobile', jsonEncode(profileData));
+        }
+
+        final String? addrJsonStr = res['address_json'];
+        if (addrJsonStr != null && addrJsonStr.trim().isNotEmpty) {
+          await prefs.setString('customer_addresses_$trimmedMobile', addrJsonStr.trim());
+        }
+
+        return res;
+      }
+    } catch (e) {
+      debugPrint('Error syncing customer profile from VPS: $e');
+    }
+    return null;
+  }
+
+  /// Get Customer Profile Data & Address directly from VPS Server Database
   static Future<Map<String, dynamic>?> getCustomerProfile(String mobile) async {
+    final trimmedMobile = mobile.trim();
+    final cleanDigits = trimmedMobile.replaceAll(RegExp(r'\D'), '');
+    final mobKey = cleanDigits.length >= 10 ? cleanDigits.substring(cleanDigits.length - 10) : trimmedMobile;
+
+    if (mobKey.isEmpty) return null;
+
+    // 1. Fetch directly from VPS Server Database via get-customer-profile
+    final vpsRes = await fetchAndSyncCustomerProfileFromVps(mobKey);
+    if (vpsRes != null && vpsRes['success'] == true) {
+      return vpsRes;
+    }
+
+    // 2. Fetch via customer-login API
+    try {
+      final res = await VpsApiService.post('customer-login', {
+        'mobile': mobKey,
+      });
+      if (res != null && res['success'] == true) {
+        return res;
+      }
+    } catch (_) {}
+
+    // 3. Fallback to local cache
     final prefs = await SharedPreferences.getInstance();
-    final str = prefs.getString('customer_profile_${mobile.trim()}');
+    final str = prefs.getString('customer_profile_$mobKey');
     if (str != null && str.isNotEmpty) {
       try {
-        return Map<String, dynamic>.from(jsonDecode(str));
+        final map = Map<String, dynamic>.from(jsonDecode(str));
+        return map;
       } catch (_) {}
     }
     return null;
   }
 
-  /// Save Customer Profile Data
+  /// Save Customer Profile Data & Sync to VPS Server Database
   static Future<void> saveCustomerProfile(String mobile, {required String name}) async {
+    final trimmedMobile = mobile.trim();
+    final trimmedName = name.trim();
     final prefs = await SharedPreferences.getInstance();
-    final data = {'mobile': mobile.trim(), 'name': name.trim()};
-    await prefs.setString('customer_profile_${mobile.trim()}', jsonEncode(data));
+    final data = {'mobile': trimmedMobile, 'name': trimmedName};
+    await prefs.setString('customer_profile_$trimmedMobile', jsonEncode(data));
+
+    try {
+      await VpsApiService.post('update-customer-profile', {
+        'mobile': trimmedMobile,
+        'name': trimmedName,
+      });
+    } catch (_) {}
   }
 
-  /// Deep Customer Name Resolver for Seller Dashboard & Delivery Boy (VPS DB + Local Cache)
-  static Future<String> getCustomerDisplayName(String custMobile, {String? dbCustomerName}) async {
-    final cleanMobile = custMobile.trim();
-    if (cleanMobile.isEmpty) return 'Customer';
-
-    // 0. If backend database provided a non-empty customer_name that isn't generic
-    if (dbCustomerName != null && dbCustomerName.trim().isNotEmpty) {
-      final dbName = dbCustomerName.trim();
-      if (!dbName.toLowerCase().startsWith('customer')) {
-        await saveCustomerProfile(cleanMobile, name: dbName);
-        return dbName;
-      }
-    }
-
+  /// Save Customer Addresses & Sync to VPS Server Database
+  static Future<void> saveCustomerAddresses(String mobile, List<Map<String, dynamic>> addresses) async {
+    final trimmedMobile = mobile.trim();
     final prefs = await SharedPreferences.getInstance();
+    final jsonStr = jsonEncode(addresses);
+    await prefs.setString('customer_addresses_$trimmedMobile', jsonStr);
 
-    // 1. Query VPS API Database directly for customer profile
     try {
-      final encMobile = Uri.encodeComponent(cleanMobile);
-      final res = await VpsApiService.get('get-customer-profile&mobile=$encMobile');
-      if (res != null && res['success'] == true && res['profile'] != null) {
-        final Map<String, dynamic> pMap = Map<String, dynamic>.from(res['profile']);
-        final vpsName = (pMap['name'] ?? pMap['customer_name'] ?? '').toString().trim();
-        if (vpsName.isNotEmpty && !vpsName.toLowerCase().startsWith('customer')) {
-          await saveCustomerProfile(cleanMobile, name: vpsName);
-          return vpsName;
-        }
-      }
+      await VpsApiService.post('update-customer-profile', {
+        'mobile': trimmedMobile,
+        'address_json': jsonStr,
+      });
     } catch (_) {}
-
-    // 2. Check local saved customer profile
-    final profile = await getCustomerProfile(cleanMobile);
-    if (profile != null && profile['name'] != null) {
-      final name = profile['name'].toString().trim();
-      if (name.isNotEmpty && !name.toLowerCase().startsWith('customer')) {
-        return name;
-      }
-    }
-
-    // 3. Check current_user in prefs
-    final currentUserStr = prefs.getString('current_user');
-    if (currentUserStr != null && currentUserStr.isNotEmpty) {
-      try {
-        final Map<String, dynamic> cUser = jsonDecode(currentUserStr);
-        final uMobile = (cUser['mobile'] ?? '').toString().trim();
-        final uName = (cUser['name'] ?? '').toString().trim();
-        if (uMobile == cleanMobile && uName.isNotEmpty && !uName.toLowerCase().startsWith('customer')) {
-          await saveCustomerProfile(cleanMobile, name: uName);
-          return uName;
-        }
-      } catch (_) {}
-    }
-
-    // 4. Check customer saved addresses
-    final jsonStr = prefs.getString('customer_addresses_$cleanMobile');
-    if (jsonStr != null && jsonStr.isNotEmpty) {
-      try {
-        final List<dynamic> list = jsonDecode(jsonStr);
-        for (var addr in list) {
-          if (addr is Map) {
-            final rName = (addr['receiverName'] ?? addr['name'] ?? addr['contactName'] ?? '').toString().trim();
-            if (rName.isNotEmpty && !rName.toLowerCase().startsWith('customer')) {
-              await saveCustomerProfile(cleanMobile, name: rName);
-              return rName;
-            }
-          }
-        }
-      } catch (_) {}
-    }
-
-    // 5. Check saved_order_delivery_details
-    final detailsStr = prefs.getString('saved_order_delivery_details');
-    if (detailsStr != null && detailsStr.isNotEmpty) {
-      try {
-        final Map<String, dynamic> detailsMap = jsonDecode(detailsStr);
-        for (var entry in detailsMap.values) {
-          if (entry is Map && entry['address'] is Map) {
-            final addr = Map<String, dynamic>.from(entry['address']);
-            final rName = (addr['receiverName'] ?? addr['name'] ?? addr['contactName'] ?? '').toString().trim();
-            if (rName.isNotEmpty && !rName.toLowerCase().startsWith('customer')) {
-              await saveCustomerProfile(cleanMobile, name: rName);
-              return rName;
-            }
-          }
-        }
-      } catch (_) {}
-    }
-
-    // 6. Check messages for receiverName or customerName
-    final pName = profile?['name']?.toString().trim() ?? '';
-    if (pName.isNotEmpty && !pName.toLowerCase().startsWith('customer')) {
-      return pName;
-    }
-
-    return 'Customer ($cleanMobile)';
   }
 
   /// Customer Mobile Login
@@ -346,13 +352,62 @@ class AuthService {
     return customerUser;
   }
 
+  static const String _keyLocations = 'app_locations_list';
+
+  /// Get list of all locations (For Admin Seller & Delivery Boy Location selection)
+  static Future<List<String>> getLocations() async {
+    try {
+      final res = await VpsApiService.get('locations');
+      if (res != null && res['locations'] != null) {
+        final List<dynamic> list = res['locations'];
+        final locs = list.map((e) => (e is Map ? (e['name'] ?? e['location_name'] ?? '') : e).toString().trim()).where((s) => s.isNotEmpty).toList();
+        if (locs.isNotEmpty) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setStringList(_keyLocations, locs);
+          return locs;
+        }
+      }
+    } catch (_) {}
+
+    final prefs = await SharedPreferences.getInstance();
+    final List<String> local = prefs.getStringList(_keyLocations) ?? [];
+    if (local.isEmpty) {
+      return ['Main Market', 'Central City', 'West Zone', 'North Hub'];
+    }
+    return local;
+  }
+
+  /// Add a new location permanently
+  static Future<bool> addLocation(String locationName) async {
+    final clean = locationName.trim();
+    if (clean.isEmpty) return false;
+
+    final prefs = await SharedPreferences.getInstance();
+    final List<String> current = prefs.getStringList(_keyLocations) ?? ['Main Market', 'Central City', 'West Zone', 'North Hub'];
+    if (!current.contains(clean)) {
+      current.add(clean);
+      await prefs.setStringList(_keyLocations, current);
+    }
+
+    try {
+      await VpsApiService.post('add-location', {'name': clean, 'location_name': clean});
+    } catch (_) {}
+
+    return true;
+  }
+
   /// Get list of all created Sellers
   static Future<List<Map<String, dynamic>>> getSellersList() async {
     try {
       final res = await VpsApiService.get('sellers');
       if (res != null && res['sellers'] != null) {
         final List<dynamic> list = res['sellers'];
-        return list.cast<Map<String, dynamic>>();
+        final sellers = list.cast<Map<String, dynamic>>();
+        if (sellers.isNotEmpty) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(_sellersKey, jsonEncode(sellers));
+          return sellers;
+        }
       }
     } catch (_) {}
 
@@ -360,21 +415,40 @@ class AuthService {
   }
 
   /// Search Sellers by Mobile Number
-  static Future<List<Map<String, dynamic>>> searchSellersByMobile(String mobile) async {
+  /// Search Sellers by Mobile Number, Seller Name, or Location
+  static Future<List<Map<String, dynamic>>> searchSellersByMobile(String query) async {
+    final cleanQuery = query.trim().toLowerCase();
+    if (cleanQuery.isEmpty) return [];
+
+    List<Map<String, dynamic>> allSellers = await getSellersList();
+
     try {
-      final encoded = Uri.encodeComponent(mobile.trim());
+      final encoded = Uri.encodeComponent(cleanQuery);
       final res = await VpsApiService.get('search-seller&mobile=$encoded');
       if (res != null && res['sellers'] != null) {
         final List<dynamic> list = res['sellers'];
-        return list.cast<Map<String, dynamic>>();
+        final vpsSellers = list.cast<Map<String, dynamic>>();
+
+        final existingUsernames = allSellers.map((s) => s['username'].toString().toLowerCase()).toSet();
+        for (var s in vpsSellers) {
+          final u = (s['username'] ?? '').toString().toLowerCase();
+          if (u.isNotEmpty && !existingUsernames.contains(u)) {
+            allSellers.add(s);
+          }
+        }
       }
     } catch (_) {}
 
-    final all = await getSellersList();
-    return all.where((s) {
-      final m = s['mobile']?.toString() ?? '';
-      final u = s['username']?.toString() ?? '';
-      return m.contains(mobile) || u.contains(mobile);
+    return allSellers.where((s) {
+      final m = (s['mobile'] ?? '').toString().toLowerCase();
+      final u = (s['username'] ?? '').toString().toLowerCase();
+      final n = (s['name'] ?? '').toString().toLowerCase();
+      final l = (s['location'] ?? s['seller_location'] ?? '').toString().toLowerCase();
+
+      return m.contains(cleanQuery) ||
+             u.contains(cleanQuery) ||
+             n.contains(cleanQuery) ||
+             l.contains(cleanQuery);
     }).toList();
   }
 
@@ -705,7 +779,18 @@ class AuthService {
       final res = await VpsApiService.get('get-seller-conversations&seller_username=$encSeller');
       if (res != null && res['conversations'] != null) {
         final List<dynamic> list = res['conversations'];
-        return list.cast<Map<String, dynamic>>();
+        final items = list.cast<Map<String, dynamic>>();
+
+        final prefs = await SharedPreferences.getInstance();
+        for (var item in items) {
+          final mobile = (item['customer_mobile'] ?? '').toString().trim();
+          final name = (item['customer_name'] ?? item['name'] ?? '').toString().trim();
+          if (mobile.isNotEmpty && name.isNotEmpty && !name.startsWith('Customer')) {
+            final profileData = {'mobile': mobile, 'name': name};
+            await prefs.setString('customer_profile_$mobile', jsonEncode(profileData));
+          }
+        }
+        return items;
       }
     } catch (_) {}
     return [];
@@ -793,7 +878,7 @@ class AuthService {
     await clearLastSelectedSeller();
 
     // 3. Clear cached messages for this seller & customer
-    await prefs.remove('msgs_${cleanSeller}_${cleanCust}');
+    await prefs.remove('msgs_${cleanSeller}_$cleanCust');
 
     // 4. Clear customer sample orders from this seller
     try {
@@ -881,7 +966,10 @@ class AuthService {
       if (savedAmounts.containsKey(idStr)) {
         m['order_amount'] = savedAmounts[idStr];
       }
-      if (savedPayments.containsKey(idStr)) {
+      final dbPayStat = (m['payment_status'] ?? '').toString().toLowerCase();
+      if (dbPayStat == 'paid' || dbPayStat == 'success') {
+        m['payment_status'] = 'paid';
+      } else if (savedPayments.containsKey(idStr)) {
         final pData = Map<String, dynamic>.from(savedPayments[idStr]);
         m['payment_status'] = pData['payment_status'];
         m['payment_utr'] = pData['payment_utr'];
@@ -936,6 +1024,7 @@ class AuthService {
     required String username,
     required String password,
     String mobile = '',
+    String location = '',
   }) async {
     final cleanMobile = mobile.replaceAll(RegExp(r'\D'), '');
     final last10 = cleanMobile.length >= 10 ? cleanMobile.substring(cleanMobile.length - 10) : cleanMobile;
@@ -975,6 +1064,7 @@ class AuthService {
         'username': username.trim(),
         'password': password.trim(),
         'mobile': mobile.trim(),
+        'location': location.trim(),
       });
       if (res != null && res['success'] == true) {
         return {'success': true, 'message': 'Seller Account Created Successfully!'};
@@ -989,6 +1079,7 @@ class AuthService {
       'username': username.trim(),
       'password': password.trim(),
       'mobile': mobile.trim(),
+      'location': location.trim(),
     };
 
     sellers.add(newSeller);
@@ -997,14 +1088,78 @@ class AuthService {
     return {'success': true, 'message': 'Seller Account Created Successfully!'};
   }
 
+  /// Admin Updates Seller Account Details
+  static Future<Map<String, dynamic>> updateSellerResult({
+    required String username,
+    required String name,
+    required String password,
+    required String mobile,
+    String location = '',
+  }) async {
+    final cleanUser = username.trim().toLowerCase();
+    final cleanMobile = mobile.replaceAll(RegExp(r'\D'), '');
+    final last10 = cleanMobile.length >= 10 ? cleanMobile.substring(cleanMobile.length - 10) : cleanMobile;
+
+    // Check if new mobile conflicts with OTHER sellers
+    final existingSellers = await getSellersList();
+    for (var s in existingSellers) {
+      final u = (s['username'] ?? '').toString().toLowerCase();
+      if (u != cleanUser && last10.isNotEmpty) {
+        final sMob = (s['mobile'] ?? '').toString().replaceAll(RegExp(r'\D'), '');
+        final sLast10 = sMob.length >= 10 ? sMob.substring(sMob.length - 10) : sMob;
+        if (sLast10.isNotEmpty && sLast10 == last10) {
+          return {'success': false, 'message': 'Mobile number +91 $last10 is already registered with another seller.'};
+        }
+      }
+    }
+
+    try {
+      final res = await VpsApiService.post('update-seller', {
+        'username': cleanUser,
+        'name': name.trim(),
+        'password': password.trim(),
+        'mobile': mobile.trim(),
+        'location': location.trim(),
+      });
+      if (res != null && res['success'] == true) {
+        return {'success': true, 'message': 'Seller details updated successfully!'};
+      }
+    } catch (_) {}
+
+    // Also update in SharedPreferences local storage
+    final prefs = await SharedPreferences.getInstance();
+    final List<String> list = prefs.getStringList(_sellersKey) ?? [];
+    List<String> updatedList = [];
+    for (var str in list) {
+      try {
+        final decoded = jsonDecode(str);
+        if (decoded is Map<String, dynamic>) {
+          if ((decoded['username'] ?? '').toString().toLowerCase() == cleanUser) {
+            decoded['name'] = name.trim();
+            decoded['password'] = password.trim();
+            decoded['mobile'] = mobile.trim();
+            decoded['location'] = location.trim();
+          }
+          updatedList.add(jsonEncode(decoded));
+        }
+      } catch (_) {
+        updatedList.add(str);
+      }
+    }
+    await prefs.setStringList(_sellersKey, updatedList);
+
+    return {'success': true, 'message': 'Seller details updated successfully!'};
+  }
+
   /// Maintain backward compatibility bool method for createSeller
   static Future<bool> createSeller({
     required String name,
     required String username,
     required String password,
     String mobile = '',
+    String location = '',
   }) async {
-    final res = await createSellerResult(name: name, username: username, password: password, mobile: mobile);
+    final res = await createSellerResult(name: name, username: username, password: password, mobile: mobile, location: location);
     return res['success'] == true;
   }
 
@@ -1021,31 +1176,39 @@ class AuthService {
     return true;
   }
 
-  /// Get seller sliders (Local-First Guaranteed)
+  /// Get seller sliders (VPS-Server-First, with Local Cache Sync)
   static Future<List<Map<String, dynamic>>> getSellerSliders(String sellerUsername) async {
+    final cleanUsername = sellerUsername.trim();
+    if (cleanUsername.isEmpty) return [];
+
     final prefs = await SharedPreferences.getInstance();
-    final localKey = 'sliders_$sellerUsername';
-    List<Map<String, dynamic>> localList = [];
+    final localKey = 'sliders_$cleanUsername';
+
+    // 1. Try Remote VPS API First to guarantee fresh server sliders for new or cache-cleared customers
+    try {
+      final res = await VpsApiService.get('get-seller-sliders&seller_username=${Uri.encodeComponent(cleanUsername)}');
+      if (res != null && res['success'] == true && res['sliders'] != null) {
+        final List list = res['sliders'];
+        final remoteList = list.map((e) => Map<String, dynamic>.from(e)).toList();
+
+        // Always update local cache with fresh server sliders
+        await prefs.setString(localKey, jsonEncode(remoteList));
+        return remoteList;
+      }
+    } catch (e) {
+      debugPrint('Error fetching remote seller sliders for $cleanUsername: $e');
+    }
+
+    // 2. Fallback to local cache if offline
     final str = prefs.getString(localKey);
-    if (str != null) {
+    if (str != null && str.isNotEmpty) {
       try {
         final List decoded = jsonDecode(str);
-        localList = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+        return decoded.map((e) => Map<String, dynamic>.from(e)).toList();
       } catch (_) {}
     }
 
-    try {
-      final res = await VpsApiService.get('get-seller-sliders&seller_username=${Uri.encodeComponent(sellerUsername)}');
-      if (res != null && res['success'] == true && res['sliders'] != null) {
-        final remoteList = List<Map<String, dynamic>>.from(res['sliders']);
-        if (remoteList.isNotEmpty) {
-          await prefs.setString(localKey, jsonEncode(remoteList));
-          return remoteList;
-        }
-      }
-    } catch (_) {}
-
-    return localList;
+    return [];
   }
 
   /// Add seller slider (Local-First Guaranteed)
@@ -1898,6 +2061,7 @@ class AuthService {
     required String name,
     required String mobile,
     String? vehicle,
+    String location = '',
   }) async {
     final cleanMobile = mobile.replaceAll(RegExp(r'\D'), '');
     final last10 = cleanMobile.length >= 10 ? cleanMobile.substring(cleanMobile.length - 10) : cleanMobile;
@@ -1940,6 +2104,7 @@ class AuthService {
       'name': name.trim(),
       'mobile': mobile.trim(),
       'vehicle': vehicle?.trim().isNotEmpty == true ? vehicle!.trim() : 'Bike',
+      'location': location.trim(),
       'role': 'delivery_boy',
       'created_at': DateTime.now().toIso8601String(),
       'status': 'active',
@@ -1947,7 +2112,81 @@ class AuthService {
 
     list.add(jsonEncode(newDeliveryBoy));
     await prefs.setStringList(_keyDeliveryBoys, list);
+
+    // Sync to VPS MySQL Database
+    try {
+      await VpsApiService.post('create-delivery-boy', newDeliveryBoy);
+    } catch (e) {
+      debugPrint('Error syncing delivery boy to VPS API: $e');
+    }
+
     return {'success': true, 'message': 'Delivery Boy Account Created Successfully!'};
+  }
+
+  /// Admin Updates Delivery Partner Account Details
+  static Future<Map<String, dynamic>> updateDeliveryBoyResult({
+    required String username,
+    required String name,
+    required String password,
+    required String mobile,
+    String? vehicle,
+    String location = '',
+  }) async {
+    final cleanUser = username.trim().toLowerCase();
+    final cleanMobile = mobile.replaceAll(RegExp(r'\D'), '');
+    final last10 = cleanMobile.length >= 10 ? cleanMobile.substring(cleanMobile.length - 10) : cleanMobile;
+
+    // Check if new mobile conflicts with OTHER delivery partners
+    final existingDeliveryBoys = await getDeliveryBoys();
+    for (var item in existingDeliveryBoys) {
+      final itemUser = (item['username'] ?? '').toString().toLowerCase();
+      if (itemUser != cleanUser && last10.isNotEmpty) {
+        final dMob = (item['mobile'] ?? '').toString().replaceAll(RegExp(r'\D'), '');
+        final dLast10 = dMob.length >= 10 ? dMob.substring(dMob.length - 10) : dMob;
+        if (dLast10.isNotEmpty && dLast10 == last10) {
+          return {'success': false, 'message': 'Mobile number +91 $last10 is already registered with another delivery partner.'};
+        }
+      }
+    }
+
+    try {
+      final res = await VpsApiService.post('update-delivery-boy', {
+        'username': cleanUser,
+        'name': name.trim(),
+        'password': password.trim(),
+        'mobile': mobile.trim(),
+        'vehicle': vehicle?.trim().isNotEmpty == true ? vehicle!.trim() : 'Bike',
+        'location': location.trim(),
+      });
+      if (res != null && res['success'] == true) {
+        return {'success': true, 'message': 'Delivery partner details updated successfully!'};
+      }
+    } catch (_) {}
+
+    // Update in local SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    final List<String> list = prefs.getStringList(_keyDeliveryBoys) ?? [];
+    List<String> updatedList = [];
+    for (var str in list) {
+      try {
+        final decoded = jsonDecode(str);
+        if (decoded is Map<String, dynamic>) {
+          if ((decoded['username'] ?? '').toString().toLowerCase() == cleanUser) {
+            decoded['name'] = name.trim();
+            decoded['password'] = password.trim();
+            decoded['mobile'] = mobile.trim();
+            decoded['vehicle'] = vehicle?.trim().isNotEmpty == true ? vehicle!.trim() : 'Bike';
+            decoded['location'] = location.trim();
+          }
+          updatedList.add(jsonEncode(decoded));
+        }
+      } catch (_) {
+        updatedList.add(str);
+      }
+    }
+    await prefs.setStringList(_keyDeliveryBoys, updatedList);
+
+    return {'success': true, 'message': 'Delivery partner details updated successfully!'};
   }
 
   /// Maintain backward compatibility bool method for createDeliveryBoy
@@ -2030,6 +2269,22 @@ class AuthService {
 
   /// Get All Delivery Boys (Admin View)
   static Future<List<Map<String, dynamic>>> getDeliveryBoys() async {
+    // 1. Fetch from VPS MySQL Database
+    try {
+      final vpsRes = await VpsApiService.get('delivery-boys');
+      if (vpsRes != null && vpsRes['delivery_boys'] != null) {
+        final List<dynamic> list = vpsRes['delivery_boys'];
+        final res = list.cast<Map<String, dynamic>>();
+
+        // Cache locally for offline fallback
+        final prefs = await SharedPreferences.getInstance();
+        final strList = res.map((e) => jsonEncode(e)).toList();
+        await prefs.setStringList(_keyDeliveryBoys, strList);
+        return res;
+      }
+    } catch (_) {}
+
+    // 2. Local Fallback
     final prefs = await SharedPreferences.getInstance();
     final List<String> list = prefs.getStringList(_keyDeliveryBoys) ?? [];
     final res = <Map<String, dynamic>>[];
@@ -2046,9 +2301,9 @@ class AuthService {
 
   /// Delete Delivery Boy by Username (Admin Function)
   static Future<bool> deleteDeliveryBoy(String username) async {
+    final cleanUser = username.trim().toLowerCase();
     final prefs = await SharedPreferences.getInstance();
     final List<String> list = prefs.getStringList(_keyDeliveryBoys) ?? [];
-    final cleanUser = username.trim().toLowerCase();
     final newList = <String>[];
     for (var str in list) {
       try {
@@ -2061,29 +2316,45 @@ class AuthService {
       }
     }
     await prefs.setStringList(_keyDeliveryBoys, newList);
+
+    // Sync deletion to VPS MySQL Database
+    try {
+      await VpsApiService.post('delete-delivery-boy', {
+        'username': cleanUser,
+      });
+    } catch (_) {}
+
     return true;
   }
 
   /// Login Delivery Boy ONLY (Rejects Sellers & Admin for strict role separation)
   static Future<Map<String, dynamic>?> loginDeliveryBoy(String username, String password) async {
-    final prefs = await SharedPreferences.getInstance();
-    final List<String> list = prefs.getStringList(_keyDeliveryBoys) ?? [];
     final cleanUser = username.trim().toLowerCase();
     final cleanPass = password.trim();
 
-    for (var str in list) {
-      try {
-        final item = jsonDecode(str);
-        final u = (item['username'] ?? '').toString().toLowerCase();
-        final p = (item['password'] ?? '').toString();
-        final role = (item['role'] ?? '').toString();
+    // 1. Check VPS API Server
+    try {
+      final res = await VpsApiService.post('delivery-boy-login', {
+        'username': cleanUser,
+        'password': cleanPass,
+      });
+      if (res != null && res['success'] == true && res['delivery_boy'] != null) {
+        return Map<String, dynamic>.from(res['delivery_boy']);
+      }
+    } catch (_) {}
 
-        if (u == cleanUser && p == cleanPass) {
-          if (role == 'delivery_boy') {
-            return item;
-          }
+    // 2. Local Fallback
+    final deliveryBoys = await getDeliveryBoys();
+    for (var item in deliveryBoys) {
+      final u = (item['username'] ?? '').toString().toLowerCase();
+      final p = (item['password'] ?? '').toString();
+      final role = (item['role'] ?? '').toString();
+
+      if (u == cleanUser && p == cleanPass) {
+        if (role == 'delivery_boy' || role.isEmpty) {
+          return item;
         }
-      } catch (_) {}
+      }
     }
     return null; // Login failed or wrong role
   }
@@ -2101,11 +2372,15 @@ class AuthService {
     return [];
   }
 
-  /// Get all undelivered orders grouped by seller (For Delivery Boy Dashboard)
-  static Future<List<Map<String, dynamic>>> getAllUndeliveredOrdersGroupedBySeller() async {
+  /// Get all undelivered orders grouped by seller (For Delivery Boy Dashboard with Location Filter)
+  static Future<List<Map<String, dynamic>>> getAllUndeliveredOrdersGroupedBySeller({
+    String deliveryBoyLocation = '',
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     final sellers = await getSellersList();
     final List<Map<String, dynamic>> groupedResult = [];
+
+    final cleanDbLoc = deliveryBoyLocation.trim().toLowerCase();
 
     // Load persistent saved payments map
     final String? allSavedPaymentsStr = prefs.getString('saved_order_payments');
@@ -2140,6 +2415,12 @@ class AuthService {
       final sellerUsername = (seller['username'] ?? '').toString().trim();
       final sellerName = (seller['name'] ?? 'Seller Store').toString().trim();
       final sellerMobile = (seller['mobile'] ?? '').toString().trim();
+      final sellerLocation = (seller['location'] ?? '').toString().trim().toLowerCase();
+
+      // Location Filtering: If delivery boy has a location, only show sellers matching that location
+      if (cleanDbLoc.isNotEmpty && sellerLocation != cleanDbLoc) {
+        continue;
+      }
 
       final List<Map<String, dynamic>> undeliveredOrders = [];
       final Set<int> processedMsgIds = {};
@@ -2152,7 +2433,7 @@ class AuthService {
           if (custMobile.isNotEmpty) {
             final msgs = await getMessages(sellerUsername: sellerUsername, customerMobile: custMobile);
             for (var msgMap in msgs) {
-              final msgId = (msgMap['id'] as num?)?.toInt() ?? 0;
+              final msgId = int.tryParse(msgMap['id']?.toString() ?? '') ?? (msgMap['id'] is num ? (msgMap['id'] as num).toInt() : 0);
               final msgIdStr = msgId.toString();
 
               if (msgId != 0 && !processedMsgIds.contains(msgId)) {
@@ -2184,22 +2465,24 @@ class AuthService {
                     msgMap['delivery_status'] = delStatus;
                   }
 
-                  final bool isReadyOrBeyond = ordStatus.toLowerCase() == 'ready' ||
-                      delStatus.toLowerCase() == 'picked up' ||
-                      delStatus.toLowerCase() == 'out for delivery';
-
                   final bool isCancelled = ordStatus.toLowerCase() == 'cancelled' || delStatus.toLowerCase() == 'cancelled';
-                  final bool isDelivered = delStatus.toLowerCase() == 'delivered';
+                  final bool isDelivered = delStatus.toLowerCase() == 'delivered' || ordStatus.toLowerCase() == 'delivered';
 
-                  if (isReadyOrBeyond && !isCancelled && !isDelivered) {
+                  if (!isCancelled && !isDelivered) {
                     if (savedPayments.containsKey(msgIdStr)) {
                       msgMap['payment_status'] = 'paid';
-                      msgMap['payment_utr'] = savedPayments[msgIdStr]['payment_utr'] ?? '';
+                      msgMap['payment_utr'] = savedPayments[msgIdStr]['payment_utr'] ?? (msgMap['payment_utr'] ?? '');
+                    } else if ((msgMap['payment_status'] ?? '').toString().toLowerCase() == 'paid') {
+                      msgMap['payment_status'] = 'paid';
                     }
 
+                    final custName = (conv['customer_name'] ?? conv['name'] ?? '').toString().trim();
                     msgMap['seller_username'] = sellerUsername;
                     msgMap['seller_name'] = sellerName;
                     msgMap['customer_mobile'] = custMobile;
+                    if (custName.isNotEmpty && custName != custMobile && !custName.startsWith('Customer')) {
+                      msgMap['customer_name'] = custName;
+                    }
 
                     undeliveredOrders.add(msgMap);
                   }
@@ -2224,7 +2507,7 @@ class AuthService {
               for (var item in list) {
                 if (item is Map) {
                   final msgMap = Map<String, dynamic>.from(item);
-                  final msgId = (msgMap['id'] as num?)?.toInt() ?? 0;
+                  final msgId = int.tryParse(msgMap['id']?.toString() ?? '') ?? (msgMap['id'] is num ? (msgMap['id'] as num).toInt() : 0);
                   final msgIdStr = msgId.toString();
 
                   if (msgId != 0 && !processedMsgIds.contains(msgId)) {
@@ -2256,17 +2539,15 @@ class AuthService {
                         msgMap['delivery_status'] = delStatus;
                       }
 
-                      final bool isReadyOrBeyond = ordStatus.toLowerCase() == 'ready' ||
-                          delStatus.toLowerCase() == 'picked up' ||
-                          delStatus.toLowerCase() == 'out for delivery';
-
                       final bool isCancelled = ordStatus.toLowerCase() == 'cancelled' || delStatus.toLowerCase() == 'cancelled';
-                      final bool isDelivered = delStatus.toLowerCase() == 'delivered';
+                      final bool isDelivered = delStatus.toLowerCase() == 'delivered' || ordStatus.toLowerCase() == 'delivered';
 
-                      if (isReadyOrBeyond && !isCancelled && !isDelivered) {
+                      if (!isCancelled && !isDelivered) {
                         if (savedPayments.containsKey(msgIdStr)) {
                           msgMap['payment_status'] = 'paid';
-                          msgMap['payment_utr'] = savedPayments[msgIdStr]['payment_utr'] ?? '';
+                          msgMap['payment_utr'] = savedPayments[msgIdStr]['payment_utr'] ?? (msgMap['payment_utr'] ?? '');
+                        } else if ((msgMap['payment_status'] ?? '').toString().toLowerCase() == 'paid') {
+                          msgMap['payment_status'] = 'paid';
                         }
 
                         msgMap['seller_username'] = sellerUsername;
@@ -2295,6 +2576,535 @@ class AuthService {
     }
 
     return groupedResult;
+  }
+
+  /// Get ALL orders grouped by Seller and Customer (For Admin Order Details Dashboard)
+  static Future<List<Map<String, dynamic>>> getAllOrdersGroupedBySellerForAdmin() async {
+    final prefs = await SharedPreferences.getInstance();
+    final sellers = await getSellersList();
+    final List<Map<String, dynamic>> result = [];
+
+    // Load persistent saved payments map
+    final String? allSavedPaymentsStr = prefs.getString('saved_order_payments');
+    Map<String, dynamic> savedPayments = {};
+    if (allSavedPaymentsStr != null && allSavedPaymentsStr.isNotEmpty) {
+      try {
+        savedPayments = Map<String, dynamic>.from(jsonDecode(allSavedPaymentsStr));
+      } catch (_) {}
+    }
+
+    // Load persistent saved order statuses map
+    final String? allSavedOrderStr = prefs.getString('saved_order_statuses');
+    Map<String, dynamic> savedOrderStatuses = {};
+    if (allSavedOrderStr != null && allSavedOrderStr.isNotEmpty) {
+      try {
+        savedOrderStatuses = Map<String, dynamic>.from(jsonDecode(allSavedOrderStr));
+      } catch (_) {}
+    }
+
+    // Load persistent saved delivery statuses map
+    final String? allSavedDeliveryStr = prefs.getString('saved_delivery_statuses');
+    Map<String, dynamic> savedDeliveryStatuses = {};
+    if (allSavedDeliveryStr != null && allSavedDeliveryStr.isNotEmpty) {
+      try {
+        savedDeliveryStatuses = Map<String, dynamic>.from(jsonDecode(allSavedDeliveryStr));
+      } catch (_) {}
+    }
+
+    for (var seller in sellers) {
+      final sellerUsername = (seller['username'] ?? '').toString().trim();
+      final sellerName = (seller['name'] ?? sellerUsername).toString().trim();
+      final sellerMobile = (seller['mobile'] ?? '').toString().trim();
+      final sellerLocation = (seller['location'] ?? '').toString().trim();
+
+      if (sellerUsername.isEmpty) continue;
+
+      final Map<String, List<Map<String, dynamic>>> customerOrdersMap = {};
+      final Map<String, String> customerNamesMap = {};
+      final Set<int> processedMsgIds = {};
+
+      try {
+        final conversations = await getSellerConversations(sellerUsername);
+        for (var conv in conversations) {
+          final custMobile = (conv['customer_mobile'] ?? conv['mobile'] ?? '').toString().trim();
+          final custName = (conv['customer_name'] ?? conv['name'] ?? '').toString().trim();
+          if (custMobile.isNotEmpty) {
+            if (custName.isNotEmpty && !custName.startsWith('Customer')) {
+              customerNamesMap[custMobile] = custName;
+            }
+
+            final msgs = await getMessages(sellerUsername: sellerUsername, customerMobile: custMobile);
+            for (var msgMap in msgs) {
+              final msgId = int.tryParse(msgMap['id']?.toString() ?? '') ?? (msgMap['id'] is num ? (msgMap['id'] as num).toInt() : 0);
+              final msgIdStr = msgId.toString();
+
+              if (msgId != 0 && !processedMsgIds.contains(msgId)) {
+                final isOrderMsg = msgMap['items_json'] != null ||
+                    msgMap['order_id'] != null ||
+                    msgMap['_calculated_order_id'] != null ||
+                    (msgMap['message'] ?? '').toString().toLowerCase().contains('order');
+
+                final isDeleted = msgMap['order_status'].toString().toLowerCase() == 'deleted' ||
+                    msgMap['is_deleted'] == true ||
+                    msgMap['is_deleted'] == 1;
+
+                if (isOrderMsg && !isDeleted) {
+                  processedMsgIds.add(msgId);
+
+                  if (savedOrderStatuses.containsKey(msgIdStr)) {
+                    msgMap['order_status'] = (savedOrderStatuses[msgIdStr] ?? msgMap['order_status']).toString();
+                  }
+                  if (savedDeliveryStatuses.containsKey(msgIdStr)) {
+                    final val = savedDeliveryStatuses[msgIdStr];
+                    if (val is Map) {
+                      msgMap['delivery_status'] = (val['delivery_status'] ?? msgMap['delivery_status']).toString();
+                    } else {
+                      msgMap['delivery_status'] = val.toString();
+                    }
+                  }
+                  if (savedPayments.containsKey(msgIdStr)) {
+                    msgMap['payment_status'] = 'paid';
+                    msgMap['payment_utr'] = savedPayments[msgIdStr]['payment_utr'] ?? (msgMap['payment_utr'] ?? '');
+                  }
+
+                  msgMap['seller_username'] = sellerUsername;
+                  msgMap['seller_name'] = sellerName;
+                  msgMap['customer_mobile'] = custMobile;
+                  if (customerNamesMap.containsKey(custMobile)) {
+                    msgMap['customer_name'] = customerNamesMap[custMobile];
+                  }
+
+                  customerOrdersMap.putIfAbsent(custMobile, () => []).add(msgMap);
+                }
+              }
+            }
+          }
+        }
+      } catch (_) {}
+
+      if (customerOrdersMap.isNotEmpty) {
+        final List<Map<String, dynamic>> customersList = [];
+        int sellerTotalOrders = 0;
+
+        customerOrdersMap.forEach((custMobile, orders) {
+          sellerTotalOrders += orders.length;
+          final custName = customerNamesMap[custMobile] ?? custMobile;
+          customersList.add({
+            'customer_mobile': custMobile,
+            'customer_name': custName,
+            'orders': orders,
+            'order_count': orders.length,
+          });
+        });
+
+        result.add({
+          'seller_username': sellerUsername,
+          'seller_name': sellerName,
+          'seller_mobile': sellerMobile,
+          'location': sellerLocation,
+          'customers': customersList,
+          'total_orders': sellerTotalOrders,
+        });
+      }
+    }
+
+    return result;
+  }
+
+  /// Get Flat List of All Orders for Admin Data Table with Date Parsing
+  static Future<List<Map<String, dynamic>>> getAllOrdersFlatListForAdmin() async {
+    final prefs = await SharedPreferences.getInstance();
+    final sellers = await getSellersList();
+    final deliveryBoys = await getDeliveryBoys();
+    final List<Map<String, dynamic>> flatOrders = [];
+    final Set<String> processedKeys = {};
+
+    // Seller location lookup map
+    final Map<String, String> sellerLocationMap = {};
+    for (var s in sellers) {
+      final uname = (s['username'] ?? '').toString().trim();
+      final name = (s['name'] ?? '').toString().trim();
+      final loc = (s['location'] ?? '').toString().trim();
+      if (loc.isNotEmpty) {
+        if (uname.isNotEmpty) sellerLocationMap[uname.toLowerCase()] = loc;
+        if (name.isNotEmpty) sellerLocationMap[name.toLowerCase()] = loc;
+      }
+    }
+
+    // Delivery boy display name lookup map
+    final Map<String, String> deliveryBoyNameMap = {};
+    for (var db in deliveryBoys) {
+      final uname = (db['username'] ?? '').toString().trim();
+      final name = (db['name'] ?? uname).toString().trim();
+      if (uname.isNotEmpty) {
+        deliveryBoyNameMap[uname.toLowerCase()] = name.isNotEmpty ? name : uname;
+      }
+    }
+
+    // Load persistent saved payments map
+    final String? allSavedPaymentsStr = prefs.getString('saved_order_payments');
+    Map<String, dynamic> savedPayments = {};
+    if (allSavedPaymentsStr != null && allSavedPaymentsStr.isNotEmpty) {
+      try {
+        savedPayments = Map<String, dynamic>.from(jsonDecode(allSavedPaymentsStr));
+      } catch (_) {}
+    }
+
+    // Load persistent saved order statuses map
+    final String? allSavedOrderStr = prefs.getString('saved_order_statuses');
+    Map<String, dynamic> savedOrderStatuses = {};
+    if (allSavedOrderStr != null && allSavedOrderStr.isNotEmpty) {
+      try {
+        savedOrderStatuses = Map<String, dynamic>.from(jsonDecode(allSavedOrderStr));
+      } catch (_) {}
+    }
+
+    // Load persistent saved delivery statuses map
+    final String? allSavedDeliveryStr = prefs.getString('saved_delivery_statuses');
+    Map<String, dynamic> savedDeliveryStatuses = {};
+    if (allSavedDeliveryStr != null && allSavedDeliveryStr.isNotEmpty) {
+      try {
+        savedDeliveryStatuses = Map<String, dynamic>.from(jsonDecode(allSavedDeliveryStr));
+      } catch (_) {}
+    }
+
+    // 1. Fetch from VPS API for all registered sellers in parallel
+    final sellerFutures = sellers.map((seller) async {
+      final rawSellerUsername = (seller['username'] ?? '').toString().trim();
+      final sellerName = (seller['name'] ?? rawSellerUsername).toString().trim();
+
+      if (rawSellerUsername.isEmpty) return;
+
+      try {
+        final conversations = await getSellerConversations(rawSellerUsername);
+        final convFutures = conversations.map((conv) async {
+          final custMobile = (conv['customer_mobile'] ?? conv['mobile'] ?? '').toString().trim();
+          final custName = (conv['customer_name'] ?? conv['name'] ?? '').toString().trim();
+          if (custMobile.isNotEmpty) {
+            final msgs = await getMessages(sellerUsername: rawSellerUsername, customerMobile: custMobile);
+            for (var msgMap in msgs) {
+              final msgId = (msgMap['id'] ?? '').toString();
+              if (msgId.isNotEmpty && !processedKeys.contains(msgId)) {
+                final isOrderMsg = msgMap['items_json'] != null ||
+                    msgMap['order_id'] != null ||
+                    msgMap['_calculated_order_id'] != null ||
+                    (msgMap['message'] ?? '').toString().toLowerCase().contains('order');
+
+                final isDeleted = msgMap['order_status'].toString().toLowerCase() == 'deleted' ||
+                    msgMap['is_deleted'] == true ||
+                    msgMap['is_deleted'] == 1;
+
+                if (isOrderMsg && !isDeleted) {
+                  processedKeys.add(msgId);
+                  final parsed = _parseFlatOrderRow(
+                    msgMap: msgMap,
+                    sellerName: sellerName,
+                    sellerUsername: rawSellerUsername,
+                    custMobile: custMobile,
+                    custName: custName,
+                    savedOrderStatuses: savedOrderStatuses,
+                    savedDeliveryStatuses: savedDeliveryStatuses,
+                    savedPayments: savedPayments,
+                    sellerLocationMap: sellerLocationMap,
+                    deliveryBoyNameMap: deliveryBoyNameMap,
+                  );
+                  flatOrders.add(parsed);
+                }
+              }
+            }
+          }
+        });
+        await Future.wait(convFutures);
+      } catch (_) {}
+    });
+
+    await Future.wait(sellerFutures);
+
+    // 2. Fetch from SharedPreferences local keys for offline/cached orders
+    final localKeys = prefs.getKeys();
+    for (var key in localKeys) {
+      if (key.startsWith('msgs_') || key.startsWith('messages_')) {
+        final parts = key.split('_');
+        final sellerUsername = parts.length >= 2 ? parts[1] : 'seller';
+        final custMobile = parts.length >= 3 ? parts[2] : 'customer';
+
+        final raw = prefs.getString(key);
+        if (raw != null && raw.isNotEmpty) {
+          try {
+            final List<dynamic> list = jsonDecode(raw);
+            for (var item in list) {
+              if (item is Map) {
+                final msgMap = Map<String, dynamic>.from(item);
+                final msgId = (msgMap['id'] ?? msgMap['_calculated_order_id'] ?? '').toString();
+                if (msgId.isNotEmpty && !processedKeys.contains(msgId)) {
+                  final isOrderMsg = msgMap['items_json'] != null ||
+                      msgMap['order_id'] != null ||
+                      msgMap['_calculated_order_id'] != null ||
+                      (msgMap['message'] ?? '').toString().toLowerCase().contains('order');
+
+                  final isDeleted = msgMap['order_status'].toString().toLowerCase() == 'deleted' ||
+                      msgMap['is_deleted'] == true ||
+                      msgMap['is_deleted'] == 1;
+
+                  if (isOrderMsg && !isDeleted) {
+                    processedKeys.add(msgId);
+                    final parsed = _parseFlatOrderRow(
+                      msgMap: msgMap,
+                      sellerName: sellerUsername,
+                      sellerUsername: sellerUsername,
+                      custMobile: custMobile,
+                      custName: custMobile,
+                      savedOrderStatuses: savedOrderStatuses,
+                      savedDeliveryStatuses: savedDeliveryStatuses,
+                      savedPayments: savedPayments,
+                      sellerLocationMap: sellerLocationMap,
+                      deliveryBoyNameMap: deliveryBoyNameMap,
+                    );
+                    flatOrders.add(parsed);
+                  }
+                }
+              }
+            }
+          } catch (_) {}
+        }
+      }
+    }
+
+    // Sort by Date Descending (Newest first)
+    flatOrders.sort((a, b) {
+      final DateTime dtA = a['raw_date'] ?? DateTime(2000);
+      final DateTime dtB = b['raw_date'] ?? DateTime(2000);
+      return dtB.compareTo(dtA);
+    });
+
+    return flatOrders;
+  }
+
+  static Map<String, dynamic> _parseFlatOrderRow({
+    required Map<String, dynamic> msgMap,
+    required String sellerName,
+    required String sellerUsername,
+    required String custMobile,
+    required String custName,
+    required Map<String, dynamic> savedOrderStatuses,
+    required Map<String, dynamic> savedDeliveryStatuses,
+    required Map<String, dynamic> savedPayments,
+    Map<String, String> sellerLocationMap = const {},
+    Map<String, String> deliveryBoyNameMap = const {},
+  }) {
+    final msgIdStr = (msgMap['id'] ?? '').toString();
+    final rawOrderId = (msgMap['order_id'] ?? msgMap['_calculated_order_id'] ?? msgIdStr).toString();
+    final cleanOrderId = rawOrderId.replaceAll('#', '').replaceAll('Order', '').trim();
+
+    String delStatus = (msgMap['delivery_status'] ?? 'Pending').toString();
+    if (savedDeliveryStatuses.containsKey(msgIdStr)) {
+      final val = savedDeliveryStatuses[msgIdStr];
+      if (val is Map) {
+        delStatus = (val['delivery_status'] ?? delStatus).toString();
+      } else {
+        delStatus = val.toString();
+      }
+    }
+
+    String ordStatus = (msgMap['order_status'] ?? '').toString();
+    if (savedOrderStatuses.containsKey(msgIdStr)) {
+      ordStatus = (savedOrderStatuses[msgIdStr] ?? ordStatus).toString();
+    }
+
+    // Determine normalized order status: Pending, Pickup, Delivered, Cancelled
+    String statusLabel = 'Pending';
+    final delLower = delStatus.toLowerCase();
+    final ordLower = ordStatus.toLowerCase();
+
+    if (delLower == 'delivered' || ordLower == 'delivered') {
+      statusLabel = 'Delivered';
+    } else if (delLower == 'out for delivery' || delLower == 'pickup' || delLower == 'picked up') {
+      statusLabel = 'Pickup';
+    } else if (delLower == 'cancelled' || ordLower == 'cancelled') {
+      statusLabel = 'Cancelled';
+    } else {
+      statusLabel = 'Pending';
+    }
+
+    // Delivery Boy Name Logic
+    String rawDeliveryBoy = (msgMap['delivered_by'] ?? msgMap['delivery_boy_name'] ?? msgMap['delivery_boy'] ?? '').toString().trim();
+    if (rawDeliveryBoy.isEmpty && savedDeliveryStatuses.containsKey(msgIdStr)) {
+      final val = savedDeliveryStatuses[msgIdStr];
+      if (val is Map) {
+        rawDeliveryBoy = (val['delivered_by'] ?? val['delivery_boy_name'] ?? val['delivery_boy'] ?? '').toString().trim();
+      }
+    }
+
+    String deliveryBoyName = 'Not Assigned';
+    if (rawDeliveryBoy.isNotEmpty && rawDeliveryBoy.toLowerCase() != 'null') {
+      final dbKey = rawDeliveryBoy.toLowerCase();
+      if (deliveryBoyNameMap.containsKey(dbKey)) {
+        deliveryBoyName = deliveryBoyNameMap[dbKey]!;
+      } else {
+        deliveryBoyName = rawDeliveryBoy.length > 1
+            ? rawDeliveryBoy[0].toUpperCase() + rawDeliveryBoy.substring(1)
+            : rawDeliveryBoy.toUpperCase();
+      }
+    }
+
+    // Amounts
+    double totalAmt = double.tryParse(msgMap['order_amount']?.toString() ?? '') ?? 0.0;
+    if (totalAmt <= 0 && msgMap['items_json'] != null) {
+      try {
+        List items = msgMap['items_json'] is String ? jsonDecode(msgMap['items_json']) : (msgMap['items_json'] as List);
+        for (var item in items) {
+          if (item is Map) {
+            double p = double.tryParse(item['price']?.toString() ?? '') ?? 0;
+            int q = int.tryParse(item['quantity']?.toString() ?? '') ?? 1;
+            totalAmt += (p * q);
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Timestamps
+    final String rawCreatedAt = (msgMap['created_at'] ?? '').toString();
+    final String cleanDtStr = rawCreatedAt.replaceAll(' ', 'T');
+    DateTime parsedDt = DateTime.tryParse(cleanDtStr) ?? DateTime.tryParse(rawCreatedAt) ?? DateTime.now();
+
+    // Status Date Time Logic:
+    // 1. Pending: empty ('')
+    // 2. Pickup: picked_up_at (when pickup action occurred)
+    // 3. Delivered: delivered_at (when delivery action occurred)
+    // 4. Cancelled: cancelled_at
+    String statusTimeDisplay = '';
+
+    if (statusLabel == 'Delivered') {
+      if (savedDeliveryStatuses.containsKey(msgIdStr) && savedDeliveryStatuses[msgIdStr] is Map) {
+        final val = savedDeliveryStatuses[msgIdStr];
+        statusTimeDisplay = (val['delivered_at'] ?? val['updated_at'] ?? '').toString().trim();
+      }
+      if (statusTimeDisplay.isEmpty) {
+        statusTimeDisplay = (msgMap['delivered_at'] ?? msgMap['delivery_time'] ?? msgMap['updated_at'] ?? '').toString().trim();
+      }
+      if (statusTimeDisplay.isEmpty && (msgMap['delivery_status'] ?? '').toString().toLowerCase() == 'delivered') {
+        statusTimeDisplay = (msgMap['status_time'] ?? '').toString().trim();
+      }
+    } else if (statusLabel == 'Pickup') {
+      if (savedDeliveryStatuses.containsKey(msgIdStr) && savedDeliveryStatuses[msgIdStr] is Map) {
+        final val = savedDeliveryStatuses[msgIdStr];
+        statusTimeDisplay = (val['picked_up_at'] ?? val['updated_at'] ?? '').toString().trim();
+      }
+      if (statusTimeDisplay.isEmpty) {
+        statusTimeDisplay = (msgMap['picked_up_at'] ?? msgMap['pickup_time'] ?? msgMap['updated_at'] ?? '').toString().trim();
+      }
+      if (statusTimeDisplay.isEmpty && (msgMap['delivery_status'] ?? '').toString().toLowerCase().contains('pickup')) {
+        statusTimeDisplay = (msgMap['status_time'] ?? '').toString().trim();
+      }
+    } else if (statusLabel == 'Cancelled') {
+      statusTimeDisplay = (msgMap['cancelled_at'] ?? msgMap['cancel_time'] ?? msgMap['updated_at'] ?? '').toString().trim();
+      if (statusTimeDisplay.isEmpty) {
+        statusTimeDisplay = (msgMap['status_time'] ?? '').toString().trim();
+      }
+    } else {
+      // Pending: ALWAYS EMPTY
+      statusTimeDisplay = '';
+    }
+
+    // Payment Status & Mode parsing
+    String rawPayStatus = (msgMap['payment_status'] ?? '').toString().trim().toLowerCase();
+    String rawPayMode = (msgMap['payment_mode'] ?? msgMap['payment_method'] ?? msgMap['payment_type'] ?? '').toString().trim();
+
+    if (savedPayments.containsKey(msgIdStr)) {
+      final pVal = savedPayments[msgIdStr];
+      if (pVal is Map) {
+        if (pVal['status'] != null) rawPayStatus = pVal['status'].toString().trim().toLowerCase();
+        if (pVal['mode'] != null) rawPayMode = pVal['mode'].toString().trim();
+      } else if (pVal != null) {
+        rawPayStatus = pVal.toString().trim().toLowerCase();
+      }
+    }
+
+    String payStatusDisplay = 'Unpaid';
+    if (rawPayStatus == 'paid' || rawPayStatus == 'completed' || rawPayStatus == 'success' || rawPayStatus == 'online_paid') {
+      payStatusDisplay = 'Paid';
+    }
+
+    String payModeDisplay = '';
+    if (payStatusDisplay == 'Paid') {
+      payModeDisplay = rawPayMode.isNotEmpty ? rawPayMode : 'Cash';
+      if (payModeDisplay.toLowerCase() == 'cod') {
+        payModeDisplay = 'Cash';
+      } else if (payModeDisplay.toLowerCase() == 'online_pay' || payModeDisplay.toLowerCase() == 'upi_pay') {
+        payModeDisplay = 'Online';
+      }
+    } else {
+      payModeDisplay = ''; // Empty when Unpaid
+    }
+
+    final String finalCustName = (custName.isNotEmpty && !custName.startsWith('Customer'))
+        ? '$custName ($custMobile)'
+        : custMobile;
+
+    // Seller Location
+    String sellerLoc = '';
+    final lookupKey = sellerUsername.toLowerCase();
+    final lookupNameKey = sellerName.toLowerCase();
+    String? loc = sellerLocationMap[lookupKey] ?? sellerLocationMap[lookupNameKey];
+    if (loc != null && loc.isNotEmpty) {
+      sellerLoc = loc;
+    }
+
+    // Explicit Pickup Date Time Parsing
+    String pickupTimeDisplay = '';
+    if (savedDeliveryStatuses.containsKey(msgIdStr) && savedDeliveryStatuses[msgIdStr] is Map) {
+      final val = savedDeliveryStatuses[msgIdStr];
+      pickupTimeDisplay = (val['picked_up_at'] ?? val['pickup_time'] ?? '').toString().trim();
+    }
+    if (pickupTimeDisplay.isEmpty) {
+      pickupTimeDisplay = (msgMap['picked_up_at'] ?? msgMap['pickup_time'] ?? '').toString().trim();
+    }
+    if (pickupTimeDisplay.isEmpty && statusLabel == 'Pickup') {
+      pickupTimeDisplay = (msgMap['status_time'] ?? '').toString().trim();
+    }
+
+    // Explicit Delivered Date Time Parsing
+    String deliveredTimeDisplay = '';
+    if (savedDeliveryStatuses.containsKey(msgIdStr) && savedDeliveryStatuses[msgIdStr] is Map) {
+      final val = savedDeliveryStatuses[msgIdStr];
+      deliveredTimeDisplay = (val['delivered_at'] ?? val['delivery_time'] ?? '').toString().trim();
+    }
+    if (deliveredTimeDisplay.isEmpty) {
+      deliveredTimeDisplay = (msgMap['delivered_at'] ?? msgMap['delivery_time'] ?? '').toString().trim();
+    }
+    DateTime? rawPickupDt;
+    if (pickupTimeDisplay.isNotEmpty) {
+      try {
+        rawPickupDt = DateTime.parse(pickupTimeDisplay.replaceAll(' ', 'T'));
+      } catch (_) {}
+    }
+
+    DateTime? rawDeliveredDt;
+    if (deliveredTimeDisplay.isNotEmpty) {
+      try {
+        rawDeliveredDt = DateTime.parse(deliveredTimeDisplay.replaceAll(' ', 'T'));
+      } catch (_) {}
+    }
+
+    return {
+      'date': '${parsedDt.day.toString().padLeft(2, '0')}/${parsedDt.month.toString().padLeft(2, '0')}/${parsedDt.year}',
+      'raw_date': parsedDt,
+      'raw_pickup_time': rawPickupDt,
+      'raw_delivered_time': rawDeliveredDt,
+      'customer_name': finalCustName,
+      'order_no': '#$cleanOrderId',
+      'order_send_time': rawCreatedAt.isNotEmpty ? rawCreatedAt : '${parsedDt.day}/${parsedDt.month}/${parsedDt.year}',
+      'amount': totalAmt,
+      'seller_name': sellerName,
+      'seller_location': sellerLoc.isNotEmpty ? sellerLoc : '-',
+      'pickup_time': pickupTimeDisplay,
+      'delivered_time': deliveredTimeDisplay,
+      'order_status': statusLabel,
+      'delivery_boy_name': deliveryBoyName,
+      'status_time': statusTimeDisplay,
+      'payment_status_display': payStatusDisplay,
+      'payment_mode_display': payModeDisplay,
+    };
   }
 
   /// Update delivery status of an order (Picked Up / Out for Delivery / Delivered)
@@ -2394,8 +3204,6 @@ class AuthService {
     required String reason,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    final cleanSeller = sellerUsername.trim().toLowerCase();
-    final cleanCust = customerMobile.trim().toLowerCase();
     final msgIdStr = messageId.toString();
 
     final now = DateTime.now();
@@ -2531,6 +3339,12 @@ class AuthService {
 
     // 3. Sync to VPS API Database
     try {
+      await VpsApiService.post('update-bill-image', {
+        'seller_username': cleanSeller,
+        'customer_mobile': cleanCust,
+        'message_id': messageId,
+        'bill_image': base64Image,
+      });
       await VpsApiService.post('save-order-bill-image', {
         'seller_username': cleanSeller,
         'customer_mobile': cleanCust,
@@ -2540,175 +3354,5 @@ class AuthService {
     } catch (_) {}
 
     return true;
-  }
-
-  // ==========================================
-  // REAL-TIME POPUP NOTIFICATION ENGINE
-  // ==========================================
-
-  /// Create a Popup Notification for a specific role/user
-  static Future<void> createPopupNotification({
-    required String targetRole, // 'customer', 'seller', 'delivery_boy'
-    String targetUser = '', // customer mobile or seller username
-    required String title,
-    required String body,
-    required String type,
-  }) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final String? existingStr = prefs.getString('app_popup_notifications');
-      List<Map<String, dynamic>> notifications = [];
-      if (existingStr != null && existingStr.isNotEmpty) {
-        final List decoded = jsonDecode(existingStr);
-        notifications = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
-      }
-
-      final newNotif = {
-        'id': 'notif_${DateTime.now().millisecondsSinceEpoch}_${(1000 + (notifications.length % 9000))}',
-        'target_role': targetRole.trim().toLowerCase(),
-        'target_user': targetUser.trim().toLowerCase(),
-        'title': title,
-        'body': body,
-        'type': type,
-        'timestamp': DateTime.now().toString().split('.')[0],
-        'is_read': false,
-      };
-
-      notifications.insert(0, newNotif);
-      // Keep last 100 notifications
-      if (notifications.length > 100) {
-        notifications = notifications.sublist(0, 100);
-      }
-
-      await prefs.setString('app_popup_notifications', jsonEncode(notifications));
-    } catch (e) {
-      debugPrint('Error creating popup notification: $e');
-    }
-  }
-
-  /// Get & mark unread notifications for a specific user and role
-  static Future<List<Map<String, dynamic>>> getAndConsumeUnreadPopupNotifications({
-    required String role, // 'customer', 'seller', 'delivery_boy'
-    String usernameOrMobile = '',
-  }) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final String? existingStr = prefs.getString('app_popup_notifications');
-      if (existingStr == null || existingStr.isEmpty) return [];
-
-      final List decoded = jsonDecode(existingStr);
-      List<Map<String, dynamic>> notifications =
-          decoded.map((e) => Map<String, dynamic>.from(e)).toList();
-
-      final String reqRole = role.trim().toLowerCase();
-      final String reqUser = usernameOrMobile.trim().toLowerCase();
-
-      List<Map<String, dynamic>> unreadToReturn = [];
-      bool modified = false;
-
-      for (var notif in notifications) {
-        final targetRole = (notif['target_role'] ?? '').toString().toLowerCase();
-        final targetUser = (notif['target_user'] ?? '').toString().toLowerCase();
-        final isRead = notif['is_read'] == true;
-
-        if (!isRead && (targetRole == reqRole || targetRole == 'all')) {
-          if (targetUser.isEmpty || reqUser.isEmpty || targetUser == reqUser) {
-            unreadToReturn.add(Map<String, dynamic>.from(notif));
-            notif['is_read'] = true;
-            modified = true;
-          }
-        }
-      }
-
-      if (modified) {
-        await prefs.setString('app_popup_notifications', jsonEncode(notifications));
-      }
-
-      return unreadToReturn;
-    } catch (e) {
-      debugPrint('Error fetching unread popup notifications: $e');
-      return [];
-    }
-  }
-
-  /// Helper to render Popup Dialog on any BuildContext
-  static void showAppNotificationDialog(BuildContext context, Map<String, dynamic> notif) {
-    final title = (notif['title'] ?? 'Notification').toString();
-    final body = (notif['body'] ?? '').toString();
-    final type = (notif['type'] ?? '').toString().toLowerCase();
-
-    IconData iconData = Icons.notifications_active_rounded;
-    Color iconColor = const Color(0xFF10B981);
-
-    if (type.contains('cancel')) {
-      iconData = Icons.cancel_rounded;
-      iconColor = const Color(0xFFEF4444);
-    } else if (type.contains('ready')) {
-      iconData = Icons.check_circle_rounded;
-      iconColor = const Color(0xFF10B981);
-    } else if (type.contains('picked')) {
-      iconData = Icons.two_wheeler_rounded;
-      iconColor = const Color(0xFF3B82F6);
-    } else if (type.contains('deliver')) {
-      iconData = Icons.verified_rounded;
-      iconColor = const Color(0xFF10B981);
-    } else if (type.contains('new_order')) {
-      iconData = Icons.shopping_bag_rounded;
-      iconColor = const Color(0xFF8B5CF6);
-    }
-
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(iconData, color: iconColor, size: 24),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-            ),
-          ],
-        ),
-        content: Text(
-          body,
-          style: const TextStyle(
-            color: Color(0xFF334155),
-            fontSize: 14,
-            height: 1.4,
-          ),
-        ),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: iconColor,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            ),
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              'OK',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

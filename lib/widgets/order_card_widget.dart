@@ -155,15 +155,23 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
     final bool isPaid = paymentStatus == 'paid';
     final String utrNumber = (widget.messageData['payment_utr'] ?? '').toString();
 
-    final String deliveryStatus = (widget.messageData['delivery_status'] ?? '').toString().toLowerCase();
-    final bool isDelivered = deliveryStatus == 'delivered';
-    final bool isPickedUpOrBeyond = deliveryStatus == 'picked up' || deliveryStatus == 'out for delivery' || deliveryStatus == 'delivered';
-    final String rawDeliveredAt = (widget.messageData['delivered_at'] ?? widget.messageData['delivered_time'] ?? widget.messageData['updated_at'] ?? '').toString();
-    final String rawCancelledAt = (widget.messageData['cancelled_at'] ?? widget.messageData['cancelled_time'] ?? widget.messageData['updated_at'] ?? '').toString();
+    final String deliveryStatus = (widget.messageData['delivery_status'] ?? '').toString().toLowerCase().trim();
+    final String rawDeliveredAt = (widget.messageData['delivered_at'] ?? widget.messageData['delivered_time'] ?? widget.messageData['updated_at'] ?? '').toString().trim();
+    final String rawCancelledAt = (widget.messageData['cancelled_at'] ?? widget.messageData['cancelled_time'] ?? widget.messageData['updated_at'] ?? '').toString().trim();
     final String cancelReasonFromMsg = (widget.messageData['cancel_reason'] ?? widget.messageData['cancellation_reason'] ?? widget.messageData['reason'] ?? '').toString();
     final String cancelReason = cancelReasonFromMsg.isNotEmpty ? cancelReasonFromMsg : (_loadedCancelReason ?? '');
-    final String pickedUpAt = (widget.messageData['picked_up_at'] ?? widget.messageData['pickup_time'] ?? '').toString();
+    final String pickedUpAt = (widget.messageData['picked_up_at'] ?? widget.messageData['pickup_time'] ?? '').toString().trim();
     final String billImage = (widget.messageData['bill_image'] ?? '').toString();
+
+    final String normOrderStatus = orderStatus.toString().toLowerCase().trim();
+    final bool isDelivered = deliveryStatus == 'delivered' || normOrderStatus == 'delivered' || rawDeliveredAt.isNotEmpty;
+    final bool isPickedUpOrBeyond = deliveryStatus == 'picked up' ||
+        deliveryStatus == 'out for delivery' ||
+        deliveryStatus == 'delivered' ||
+        normOrderStatus == 'pickup' ||
+        normOrderStatus == 'delivered' ||
+        pickedUpAt.isNotEmpty ||
+        rawDeliveredAt.isNotEmpty;
 
     final bool isDeleted = orderStatus.toString().toLowerCase() == 'deleted' ||
         widget.messageData['is_deleted'] == true ||
@@ -372,7 +380,7 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
               if (billImage.isNotEmpty) ...[
                 const SizedBox(width: 5),
                 InkWell(
-                  onTap: () => _showBillImageDialog(billImage),
+                  onTap: () => _showBillImageDialog(billImage, isPickedUpOrBeyond),
                   borderRadius: BorderRadius.circular(12),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -833,6 +841,32 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
   }
 
   Future<void> _pickAndSaveBillImage() async {
+    final String orderStatus = (widget.messageData['order_status'] ?? '').toString().toLowerCase().trim();
+    final String deliveryStatus = (widget.messageData['delivery_status'] ?? '').toString().toLowerCase().trim();
+    final String pickedUpAt = (widget.messageData['picked_up_at'] ?? widget.messageData['pickup_time'] ?? '').toString().trim();
+    final String deliveredAt = (widget.messageData['delivered_at'] ?? widget.messageData['delivered_time'] ?? '').toString().trim();
+
+    final bool isPickedUpOrBeyond = deliveryStatus == 'picked up' ||
+        deliveryStatus == 'out for delivery' ||
+        deliveryStatus == 'delivered' ||
+        orderStatus == 'pickup' ||
+        orderStatus == 'delivered' ||
+        pickedUpAt.isNotEmpty ||
+        deliveredAt.isNotEmpty;
+
+    if (isPickedUpOrBeyond) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ Delivery Boy order Pick Up kar chuka hai! Ab bill edit / change nahi ho sakta 🔒'),
+            backgroundColor: Color(0xFFEF4444),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+      return;
+    }
+
     try {
       final ImagePicker picker = ImagePicker();
       final XFile? photo = await picker.pickImage(
@@ -885,7 +919,60 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
     }
   }
 
-  void _showBillImageDialog(String base64Img) {
+  void _showFullScreenImageDialog(String base64Img) {
+    showDialog(
+      context: context,
+      builder: (fullCtx) {
+        return Dialog.fullscreen(
+          child: Scaffold(
+            backgroundColor: Colors.black,
+            appBar: AppBar(
+              backgroundColor: const Color(0xFF0F172A),
+              elevation: 0,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                onPressed: () => Navigator.pop(fullCtx),
+              ),
+              title: const Row(
+                children: [
+                  Icon(Icons.receipt_long_rounded, color: Color(0xFFFBBF24), size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Bill Photo Zoom 🧾',
+                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, color: Colors.white, size: 24),
+                  onPressed: () => Navigator.pop(fullCtx),
+                ),
+              ],
+            ),
+            body: Center(
+              child: InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 6.0,
+                child: Image.memory(
+                  base64Decode(base64Img),
+                  fit: BoxFit.contain,
+                  errorBuilder: (ctx, err, stack) => const Center(
+                    child: Text('Failed to load bill image.', style: TextStyle(color: Colors.red)),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showBillImageDialog(String base64Img, bool isPickedUpOrBeyond) {
     showDialog(
       context: context,
       builder: (ctx) {
@@ -918,11 +1005,18 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
                     children: [
                       const Icon(Icons.receipt_long_rounded, color: Color(0xFFFBBF24), size: 20),
                       const SizedBox(width: 8),
-                      const Text(
-                        'Order Bill Photo 🧾',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                      const Expanded(
+                        child: Text(
+                          'Order Bill Photo 🧾',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.fullscreen_rounded, color: Color(0xFFFBBF24), size: 22),
+                        tooltip: 'Full Screen Zoom',
+                        onPressed: () => _showFullScreenImageDialog(base64Img),
+                      ),
                       IconButton(
                         icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
                         onPressed: () => Navigator.pop(ctx),
@@ -931,20 +1025,56 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
                   ),
                 ),
 
-                // Image Preview
+                // Image Preview (With Pinch-to-Zoom & Full Screen Overlay Button)
                 Flexible(
                   child: Padding(
                     padding: const EdgeInsets.all(12.0),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.memory(
-                        base64Decode(base64Img),
-                        fit: BoxFit.contain,
-                        errorBuilder: (ctx, err, stack) => const Padding(
-                          padding: EdgeInsets.all(30.0),
-                          child: Text('Failed to load bill image.', style: TextStyle(color: Colors.red)),
+                    child: Stack(
+                      alignment: Alignment.topRight,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: InteractiveViewer(
+                            minScale: 0.8,
+                            maxScale: 4.0,
+                            child: Image.memory(
+                              base64Decode(base64Img),
+                              fit: BoxFit.contain,
+                              errorBuilder: (ctx, err, stack) => const Padding(
+                                padding: EdgeInsets.all(30.0),
+                                child: Text('Failed to load bill image.', style: TextStyle(color: Colors.red)),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: InkWell(
+                            onTap: () => _showFullScreenImageDialog(base64Img),
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0F172A).withValues(alpha: 0.85),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: const Color(0xFFFBBF24), width: 0.8),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.zoom_in_rounded, size: 14, color: Color(0xFFFBBF24)),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Full Screen 🔍',
+                                    style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -955,19 +1085,39 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
                     padding: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
                     child: SizedBox(
                       width: double.infinity,
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF2563EB),
-                          side: const BorderSide(color: Color(0xFF2563EB)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        icon: const Icon(Icons.camera_alt_rounded, size: 18),
-                        label: const Text('Retake / Update Bill Photo 📸', style: TextStyle(fontWeight: FontWeight.bold)),
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _pickAndSaveBillImage();
-                        },
-                      ),
+                      child: isPickedUpOrBeyond
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFCBD5E1)),
+                              ),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.lock_rounded, size: 16, color: Color(0xFF64748B)),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'Order Picked Up - Bill Locked 🔒',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF64748B)),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF2563EB),
+                                side: const BorderSide(color: Color(0xFF2563EB)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              icon: const Icon(Icons.camera_alt_rounded, size: 18),
+                              label: const Text('Retake / Update Bill Photo 📸', style: TextStyle(fontWeight: FontWeight.bold)),
+                              onPressed: () {
+                                Navigator.pop(ctx);
+                                _pickAndSaveBillImage();
+                              },
+                            ),
                     ),
                   ),
               ],

@@ -1,10 +1,8 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/user_model.dart';
-import '../../services/auth_service.dart';
 import '../dashboards/seller_dashboard.dart';
-import 'seller_account_screen.dart';
+import 'seller_accounts_screen.dart';
 import 'seller_profile_screen.dart';
 
 class SellerMainNavScreen extends StatefulWidget {
@@ -23,37 +21,11 @@ class SellerMainNavScreen extends StatefulWidget {
 
 class _SellerMainNavScreenState extends State<SellerMainNavScreen> {
   late int _currentIndex;
-  Timer? _popupTimer;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialTab;
-    _startPopupTimer();
-  }
-
-  void _startPopupTimer() {
-    _popupTimer?.cancel();
-    _popupTimer = Timer.periodic(const Duration(seconds: 3), (_) => _checkPopupNotifications());
-  }
-
-  void _checkPopupNotifications() async {
-    if (!mounted) return;
-    final unreads = await AuthService.getAndConsumeUnreadPopupNotifications(
-      role: 'seller',
-      usernameOrMobile: widget.seller.username ?? '',
-    );
-    if (unreads.isNotEmpty && mounted) {
-      for (var notif in unreads) {
-        AuthService.showAppNotificationDialog(context, notif);
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _popupTimer?.cancel();
-    super.dispose();
   }
 
   Future<bool> _showExitConfirmationDialog() async {
@@ -96,7 +68,7 @@ class _SellerMainNavScreenState extends State<SellerMainNavScreen> {
   Widget build(BuildContext context) {
     final List<Widget> pages = [
       SellerDashboard(seller: widget.seller),
-      SellerAccountScreen(seller: widget.seller),
+      SellerAccountsScreen(seller: widget.seller),
       SellerProfileScreen(seller: widget.seller),
     ];
 
@@ -129,7 +101,7 @@ class _SellerMainNavScreenState extends State<SellerMainNavScreen> {
             color: Colors.white,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.08),
+                color: Colors.black.withValues(alpha: 0.08),
                 blurRadius: 16,
                 offset: const Offset(0, -3),
               ),

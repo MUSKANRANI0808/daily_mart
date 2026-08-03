@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -26,38 +25,12 @@ class _CustomerMainNavScreenState extends State<CustomerMainNavScreen> {
   late int _currentIndex;
   Map<String, String>? _lastSeller;
   bool _isLoadingSeller = true;
-  Timer? _popupTimer;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialTab;
     _checkSellerStatus();
-    _startPopupTimer();
-  }
-
-  void _startPopupTimer() {
-    _popupTimer?.cancel();
-    _popupTimer = Timer.periodic(const Duration(seconds: 3), (_) => _checkPopupNotifications());
-  }
-
-  void _checkPopupNotifications() async {
-    if (!mounted) return;
-    final unreads = await AuthService.getAndConsumeUnreadPopupNotifications(
-      role: 'customer',
-      usernameOrMobile: widget.customer.mobile ?? '',
-    );
-    if (unreads.isNotEmpty && mounted) {
-      for (var notif in unreads) {
-        AuthService.showAppNotificationDialog(context, notif);
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _popupTimer?.cancel();
-    super.dispose();
   }
 
   Future<bool> _showExitConfirmationDialog() async {
@@ -107,21 +80,6 @@ class _CustomerMainNavScreenState extends State<CustomerMainNavScreen> {
     if (activeSeller != null && deletedList.contains(activeSeller['username'])) {
       await AuthService.clearLastSelectedSeller();
       activeSeller = null;
-    }
-
-    if (activeSeller == null) {
-      final chats = await AuthService.getCustomerConversations(cleanCust);
-      final validChats = chats.where((c) => !deletedList.contains((c['seller_username'] ?? '').toString().trim())).toList();
-      if (validChats.isNotEmpty) {
-        final firstChat = validChats.first;
-        final sUsername = (firstChat['seller_username'] ?? '').toString().trim();
-        final sName = (firstChat['seller_name'] ?? sUsername).toString().trim();
-        final sMobile = (firstChat['seller_mobile'] ?? '').toString().trim();
-        if (sUsername.isNotEmpty && sUsername != 'seller') {
-          await AuthService.saveLastSelectedSeller(username: sUsername, name: sName, mobile: sMobile, customerMobile: cleanCust);
-          activeSeller = await AuthService.getLastSelectedSeller();
-        }
-      }
     }
 
     final bool hasValidSeller = activeSeller != null &&

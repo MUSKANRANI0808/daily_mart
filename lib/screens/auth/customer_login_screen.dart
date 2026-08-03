@@ -181,12 +181,15 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
   void _proceedWithLogin(String mobile) async {
     setState(() => _isLoading = true);
 
-    // 1. Check if customer profile has Name
+    // 1. Sync & Restore customer profile and saved addresses from VPS Server Database for this mobile number
+    await AuthService.fetchAndSyncCustomerProfileFromVps(mobile);
+
+    // 2. Check if customer profile has Name
     final profile = await AuthService.getCustomerProfile(mobile);
     final existingName = (profile != null && profile['name'] != null) ? profile['name'].toString().trim() : '';
     final hasValidName = existingName.isNotEmpty && !existingName.startsWith('Customer');
 
-    // 2. Check if customer address exists
+    // 3. Check if customer address exists
     final prefs = await SharedPreferences.getInstance();
     final addrJsonStr = prefs.getString('customer_addresses_$mobile');
     bool hasAddress = false;
@@ -204,7 +207,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
         _showCompleteProfileDialog(mobile, existingName: hasValidName ? existingName : null);
       }
     } else {
-      final user = await AuthService.loginCustomer(mobile);
+      final user = await AuthService.loginCustomer(mobile, customName: existingName);
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
@@ -279,7 +282,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                     style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                     decoration: InputDecoration(
                       labelText: 'Your Full Name *',
-                      hintText: 'e.g. Pushpraj Kumar',
+                      hintText: 'Enter your name',
                       prefixIcon: const Icon(Icons.person_rounded, color: Color(0xFF10B981)),
                       filled: true,
                       fillColor: const Color(0xFFF8FAFC),
@@ -429,7 +432,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                           } catch (_) {}
                         }
                         addrsList.insert(0, newAddr);
-                        await prefs.setString('customer_addresses_$mobile', jsonEncode(addrsList));
+                        await AuthService.saveCustomerAddresses(mobile, addrsList);
 
                         // 2. Complete Customer Login with Custom Name
                         final user = await AuthService.loginCustomer(mobile, customName: fullName);

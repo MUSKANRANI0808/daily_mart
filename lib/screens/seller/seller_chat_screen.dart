@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
+import '../../services/notification_service.dart';
 import '../../widgets/order_card_widget.dart';
 
 class SellerChatScreen extends StatefulWidget {
@@ -22,7 +23,6 @@ class SellerChatScreen extends StatefulWidget {
 }
 
 class _SellerChatScreenState extends State<SellerChatScreen> {
-  final TextEditingController _replyController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   List<Map<String, dynamic>> _messages = [];
   bool _isLoading = true;
@@ -38,18 +38,42 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
-    _replyController.dispose();
     super.dispose();
   }
 
 
 
   Future<void> _loadCustomerProfileName() async {
-    final name = await AuthService.getCustomerDisplayName(widget.customerMobile);
-    if (mounted && name.isNotEmpty) {
-      setState(() {
-        _customerDisplayName = name;
-      });
+    final profile = await AuthService.getCustomerProfile(widget.customerMobile);
+    if (profile != null && profile['name'] != null && profile['name'].toString().trim().isNotEmpty) {
+      final pName = profile['name'].toString().trim();
+      if (!pName.startsWith('Customer')) {
+        if (mounted) {
+          setState(() {
+            _customerDisplayName = pName;
+          });
+        }
+        return;
+      }
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = prefs.getString('customer_addresses_${widget.customerMobile}');
+    if (jsonStr != null && jsonStr.isNotEmpty) {
+      try {
+        final List<dynamic> list = jsonDecode(jsonStr);
+        if (list.isNotEmpty) {
+          final defaultAddr = list.firstWhere((a) => a['isDefault'] == true, orElse: () => list.first);
+          final rName = defaultAddr['receiverName']?.toString().trim() ?? '';
+          if (rName.isNotEmpty) {
+            if (mounted) {
+              setState(() {
+                _customerDisplayName = rName;
+              });
+            }
+          }
+        }
+      } catch (_) {}
     }
   }
 
@@ -708,28 +732,25 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
       orderStatus: finalStatus,
     );
 
+    final String rawOrderId = (msgData['order_id'] ?? 'Order #$msgId').toString();
+    final String sellerDisplayName = (widget.seller.name.isNotEmpty ? widget.seller.name : widget.seller.username).toString();
+    final String sellerUser = widget.seller.username.toString();
+
     if (finalStatus == 'Cancelled') {
-      AuthService.createPopupNotification(
-        targetRole: 'customer',
-        targetUser: widget.customerMobile,
-        title: '❌ Order Cancelled by Seller!',
-        body: 'Seller ${widget.seller.name} has cancelled your Order #${msgData['id'] ?? ''}.',
-        type: 'order_cancelled',
+      // Scenario 2: Seller cancels order -> Notify Customer
+      await NotificationService.notifyCustomerOrderCancelled(
+        customerMobile: widget.customerMobile,
+        sellerName: sellerDisplayName,
+        orderId: rawOrderId,
+        reason: 'Cancelled by seller',
       );
-    } else if (finalStatus == 'Ready') {
-      AuthService.createPopupNotification(
-        targetRole: 'customer',
-        targetUser: widget.customerMobile,
-        title: '✅ Order Packed & Ready!',
-        body: 'Seller ${widget.seller.name} has packed your Order #${msgData['id'] ?? ''}.',
-        type: 'order_ready',
-      );
-      AuthService.createPopupNotification(
-        targetRole: 'delivery_boy',
-        targetUser: '', // All Delivery Boys
-        title: '🔔 New Order Ready for Pickup!',
-        body: 'Order #${msgData['id'] ?? ''} is packed & ready for pickup at ${widget.seller.name}.',
-        type: 'order_ready',
+    } else if (finalStatus == 'Ready' || finalStatus == 'Approved') {
+      // Scenario 3: Seller sets Ready/Approved -> Notify Customer & Delivery Boys
+      await NotificationService.notifyOrderReady(
+        customerMobile: widget.customerMobile,
+        sellerUsername: sellerUser,
+        sellerName: sellerDisplayName,
+        orderId: rawOrderId,
       );
     }
   }
@@ -866,7 +887,7 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
       await AuthService.updateItemStatus(
         messageId: msgId,
         items: items,
-        sellerName: widget.seller.name ?? 'SELLER',
+        sellerName: widget.seller.name,
         itemNum: itemIndex + 1,
         status: newStatusVal,
       );
@@ -874,12 +895,24 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
   }
 
   void _showAddAmountDialog(Map<String, dynamic> msgData) {
-    final delStat = (msgData['delivery_status'] ?? '').toString().toLowerCase();
-    if (delStat == 'picked up' || delStat == 'out for delivery' || delStat == 'delivered') {
+    final delStat = (msgData['delivery_status'] ?? '').toString().toLowerCase().trim();
+    final ordStat = (msgData['order_status'] ?? '').toString().toLowerCase().trim();
+    final pickedUpAt = (msgData['picked_up_at'] ?? msgData['pickup_time'] ?? '').toString().trim();
+    final deliveredAt = (msgData['delivered_at'] ?? msgData['delivered_time'] ?? '').toString().trim();
+
+    final bool isPickedUpOrBeyond = delStat == 'picked up' ||
+        delStat == 'out for delivery' ||
+        delStat == 'delivered' ||
+        ordStat == 'pickup' ||
+        ordStat == 'delivered' ||
+        pickedUpAt.isNotEmpty ||
+        deliveredAt.isNotEmpty;
+
+    if (isPickedUpOrBeyond) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('⚠️ Delivery Boy order Pick Up kar chuka hai! Ab amount edit nahi ho sakta.'),
+            content: Text('⚠️ Delivery Boy order Pick Up kar chuka hai! Ab bill / amount edit nahi ho sakta 🔒'),
             backgroundColor: Color(0xFFEF4444),
             duration: Duration(seconds: 3),
           ),
@@ -891,10 +924,30 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
     final msgId = (msgData['id'] as num?)?.toInt() ?? 0;
     if (msgId == 0) return;
 
-    final existingAmount = msgData['order_amount'] ?? msgData['amount'] ?? '';
-    final TextEditingController amountController = TextEditingController(
-      text: (existingAmount == null || existingAmount.toString() == 'null') ? '' : existingAmount.toString(),
-    );
+    final rawAmtStr = (msgData['order_amount'] ?? msgData['amount'] ?? '').toString().trim();
+    final double? existingAmtNum = double.tryParse(rawAmtStr);
+    
+    // Initial text: if 0, 0.0, 0.00, or null/empty, leave text EMPTY so seller doesn't have to backspace!
+    final String initialText = (existingAmtNum == null || existingAmtNum == 0)
+        ? ''
+        : (existingAmtNum % 1 == 0 ? existingAmtNum.toInt().toString() : existingAmtNum.toString());
+
+    final TextEditingController amountController = TextEditingController(text: initialText);
+    final FocusNode amountFocusNode = FocusNode();
+
+    amountFocusNode.addListener(() {
+      if (amountFocusNode.hasFocus) {
+        final text = amountController.text.trim();
+        if (text == '0' || text == '0.0' || text == '0.00') {
+          amountController.clear();
+        } else if (text.isNotEmpty) {
+          amountController.selection = TextSelection(
+            baseOffset: 0,
+            extentOffset: amountController.text.length,
+          );
+        }
+      }
+    });
 
     showDialog(
       context: context,
@@ -917,13 +970,20 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: amountController,
+                focusNode: amountFocusNode,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 autofocus: true,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                onTap: () {
+                  final text = amountController.text.trim();
+                  if (text == '0' || text == '0.0' || text == '0.00') {
+                    amountController.clear();
+                  }
+                },
                 decoration: InputDecoration(
                   prefixIcon: const Icon(Icons.currency_rupee_rounded, color: Color(0xFF0F172A)),
-                  hintText: 'e.g. 150 or 499',
-                  hintStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.normal, color: Colors.black38),
+                  hintText: '0.00',
+                  hintStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w400, color: Color(0xFF94A3B8)),
                   filled: true,
                   fillColor: const Color(0xFFF1F5F9),
                   border: OutlineInputBorder(
@@ -964,30 +1024,6 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
         );
       },
     );
-  }
-
-  void _sendReply() async {
-    final text = _replyController.text.trim();
-    if (text.isEmpty) return;
-
-    _replyController.clear();
-
-    final success = await AuthService.sendMessage(
-      sellerUsername: widget.seller.username ?? '',
-      customerMobile: widget.customerMobile,
-      message: text,
-      senderType: 'seller',
-    );
-
-    if (success) {
-      _loadMessages();
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to send reply.')),
-        );
-      }
-    }
   }
 
   @override
@@ -1144,68 +1180,32 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
                         ),
             ),
 
-            // Bottom Reply Input Field or Blocked Banner
-            _isBlocked
-                ? Container(
-                    width: double.infinity,
-                    color: const Color(0xFFFEF2F2),
-                    child: const SafeArea(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.block_rounded, color: Color(0xFFEF4444), size: 20),
-                            SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'This customer is blocked. Tap 3 dots above to unblock.',
-                                style: TextStyle(color: Color(0xFFB91C1C), fontWeight: FontWeight.bold, fontSize: 13),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
+            // Blocked Banner (If customer is blocked)
+            if (_isBlocked)
+              Container(
+                width: double.infinity,
+                color: const Color(0xFFFEF2F2),
+                child: const SafeArea(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.block_rounded, color: Color(0xFFEF4444), size: 20),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'This customer is blocked. Tap 3 dots above to unblock.',
+                            style: TextStyle(color: Color(0xFFB91C1C), fontWeight: FontWeight.bold, fontSize: 13),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                    ),
-                  )
-                : Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    color: Colors.white,
-                    child: SafeArea(
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _replyController,
-                              style: const TextStyle(color: Color(0xFF0F172A), fontSize: 15),
-                              decoration: InputDecoration(
-                                hintText: 'Reply to customer...',
-                                hintStyle: const TextStyle(color: Colors.black38),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                filled: true,
-                                fillColor: const Color(0xFFF1F5F9),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                  borderSide: BorderSide.none,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          CircleAvatar(
-                            backgroundColor: const Color(0xFF8B5CF6),
-                            radius: 22,
-                            child: IconButton(
-                              icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-                              onPressed: _sendReply,
-                            ),
-                          ),
-                        ],
-                      ),
+                      ],
                     ),
                   ),
+                ),
+              ),
           ],
         ),
       ),
