@@ -439,83 +439,166 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   ),
                   const SizedBox(height: 16),
 
-                  // 3. CUSTOM HEX COLORS (Color 1 & Color 2 & Color 3)
-                  const Text(
-                    'Custom Gradient Colors (Color 1 & Color 2 Hex):',
-                    style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13),
+                  // 3. CUSTOM GRADIENT COLORS WITH VISUAL COLOR SCALE PICKER
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: const [
+                      Text(
+                        'Custom Gradient Colors (Tap Circle to Pick):',
+                        style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      Text(
+                        '🎨 Color Scale Palette',
+                        style: TextStyle(color: Color(0xFF8B5CF6), fontWeight: FontWeight.bold, fontSize: 11),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
+                      // COLOR 1 SCALE PICKER
                       Expanded(
-                        child: TextFormField(
-                          controller: c1Controller,
-                          style: const TextStyle(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.bold),
-                          decoration: InputDecoration(
-                            labelText: 'Color 1 (Start)',
-                            labelStyle: const TextStyle(fontSize: 11),
-                            prefixIcon: Container(
-                              margin: const EdgeInsets.all(8),
-                              width: 18,
-                              height: 18,
-                              decoration: BoxDecoration(
-                                color: HeaderThemeHelper.hexToColor(c1Controller.text),
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.grey),
+                        child: InkWell(
+                          onTap: () {
+                            _showColorPickerScaleDialog(
+                              title: 'Color 1 (Start)',
+                              initialColorHex: c1Controller.text,
+                              onColorSelected: (hex) {
+                                setDialogState(() {
+                                  c1Controller.text = hex;
+                                  selectedPreset = 'custom';
+                                });
+                              },
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: IgnorePointer(
+                            child: TextFormField(
+                              controller: c1Controller,
+                              style: const TextStyle(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.bold),
+                              decoration: InputDecoration(
+                                labelText: 'Color 1 (Start)',
+                                labelStyle: const TextStyle(fontSize: 11),
+                                suffixIcon: const Icon(Icons.palette_rounded, size: 16, color: Color(0xFF8B5CF6)),
+                                prefixIcon: Container(
+                                  margin: const EdgeInsets.all(6),
+                                  width: 24,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    color: HeaderThemeHelper.hexToColor(c1Controller.text),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.grey.shade400, width: 2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: HeaderThemeHelper.hexToColor(c1Controller.text).withValues(alpha: 0.4),
+                                        blurRadius: 4,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                border: const OutlineInputBorder(),
+                                isDense: true,
                               ),
                             ),
-                            border: const OutlineInputBorder(),
-                            isDense: true,
                           ),
-                          onChanged: (_) => setDialogState(() => selectedPreset = 'custom'),
                         ),
                       ),
                       const SizedBox(width: 8),
+
+                      // COLOR 2 SCALE PICKER
                       Expanded(
-                        child: TextFormField(
-                          controller: c2Controller,
-                          style: const TextStyle(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.bold),
-                          decoration: InputDecoration(
-                            labelText: 'Color 2 (End)',
-                            labelStyle: const TextStyle(fontSize: 11),
-                            prefixIcon: Container(
-                              margin: const EdgeInsets.all(8),
-                              width: 18,
-                              height: 18,
-                              decoration: BoxDecoration(
-                                color: HeaderThemeHelper.hexToColor(c2Controller.text),
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.grey),
+                        child: InkWell(
+                          onTap: () {
+                            _showColorPickerScaleDialog(
+                              title: 'Color 2 (End)',
+                              initialColorHex: c2Controller.text,
+                              onColorSelected: (hex) {
+                                setDialogState(() {
+                                  c2Controller.text = hex;
+                                  selectedPreset = 'custom';
+                                });
+                              },
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: IgnorePointer(
+                            child: TextFormField(
+                              controller: c2Controller,
+                              style: const TextStyle(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.bold),
+                              decoration: InputDecoration(
+                                labelText: 'Color 2 (End)',
+                                labelStyle: const TextStyle(fontSize: 11),
+                                suffixIcon: const Icon(Icons.palette_rounded, size: 16, color: Color(0xFF8B5CF6)),
+                                prefixIcon: Container(
+                                  margin: const EdgeInsets.all(6),
+                                  width: 24,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    color: HeaderThemeHelper.hexToColor(c2Controller.text),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.grey.shade400, width: 2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: HeaderThemeHelper.hexToColor(c2Controller.text).withValues(alpha: 0.4),
+                                        blurRadius: 4,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                border: const OutlineInputBorder(),
+                                isDense: true,
                               ),
                             ),
-                            border: const OutlineInputBorder(),
-                            isDense: true,
                           ),
-                          onChanged: (_) => setDialogState(() => selectedPreset = 'custom'),
                         ),
                       ),
                       const SizedBox(width: 8),
+
+                      // COLOR 3 SCALE PICKER
                       Expanded(
-                        child: TextFormField(
-                          controller: c3Controller,
-                          style: const TextStyle(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.bold),
-                          decoration: InputDecoration(
-                            labelText: 'Color 3 (Accent)',
-                            labelStyle: const TextStyle(fontSize: 11),
-                            prefixIcon: Container(
-                              margin: const EdgeInsets.all(8),
-                              width: 18,
-                              height: 18,
-                              decoration: BoxDecoration(
-                                color: HeaderThemeHelper.hexToColor(c3Controller.text),
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.grey),
+                        child: InkWell(
+                          onTap: () {
+                            _showColorPickerScaleDialog(
+                              title: 'Color 3 (Accent)',
+                              initialColorHex: c3Controller.text,
+                              onColorSelected: (hex) {
+                                setDialogState(() {
+                                  c3Controller.text = hex;
+                                  selectedPreset = 'custom';
+                                });
+                              },
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: IgnorePointer(
+                            child: TextFormField(
+                              controller: c3Controller,
+                              style: const TextStyle(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.bold),
+                              decoration: InputDecoration(
+                                labelText: 'Color 3 (Accent)',
+                                labelStyle: const TextStyle(fontSize: 11),
+                                suffixIcon: const Icon(Icons.palette_rounded, size: 16, color: Color(0xFF8B5CF6)),
+                                prefixIcon: Container(
+                                  margin: const EdgeInsets.all(6),
+                                  width: 24,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    color: HeaderThemeHelper.hexToColor(c3Controller.text),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.grey.shade400, width: 2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: HeaderThemeHelper.hexToColor(c3Controller.text).withValues(alpha: 0.4),
+                                        blurRadius: 4,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                border: const OutlineInputBorder(),
+                                isDense: true,
                               ),
                             ),
-                            border: const OutlineInputBorder(),
-                            isDense: true,
                           ),
-                          onChanged: (_) => setDialogState(() => selectedPreset = 'custom'),
                         ),
                       ),
                     ],
@@ -643,6 +726,170 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     ),
                   );
                 },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _showColorPickerScaleDialog({
+    required String title,
+    required String initialColorHex,
+    required Function(String hexCode) onColorSelected,
+  }) {
+    final List<Map<String, dynamic>> colorPalette = [
+      {
+        'category': '🌙 Dark Obsidian & Deep Slate',
+        'colors': ['#0F172A', '#1E1B4B', '#1E293B', '#09090B', '#18181B', '#27272A', '#334155', '#475569'],
+      },
+      {
+        'category': '🟣 Royal Purple & Electric Violet',
+        'colors': ['#2E1065', '#3B0764', '#4C1D95', '#581C87', '#6D28D9', '#7E22CE', '#9333EA', '#A855F7'],
+      },
+      {
+        'category': '🔵 Ocean Blue & Neon Cyan',
+        'colors': ['#0C4A6E', '#075985', '#0369A1', '#0284C7', '#0EA5E9', '#38BDF8', '#1D4ED8', '#2563EB'],
+      },
+      {
+        'category': '🟢 Emerald Mint & Forest Green',
+        'colors': ['#022C22', '#064E3B', '#047857', '#059669', '#10B981', '#34D399', '#6EE7B7', '#A7F3D0'],
+      },
+      {
+        'category': '🌅 Crimson Rose & Ruby Red',
+        'colors': ['#4C0519', '#881337', '#9F1239', '#BE123C', '#E11D48', '#F43F5E', '#FB7185', '#FDA4AF'],
+      },
+      {
+        'category': '👑 Golden Luxe & Amber Gold',
+        'colors': ['#451A03', '#78350F', '#92400E', '#B45309', '#D97706', '#F59E0B', '#FBBF24', '#FCD34D'],
+      },
+    ];
+
+    String selectedHex = initialColorHex.trim();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setPickerState) {
+          return AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                Container(
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: HeaderThemeHelper.hexToColor(selectedHex),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.grey.shade400, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: HeaderThemeHelper.hexToColor(selectedHex).withValues(alpha: 0.4),
+                        blurRadius: 6,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Pick Color ($title)',
+                    style: const TextStyle(color: Color(0xFF0F172A), fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Text(
+                    selectedHex.toUpperCase(),
+                    style: const TextStyle(color: Color(0xFF8B5CF6), fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: 440,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Select any color circle from the scale below to set it instantly:',
+                      style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                    ),
+                    const SizedBox(height: 12),
+
+                    ...colorPalette.map((group) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(top: 10, bottom: 6),
+                            child: Text(
+                              group['category'] as String,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF334155),
+                              ),
+                            ),
+                          ),
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: (group['colors'] as List<String>).map((hex) {
+                              final isCurrent = selectedHex.toLowerCase() == hex.toLowerCase();
+                              final color = HeaderThemeHelper.hexToColor(hex);
+
+                              return GestureDetector(
+                                onTap: () {
+                                  setPickerState(() => selectedHex = hex);
+                                  onColorSelected(hex);
+                                  Navigator.pop(ctx);
+                                },
+                                child: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: color,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: isCurrent ? const Color(0xFF8B5CF6) : Colors.black12,
+                                      width: isCurrent ? 3.5 : 1.5,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: color.withValues(alpha: 0.35),
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child: isCurrent
+                                      ? const Icon(Icons.check_rounded, color: Colors.white, size: 20)
+                                      : null,
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
               ),
             ],
           );
