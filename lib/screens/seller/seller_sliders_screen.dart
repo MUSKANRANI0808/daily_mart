@@ -226,6 +226,24 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
     required Widget child,
     BorderRadius? borderRadius,
   }) {
+    if (bg == 'none' || bg.isEmpty || bg == 'transparent') {
+      return Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F172A),
+          borderRadius: borderRadius ?? BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: child,
+      );
+    }
+
     final preset = presetThemes.firstWhere(
       (p) => p['id'] == bg,
       orElse: () => {},
@@ -323,7 +341,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
     final tagCtrl = TextEditingController(text: existingSlider?['tag'] ?? '');
     final titleCtrl = TextEditingController(text: existingSlider?['title'] ?? '');
     final descCtrl = TextEditingController(text: existingSlider?['description'] ?? '');
-    String selectedImageData = existingSlider?['bg_image_url'] ?? 'preset_1';
+    String selectedImageData = existingSlider?['bg_image_url'] ?? 'none';
     bool isPickingImage = false;
     int selectedTab = 0; // 0: Text Content, 1: Style & Colors, 2: Background Image
 
@@ -803,49 +821,75 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('Choose Abstract Theme Card', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                                const Text('Choose Background Preset / Theme Card', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
                                 const SizedBox(height: 6),
                                 SizedBox(
                                   height: 60,
-                                  child: ListView.separated(
+                                  child: ListView(
                                     scrollDirection: Axis.horizontal,
-                                    itemCount: presetThemes.length,
-                                    separatorBuilder: (ctx, idx) => const SizedBox(width: 8),
-                                    itemBuilder: (ctx, idx) {
-                                      final p = presetThemes[idx];
-                                      final isSelected = selectedImageData == p['id'];
-                                      final colors = List<Color>.from(p['colors']);
-                                      return GestureDetector(
-                                        onTap: () => setDialogState(() => selectedImageData = p['id']),
+                                    children: [
+                                      // NO IMAGE OPTION (DEFAULT)
+                                      GestureDetector(
+                                        onTap: () => setDialogState(() => selectedImageData = 'none'),
                                         child: Container(
                                           width: 100,
+                                          margin: const EdgeInsets.only(right: 8),
                                           decoration: BoxDecoration(
-                                            gradient: LinearGradient(
-                                              colors: colors,
-                                              begin: Alignment.topLeft,
-                                              end: Alignment.bottomRight,
-                                            ),
+                                            color: const Color(0xFF0F172A),
                                             borderRadius: BorderRadius.circular(10),
-                                            border: isSelected ? Border.all(color: Colors.white, width: 2.5) : Border.all(color: Colors.black12),
+                                            border: (selectedImageData == 'none' || selectedImageData.isEmpty)
+                                                ? Border.all(color: const Color(0xFF10B981), width: 2.5)
+                                                : Border.all(color: Colors.black12),
                                           ),
-                                          child: CustomPaint(
-                                            painter: AbstractPatternPainter(p['id']),
-                                            child: Center(
-                                              child: Text(
-                                                p['name'],
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 10,
-                                                  shadows: [Shadow(color: Colors.black45, blurRadius: 4)],
-                                                ),
-                                                textAlign: TextAlign.center,
+                                          child: const Center(
+                                            child: Text(
+                                              '🚫 No Image\n(Clean Dark)',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 10,
                                               ),
+                                              textAlign: TextAlign.center,
                                             ),
                                           ),
                                         ),
-                                      );
-                                    },
+                                      ),
+                                      ...presetThemes.map((p) {
+                                        final isSelected = selectedImageData == p['id'];
+                                        final colors = List<Color>.from(p['colors']);
+                                        return GestureDetector(
+                                          onTap: () => setDialogState(() => selectedImageData = p['id']),
+                                          child: Container(
+                                            width: 100,
+                                            margin: const EdgeInsets.only(right: 8),
+                                            decoration: BoxDecoration(
+                                              gradient: LinearGradient(
+                                                colors: colors,
+                                                begin: Alignment.topLeft,
+                                                end: Alignment.bottomRight,
+                                              ),
+                                              borderRadius: BorderRadius.circular(10),
+                                              border: isSelected ? Border.all(color: Colors.white, width: 2.5) : Border.all(color: Colors.black12),
+                                            ),
+                                            child: CustomPaint(
+                                              painter: AbstractPatternPainter(p['id']),
+                                              child: Center(
+                                                child: Text(
+                                                  p['name'],
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 10,
+                                                    shadows: [Shadow(color: Colors.black45, blurRadius: 4)],
+                                                  ),
+                                                  textAlign: TextAlign.center,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }),
+                                    ],
                                   ),
                                 ),
                                 const SizedBox(height: 14),
@@ -884,7 +928,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                 ),
                                 const SizedBox(height: 8),
 
-                                selectedImageData.isNotEmpty && !selectedImageData.startsWith('preset_')
+                                selectedImageData.isNotEmpty && !selectedImageData.startsWith('preset_') && selectedImageData != 'none'
                                     ? Stack(
                                         children: [
                                           Container(
@@ -908,7 +952,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                                 padding: EdgeInsets.zero,
                                                 icon: const Icon(Icons.close, color: Colors.white, size: 15),
                                                 onPressed: () {
-                                                  setDialogState(() => selectedImageData = 'preset_1');
+                                                  setDialogState(() => selectedImageData = 'none');
                                                 },
                                               ),
                                             ),
