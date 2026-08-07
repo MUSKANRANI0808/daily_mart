@@ -1641,187 +1641,181 @@ class _CustomerProductItemTileState extends State<_CustomerProductItemTile> {
     final amountStr = amount > 0 ? '₹${amount.toStringAsFixed(amount.truncateToDouble() == amount ? 0 : 2)}' : '₹0';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          // Row 1: Product Name & Add Button
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      pName,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
-                    ),
-                    if (pDesc.isNotEmpty)
-                      Text(
-                        pDesc,
-                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                      ),
-                  ],
+          // 1. Product Name & Description
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  pName,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-              ElevatedButton.icon(
-                onPressed: () {
-                  if (_selectedUnit == null || _selectedUnit!.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please select Unit first! ⚠️'),
-                        backgroundColor: Color(0xFFEF4444),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                    return;
-                  }
-
-                  final qStr = _qtyController.text.trim();
-                  final qVal = double.tryParse(qStr);
-                  if (qVal == null || qVal <= 0) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please enter valid Quantity! ⚠️'),
-                        backgroundColor: Color(0xFFEF4444),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                    return;
-                  }
-
-                  widget.onAdd(pName, _selectedUnit!, qStr, amount);
-                  setState(() {
-                    _selectedUnit = null;
-                    _qtyController.clear();
-                  });
-                },
-                icon: const Icon(Icons.add_rounded, size: 16, color: Colors.white),
-                label: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF10B981),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  elevation: 0,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-
-          // Row 2: Unit Dropdown | Qty Selector (- field +) | Auto-Calculated Amount
-          Row(
-            children: [
-              // Unit Dropdown
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                decoration: BoxDecoration(
-                  color: _selectedUnit == null ? const Color(0xFFF1F5F9) : const Color(0xFFEDE9FE),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: _selectedUnit == null ? const Color(0xFFCBD5E1) : const Color(0xFFDDD6FE),
-                  ),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedUnit,
-                    hint: const Text('Select Unit', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF8B5CF6))),
-                    isDense: true,
-                    icon: const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFF6D28D9)),
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF6D28D9)),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() {
-                          _selectedUnit = val;
-                        });
-                      }
-                    },
-                    items: _availableUnits.map((u) {
-                      return DropdownMenuItem<String>(
-                        value: u,
-                        child: Text(u),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-
-              // Qty Stepper Field (- field +)
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFCBD5E1)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    InkWell(
-                      onTap: () => _adjustQty((_selectedUnit ?? '').toLowerCase().contains('gram') ? -50 : -1),
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                        child: Icon(Icons.remove_rounded, size: 16, color: Color(0xFF475569)),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 44,
-                      child: TextField(
-                        controller: _qtyController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        textAlign: TextAlign.center,
-                        onChanged: (_) => setState(() {}),
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
-                        decoration: const InputDecoration(
-                          hintText: 'Qty',
-                          hintStyle: TextStyle(fontSize: 12, color: Color(0xFF94A3B8), fontWeight: FontWeight.normal),
-                          isDense: true,
-                          contentPadding: EdgeInsets.symmetric(vertical: 6),
-                          border: InputBorder.none,
-                        ),
-                      ),
-                    ),
-                    InkWell(
-                      onTap: () => _adjustQty((_selectedUnit ?? '').toLowerCase().contains('gram') ? 50 : 1),
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                        child: Icon(Icons.add_rounded, size: 16, color: Color(0xFF475569)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Spacer(),
-
-              // Auto-Calculated Amount
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  const Text('Amount', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+                if (pDesc.isNotEmpty)
                   Text(
-                    amountStr,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: amount > 0 ? const Color(0xFF059669) : const Color(0xFF94A3B8),
+                    pDesc,
+                    style: const TextStyle(fontSize: 10, color: Color(0xFF64748B)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 4),
+
+          // 2. Compact Unit Selector Dropdown
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: _selectedUnit == null ? const Color(0xFFF1F5F9) : const Color(0xFFEDE9FE),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: _selectedUnit == null ? const Color(0xFFCBD5E1) : const Color(0xFFDDD6FE),
+              ),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _selectedUnit,
+                hint: const Text('Unit ▾', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF8B5CF6))),
+                isDense: true,
+                icon: const SizedBox.shrink(),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF6D28D9)),
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _selectedUnit = val;
+                    });
+                  }
+                },
+                items: _availableUnits.map((u) {
+                  return DropdownMenuItem<String>(
+                    value: u,
+                    child: Text(u, style: const TextStyle(fontSize: 11)),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+
+          // 3. Compact Qty Input Field (- qty +)
+          Container(
+            height: 28,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFCBD5E1)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                InkWell(
+                  onTap: () => _adjustQty((_selectedUnit ?? '').toLowerCase().contains('gram') ? -50 : -1),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    child: Icon(Icons.remove, size: 12, color: Color(0xFF475569)),
+                  ),
+                ),
+                SizedBox(
+                  width: 32,
+                  child: TextField(
+                    controller: _qtyController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    textAlign: TextAlign.center,
+                    onChanged: (_) => setState(() {}),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF0F172A)),
+                    decoration: const InputDecoration(
+                      hintText: 'Qty',
+                      hintStyle: TextStyle(fontSize: 10, color: Color(0xFF94A3B8), fontWeight: FontWeight.normal),
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                      border: InputBorder.none,
                     ),
                   ),
-                ],
+                ),
+                InkWell(
+                  onTap: () => _adjustQty((_selectedUnit ?? '').toLowerCase().contains('gram') ? 50 : 1),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    child: Icon(Icons.add, size: 12, color: Color(0xFF475569)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 4),
+
+          // 4. Compact Amount Display
+          SizedBox(
+            width: 46,
+            child: Text(
+              amountStr,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w800,
+                color: amount > 0 ? const Color(0xFF059669) : const Color(0xFF94A3B8),
               ),
-            ],
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 4),
+
+          // 5. Compact + Add Button
+          ElevatedButton(
+            onPressed: () {
+              if (_selectedUnit == null || _selectedUnit!.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please select Unit first! ⚠️'),
+                    backgroundColor: Color(0xFFEF4444),
+                    duration: Duration(milliseconds: 1500),
+                  ),
+                );
+                return;
+              }
+
+              final qStr = _qtyController.text.trim();
+              final qVal = double.tryParse(qStr);
+              if (qVal == null || qVal <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter valid Quantity! ⚠️'),
+                    backgroundColor: Color(0xFFEF4444),
+                    duration: Duration(milliseconds: 1500),
+                  ),
+                );
+                return;
+              }
+
+              widget.onAdd(pName, _selectedUnit!, qStr, amount);
+              setState(() {
+                _selectedUnit = null;
+                _qtyController.clear();
+              });
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              elevation: 0,
+            ),
+            child: const Text('+ Add', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
           ),
         ],
       ),
