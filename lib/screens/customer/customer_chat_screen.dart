@@ -34,6 +34,8 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
   bool _isLoading = true;
   bool _isBlocked = false;
   List<Map<String, dynamic>> _sellerProducts = [];
+  bool _isListMode = true;
+  List<Map<String, dynamic>> _selectedOrderItems = [];
 
   late Razorpay _razorpay;
   int _activePendingMsgId = 0;
@@ -431,6 +433,10 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                             );
 
                           if (success) {
+                            setState(() {
+                              _selectedOrderItems.clear();
+                              _msgController.clear();
+                            });
                             _loadMessages();
                             NotificationService.notifySellerNewOrder(
                               sellerUsername: widget.sellerUsername,
@@ -769,21 +775,126 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
     });
   }
 
-  void _addCustomItemToOrderText(String name, String unit, String qtyStr, double amount) {
-    final existingText = _msgController.text.trim();
-    final lines = existingText.isEmpty ? <String>[] : existingText.split('\n').where((l) => l.trim().isNotEmpty).toList();
-    final lineNum = lines.length + 1;
-    final amtStr = amount > 0 ? ' - ₹${amount.toStringAsFixed(amount.truncateToDouble() == amount ? 0 : 2)}' : '';
-    final newItemStr = '$lineNum. $name ($qtyStr $unit)$amtStr';
+  double _calculateSelectedTotal() {
+    double sum = 0.0;
+    for (var item in _selectedOrderItems) {
+      sum += (item['amount'] as double? ?? 0.0);
+    }
+    return sum;
+  }
 
+  void _syncSelectedItemsToMsgController() {
+    final lines = <String>[];
+    for (int i = 0; i < _selectedOrderItems.length; i++) {
+      final item = _selectedOrderItems[i];
+      final amt = item['amount'] as double;
+      final amtStr = amt > 0 ? ' - ₹${amt.toStringAsFixed(amt.truncateToDouble() == amt ? 0 : 2)}' : '';
+      lines.add('${i + 1}. ${item['name']} (${item['qty']} ${item['unit']})$amtStr');
+    }
+    _msgController.text = lines.join('\n');
+  }
+
+  void _addCustomItemToOrderText(String name, String unit, String qtyStr, double amount, [Map<String, dynamic>? rawItem]) {
     setState(() {
-      if (existingText.isEmpty) {
-        _msgController.text = newItemStr;
+      _isListMode = true;
+      int existingIdx = _selectedOrderItems.indexWhere((i) => i['name'].toString().toLowerCase() == name.toLowerCase());
+      if (existingIdx >= 0) {
+        _selectedOrderItems[existingIdx] = {
+          'name': name,
+          'unit': unit,
+          'qty': qtyStr,
+          'amount': amount,
+          'itemData': rawItem ?? _selectedOrderItems[existingIdx]['itemData'] ?? {},
+        };
       } else {
-        _msgController.text = '$existingText\n$newItemStr';
+        _selectedOrderItems.add({
+          'name': name,
+          'unit': unit,
+          'qty': qtyStr,
+          'amount': amount,
+          'itemData': rawItem ?? {},
+        });
       }
-      _msgController.selection = TextSelection.fromPosition(TextPosition(offset: _msgController.text.length));
+      _syncSelectedItemsToMsgController();
     });
+  }
+
+  void _showEditSelectedItemDialog(int index) {
+    if (index < 0 || index >= _selectedOrderItems.length) return;
+    final item = _selectedOrderItems[index];
+    final rawItem = Map<String, dynamic>.from(item['itemData'] as Map? ?? {});
+    if (rawItem.isEmpty) {
+      rawItem['name'] = item['name'];
+      rawItem['unit'] = item['unit'];
+      rawItem['qty'] = double.tryParse(item['qty'].toString()) ?? 1;
+      rawItem['rate'] = item['amount'];
+    }
+
+    final sellerCustomUnits = _sellerProducts.map((p) => (p['unit'] ?? '').toString()).where((u) => u.isNotEmpty).toSet().toList();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+          left: 20,
+          right: 20,
+          top: 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.edit_note_rounded, color: Color(0xFF8B5CF6), size: 24),
+                const SizedBox(width: 8),
+                Text(
+                  'Edit ${item['name']}',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.grey),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _CustomerProductItemTile(
+              item: rawItem,
+              sellerUnits: sellerCustomUnits,
+              onAdd: (name, newUnit, newQtyStr, newAmount) {
+                setState(() {
+                  _selectedOrderItems[index] = {
+                    'name': name,
+                    'unit': newUnit,
+                    'qty': newQtyStr,
+                    'amount': newAmount,
+                    'itemData': rawItem,
+                  };
+                  _syncSelectedItemsToMsgController();
+                });
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Updated "$name ($newQtyStr $newUnit)" ✏️'),
+                    backgroundColor: const Color(0xFF8B5CF6),
+                    duration: const Duration(seconds: 1),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showProductListPickerSheet() {
@@ -1095,50 +1206,77 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                         child: Row(
                           children: [
                             InkWell(
-                              onTap: _showProductListPickerSheet,
+                              onTap: () {
+                                setState(() {
+                                  _isListMode = true;
+                                });
+                                if (_selectedOrderItems.isEmpty) {
+                                  _showProductListPickerSheet();
+                                }
+                              },
                               borderRadius: BorderRadius.circular(20),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF8B5CF6),
+                                  color: _isListMode ? const Color(0xFF8B5CF6) : Colors.white,
                                   borderRadius: BorderRadius.circular(20),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.3),
-                                      blurRadius: 4,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
+                                  border: _isListMode ? null : Border.all(color: const Color(0xFFCBD5E1)),
+                                  boxShadow: _isListMode
+                                      ? [
+                                          BoxShadow(
+                                            color: const Color(0xFF8B5CF6).withValues(alpha: 0.3),
+                                            blurRadius: 4,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ]
+                                      : null,
                                 ),
-                                child: const Row(
+                                child: Row(
                                   children: [
-                                    Icon(Icons.format_list_bulleted_add, color: Colors.white, size: 16),
-                                    SizedBox(width: 6),
+                                    Icon(Icons.format_list_bulleted_add, color: _isListMode ? Colors.white : const Color(0xFF475569), size: 16),
+                                    const SizedBox(width: 6),
                                     Text(
                                       'List 📋 (Select Items)',
-                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                      style: TextStyle(color: _isListMode ? Colors.white : const Color(0xFF475569), fontWeight: FontWeight.bold, fontSize: 12),
                                     ),
                                   ],
                                 ),
                               ),
                             ),
                             const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: const Color(0xFFCBD5E1)),
-                              ),
-                              child: const Row(
-                                children: [
-                                  Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF475569), size: 14),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'Chat 💬',
-                                    style: TextStyle(color: Color(0xFF475569), fontWeight: FontWeight.bold, fontSize: 11.5),
-                                  ),
-                                ],
+                            InkWell(
+                              onTap: () {
+                                setState(() {
+                                  _isListMode = false;
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(20),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: !_isListMode ? const Color(0xFF8B5CF6) : Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: !_isListMode ? null : Border.all(color: const Color(0xFFCBD5E1)),
+                                  boxShadow: !_isListMode
+                                      ? [
+                                          BoxShadow(
+                                            color: const Color(0xFF8B5CF6).withValues(alpha: 0.3),
+                                            blurRadius: 4,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ]
+                                      : null,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.chat_bubble_outline_rounded, color: !_isListMode ? Colors.white : const Color(0xFF475569), size: 14),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Chat 💬',
+                                      style: TextStyle(color: !_isListMode ? Colors.white : const Color(0xFF475569), fontWeight: FontWeight.bold, fontSize: 11.5),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                             if (_sellerProducts.isNotEmpty) ...[
@@ -1153,64 +1291,218 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                       ),
                     ),
 
-                    // Input Bar
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.06),
-                            blurRadius: 10,
-                            offset: const Offset(0, -2),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          // Quick List Picker Icon Button
-                          IconButton(
-                            icon: const Icon(Icons.playlist_add_rounded, color: Color(0xFF8B5CF6), size: 26),
-                            tooltip: 'Select from Product List',
-                            onPressed: _showProductListPickerSheet,
-                          ),
-                          Expanded(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF8FAFC),
-                                borderRadius: BorderRadius.circular(24),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                              ),
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              child: TextField(
-                                controller: _msgController,
-                                keyboardType: TextInputType.multiline,
-                                maxLines: 5,
-                                minLines: 1,
-                                textInputAction: TextInputAction.newline,
-                                style: const TextStyle(color: Color(0xFF0F172A), fontSize: 15),
-                                decoration: const InputDecoration(
-                                  hintText: 'Type order or tap List 📋...',
-                                  hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
-                                  border: InputBorder.none,
-                                  contentPadding: EdgeInsets.symmetric(vertical: 12),
+                    // Bottom Area: Structured Selected Items List OR Standard Chat Field
+                    if (_isListMode && _selectedOrderItems.isNotEmpty)
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              blurRadius: 10,
+                              offset: const Offset(0, -2),
+                            ),
+                          ],
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Header Row
+                            Row(
+                              children: [
+                                Text(
+                                  'Selected Items (${_selectedOrderItems.length})',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFDCFCE7),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: const Color(0xFF86EFAC)),
+                                  ),
+                                  child: Text(
+                                    'Total: ₹${_calculateSelectedTotal().toStringAsFixed(_calculateSelectedTotal().truncateToDouble() == _calculateSelectedTotal() ? 0 : 2)}',
+                                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: Color(0xFF15803D)),
+                                  ),
+                                ),
+                                const Spacer(),
+                                TextButton.icon(
+                                  onPressed: _showProductListPickerSheet,
+                                  icon: const Icon(Icons.add_circle_outline_rounded, size: 16, color: Color(0xFF8B5CF6)),
+                                  label: const Text('+ Add More', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF8B5CF6))),
+                                  style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+
+                            // List of Items (Slide to Delete & Tap to Edit)
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxHeight: 160),
+                              child: SingleChildScrollView(
+                                child: Column(
+                                  children: List.generate(_selectedOrderItems.length, (idx) {
+                                    final it = _selectedOrderItems[idx];
+                                    final amt = (it['amount'] as num?)?.toDouble() ?? 0.0;
+                                    final amtStr = amt > 0 ? '₹${amt.toStringAsFixed(amt.truncateToDouble() == amt ? 0 : 2)}' : '';
+
+                                    return Dismissible(
+                                      key: Key('selected_item_${it['name']}_$idx'),
+                                      direction: DismissDirection.endToStart,
+                                      background: Container(
+                                        alignment: Alignment.centerRight,
+                                        padding: const EdgeInsets.only(right: 16),
+                                        margin: const EdgeInsets.only(bottom: 6),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFEF4444),
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: const Row(
+                                          mainAxisAlignment: MainAxisAlignment.end,
+                                          children: [
+                                            Icon(Icons.delete_forever_rounded, color: Colors.white, size: 18),
+                                            SizedBox(width: 4),
+                                            Text('Remove', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                                          ],
+                                        ),
+                                      ),
+                                      onDismissed: (direction) {
+                                        final removedName = it['name'];
+                                        setState(() {
+                                          _selectedOrderItems.removeAt(idx);
+                                          _syncSelectedItemsToMsgController();
+                                        });
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('Removed "$removedName" from list'),
+                                            duration: const Duration(seconds: 1),
+                                          ),
+                                        );
+                                      },
+                                      child: Container(
+                                        margin: const EdgeInsets.only(bottom: 6),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF8FAFC),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                                        ),
+                                        child: InkWell(
+                                          onTap: () => _showEditSelectedItemDialog(idx),
+                                          child: Row(
+                                            children: [
+                                              Text(
+                                                '${idx + 1}.',
+                                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF64748B)),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Expanded(
+                                                child: Text(
+                                                  '${it['name']} (${it['qty']} ${it['unit']})',
+                                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              if (amtStr.isNotEmpty)
+                                                Text(
+                                                  amtStr,
+                                                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF059669)),
+                                                ),
+                                              const SizedBox(width: 6),
+                                              const Icon(Icons.edit_outlined, size: 16, color: Color(0xFF8B5CF6)),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }),
                                 ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          CircleAvatar(
-                            backgroundColor: const Color(0xFF10B981),
-                            radius: 22,
-                            child: IconButton(
-                              icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-                              onPressed: _sendMessage,
+                            const SizedBox(height: 8),
+
+                            // Send Order Button
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: _sendMessage,
+                                icon: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                                label: const Text('Send Order', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF10B981),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  elevation: 0,
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
+                      )
+                    else
+                      // Standard Input Bar
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.06),
+                              blurRadius: 10,
+                              offset: const Offset(0, -2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            // Quick List Picker Icon Button
+                            IconButton(
+                              icon: const Icon(Icons.playlist_add_rounded, color: Color(0xFF8B5CF6), size: 26),
+                              tooltip: 'Select from Product List',
+                              onPressed: _showProductListPickerSheet,
+                            ),
+                            Expanded(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(24),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                child: TextField(
+                                  controller: _msgController,
+                                  keyboardType: TextInputType.multiline,
+                                  maxLines: 5,
+                                  minLines: 1,
+                                  textInputAction: TextInputAction.newline,
+                                  style: const TextStyle(color: Color(0xFF0F172A), fontSize: 15),
+                                  decoration: const InputDecoration(
+                                    hintText: 'Type order or tap List 📋...',
+                                    hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
+                                    border: InputBorder.none,
+                                    contentPadding: EdgeInsets.symmetric(vertical: 12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            CircleAvatar(
+                              backgroundColor: const Color(0xFF10B981),
+                              radius: 22,
+                              child: IconButton(
+                                icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                                onPressed: _sendMessage,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
                   ],
                 ),
         ],
