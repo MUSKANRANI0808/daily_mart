@@ -315,31 +315,40 @@ class FestivalLottieHeaderWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isFestivalActive = config['is_festival_active'] == true;
-    final String lottieUrl = (config['lottie_url'] ?? '').toString().trim();
-    final double lottieOpacity = (config['lottie_opacity'] as num?)?.toDouble() ?? 0.75;
+    String lottieUrl = (config['lottie_url'] ?? '').toString().trim();
+    final double lottieOpacity = (config['lottie_opacity'] as num?)?.toDouble() ?? 0.85;
 
-    if (!isFestivalActive || lottieUrl.isEmpty) {
-      return const SizedBox.shrink();
+    if (lottieUrl.isEmpty || lottieUrl.contains('lottiefiles.com')) {
+      lottieUrl = 'assets/lottie/daily_mart_exclusive.json';
+    }
+
+    Widget buildLottieWidget() {
+      if (lottieUrl.startsWith('http')) {
+        return Lottie.network(
+          lottieUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (ctx, err, stack) => Lottie.asset(
+            'assets/lottie/daily_mart_exclusive.json',
+            fit: BoxFit.cover,
+            errorBuilder: (c, e, s) => Lottie.asset('assets/lottie/freedom_sale.json', fit: BoxFit.cover),
+          ),
+        );
+      }
+      return Lottie.asset(
+        lottieUrl,
+        fit: BoxFit.cover,
+        errorBuilder: (ctx, err, stack) => Lottie.asset(
+          'assets/lottie/freedom_sale.json',
+          fit: BoxFit.cover,
+        ),
+      );
     }
 
     return IgnorePointer(
       child: Opacity(
         opacity: lottieOpacity.clamp(0.1, 1.0),
         child: SizedBox.expand(
-          child: lottieUrl.startsWith('http')
-              ? Lottie.network(
-                  lottieUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (ctx, err, stack) => const SizedBox.shrink(),
-                )
-              : (lottieUrl.startsWith('assets/')
-                  ? Lottie.asset(
-                      lottieUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (ctx, err, stack) => const SizedBox.shrink(),
-                    )
-                  : const SizedBox.shrink()),
+          child: buildLottieWidget(),
         ),
       ),
     );
