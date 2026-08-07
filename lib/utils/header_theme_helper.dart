@@ -4,6 +4,15 @@ import 'package:lottie/lottie.dart';
 class HeaderThemeHelper {
   static List<Map<String, String>> get festivalPresets => [
     {
+      'id': 'daily_mart_express',
+      'name': 'Daily Mart Express Order & Safe Pickup 🚀',
+      'title': 'EXPRESS ORDER & SAFE PICKUP ⚡',
+      'url': 'assets/lottie/daily_mart_exclusive.json',
+      'color1': '#0F172A',
+      'color2': '#1E1B4B',
+      'color3': '#312E81',
+    },
+    {
       'id': 'freedom_sale',
       'name': 'Freedom & Grand Sale Carnival 🎈',
       'title': 'FREEDOM SALE 🇮🇳',
