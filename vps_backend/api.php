@@ -48,7 +48,59 @@ if (!$colCheckBill || $colCheckBill->num_rows == 0) {
     @$conn->query("ALTER TABLE messages ADD COLUMN bill_image LONGTEXT DEFAULT NULL");
 }
 
-// 3. Auto-check & create seller_products table if missing
+// 3. Auto-check & create delivery status tracking columns in messages table
+$colCheckDelStatus = $conn->query("SHOW COLUMNS FROM messages LIKE 'delivery_status'");
+if (!$colCheckDelStatus || $colCheckDelStatus->num_rows == 0) {
+    @$conn->query("ALTER TABLE messages ADD COLUMN delivery_status VARCHAR(50) DEFAULT 'pending', ADD COLUMN delivered_by VARCHAR(100) DEFAULT NULL, ADD COLUMN picked_up_at VARCHAR(50) DEFAULT NULL, ADD COLUMN delivered_at VARCHAR(50) DEFAULT NULL, ADD COLUMN cancel_reason VARCHAR(255) DEFAULT NULL, ADD COLUMN cancelled_at VARCHAR(50) DEFAULT NULL");
+}
+
+// 4. Auto-check & create seller_sliders table in database
+$conn->query("CREATE TABLE IF NOT EXISTS seller_sliders (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    seller_username VARCHAR(100) NOT NULL,
+    tag VARCHAR(255) DEFAULT 'SPECIAL OFFER 🏷️',
+    title VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    bg_image_url LONGTEXT DEFAULT NULL,
+    tag_bg_color VARCHAR(50) DEFAULT '#10B981',
+    tag_shape VARCHAR(50) DEFAULT 'pill',
+    title_color VARCHAR(50) DEFAULT '#FFFFFF',
+    desc_color VARCHAR(50) DEFAULT '#E2E8F0',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)");
+
+// 5. Auto-check & create delivery_boys table in database
+$conn->query("CREATE TABLE IF NOT EXISTS delivery_boys (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    username VARCHAR(255) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    mobile VARCHAR(20) NOT NULL,
+    vehicle VARCHAR(100) DEFAULT 'Bike',
+    location VARCHAR(255) DEFAULT NULL,
+    role VARCHAR(50) DEFAULT 'delivery_boy',
+    status VARCHAR(50) DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)");
+
+$colCheckDelLoc = $conn->query("SHOW COLUMNS FROM delivery_boys LIKE 'location'");
+if (!$colCheckDelLoc || $colCheckDelLoc->num_rows == 0) {
+    @$conn->query("ALTER TABLE delivery_boys ADD COLUMN location VARCHAR(255) DEFAULT NULL");
+}
+
+$colCheckSelLoc = $conn->query("SHOW COLUMNS FROM sellers LIKE 'location'");
+if (!$colCheckSelLoc || $colCheckSelLoc->num_rows == 0) {
+    @$conn->query("ALTER TABLE sellers ADD COLUMN location VARCHAR(255) DEFAULT NULL");
+}
+
+// 6. Auto-check & create locations table in database
+$conn->query("CREATE TABLE IF NOT EXISTS locations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)");
+
+// 7. Auto-check & create seller_products table if missing
 @$conn->query("CREATE TABLE IF NOT EXISTS seller_products (
     id INT AUTO_INCREMENT PRIMARY KEY,
     seller_username VARCHAR(100) NOT NULL,
@@ -66,7 +118,7 @@ if (!$colCheckQty || $colCheckQty->num_rows == 0) {
     @$conn->query("ALTER TABLE seller_products ADD COLUMN qty INT NOT NULL DEFAULT 1");
 }
 
-// 4. Auto-check & create seller_units table if missing
+// 8. Auto-check & create seller_units table if missing
 @$conn->query("CREATE TABLE IF NOT EXISTS seller_units (
     id INT AUTO_INCREMENT PRIMARY KEY,
     seller_username VARCHAR(100) NOT NULL,
@@ -75,14 +127,36 @@ if (!$colCheckQty || $colCheckQty->num_rows == 0) {
     INDEX(seller_username)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-// 5. Auto-check & create app_settings table if missing
+// 9. Auto-check & create app_settings table for Global Header Theme Sync if missing
 @$conn->query("CREATE TABLE IF NOT EXISTS app_settings (
     setting_key VARCHAR(100) PRIMARY KEY,
     setting_value LONGTEXT NOT NULL,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-if ($action == 'customer-login') {
+if ($action == 'get-header-theme') {
+    $res = $conn->query("SELECT setting_value FROM app_settings WHERE setting_key = 'global_header_theme'");
+    if ($res && $row = $res->fetch_assoc()) {
+        $themeConfig = json_decode($row['setting_value'], true);
+        if (is_array($themeConfig)) {
+            echo json_encode(["success" => true, "theme" => $themeConfig]);
+            exit();
+        }
+    }
+    echo json_encode(["success" => true, "theme" => null]);
+    exit();
+} elseif ($action == 'update-header-theme') {
+    $themeConfig = isset($input) && is_array($input) ? $input : array();
+    $jsonVal = json_encode($themeConfig);
+
+    $stmt = $conn->prepare("INSERT INTO app_settings (setting_key, setting_value) VALUES ('global_header_theme', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+    if ($stmt) {
+        $stmt->bind_param("s", $jsonVal);
+        $stmt->execute();
+    }
+    echo json_encode(["success" => true, "message" => "Header theme saved in database"]);
+    exit();
+} elseif ($action == 'customer-login') {
     $mobile = isset($input['mobile']) ? trim($input['mobile']) : '';
     $name = isset($input['name']) ? trim($input['name']) : '';
     $address_json = isset($input['address_json']) ? (is_array($input['address_json']) ? json_encode($input['address_json']) : trim($input['address_json'])) : '';
@@ -95,7 +169,6 @@ if ($action == 'customer-login') {
         $last10 = (strlen($digits) >= 10) ? substr($digits, -10) : $digits;
         $escapedLike = "%" . $conn->real_escape_string($last10) . "%";
 
-        // 1. Check existing name & address from customers table
         $chkRes = $conn->query("SELECT name, address_json FROM customers WHERE mobile = '$mobile' OR mobile LIKE '$escapedLike' ORDER BY id DESC LIMIT 1");
         if ($chkRes && $chkRow = $chkRes->fetch_assoc()) {
             $exName = trim($chkRow['name'] ?? '');
@@ -107,7 +180,6 @@ if ($action == 'customer-login') {
             }
         }
 
-        // 2. If new valid name or address passed, update database
         if (!empty($name) && $name !== 'Customer' && strpos($name, 'Customer') !== 0) {
             $cName = $name;
         }
@@ -124,6 +196,277 @@ if ($action == 'customer-login') {
         }
     }
     echo json_encode(["success" => true, "role" => "customer", "mobile" => $mobile, "name" => $cName, "address_json" => $cAddr]);
+    exit();
+} elseif ($action == 'locations' || $action == 'get-locations') {
+    $res = $conn->query("SELECT * FROM locations ORDER BY id ASC");
+    $locations = array();
+    if ($res && $res !== true) {
+        while ($row = $res->fetch_assoc()) {
+            $locations[] = $row;
+        }
+    }
+    echo json_encode(["success" => true, "locations" => $locations]);
+    exit();
+} elseif ($action == 'add-location') {
+    $locName = isset($input['name']) ? trim($input['name']) : (isset($input['location_name']) ? trim($input['location_name']) : '');
+    if (!empty($locName)) {
+        $stmt = $conn->prepare("INSERT IGNORE INTO locations (name) VALUES (?)");
+        if ($stmt) {
+            $stmt->bind_param("s", $locName);
+            $stmt->execute();
+        }
+    }
+    echo json_encode(["success" => true, "message" => "Location Saved"]);
+    exit();
+} elseif ($action == 'create-delivery-boy') {
+    $name = isset($input['name']) ? trim($input['name']) : '';
+    $username = isset($input['username']) ? trim($input['username']) : '';
+    $password = isset($input['password']) ? trim($input['password']) : '';
+    $mobile = isset($input['mobile']) ? trim($input['mobile']) : '';
+    $vehicle = isset($input['vehicle']) ? trim($input['vehicle']) : 'Bike';
+    $location = isset($input['location']) ? trim($input['location']) : '';
+
+    if (!empty($username) && !empty($password) && !empty($name)) {
+        $stmt = $conn->prepare("INSERT INTO delivery_boys (name, username, password, mobile, vehicle, location) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name=VALUES(name), password=VALUES(password), mobile=VALUES(mobile), vehicle=VALUES(vehicle), location=VALUES(location)");
+        if ($stmt) {
+            $stmt->bind_param("ssssss", $name, $username, $password, $mobile, $vehicle, $location);
+            if ($stmt->execute()) {
+                echo json_encode(["success" => true, "message" => "Delivery Boy Account Created Successfully"]);
+                exit();
+            }
+        }
+    }
+    echo json_encode(["success" => false, "message" => "Required fields missing or SQL error"]);
+    exit();
+} elseif ($action == 'update-delivery-boy') {
+    $username = isset($input['username']) ? trim($input['username']) : '';
+    $name = isset($input['name']) ? trim($input['name']) : '';
+    $password = isset($input['password']) ? trim($input['password']) : '';
+    $mobile = isset($input['mobile']) ? trim($input['mobile']) : '';
+    $vehicle = isset($input['vehicle']) ? trim($input['vehicle']) : 'Bike';
+    $location = isset($input['location']) ? trim($input['location']) : '';
+
+    if (!empty($username)) {
+        $stmt = $conn->prepare("UPDATE delivery_boys SET name = ?, password = ?, mobile = ?, vehicle = ?, location = ? WHERE username = ?");
+        if ($stmt) {
+            $stmt->bind_param("ssssss", $name, $password, $mobile, $vehicle, $location, $username);
+            $stmt->execute();
+            echo json_encode(["success" => true, "message" => "Delivery partner updated successfully"]);
+            exit();
+        }
+    }
+    echo json_encode(["success" => false, "message" => "Invalid username"]);
+    exit();
+} elseif ($action == 'update-delivery-status') {
+    $msg_id = isset($input['message_id']) ? (int)$input['message_id'] : 0;
+    $delivery_status = isset($input['delivery_status']) ? trim($input['delivery_status']) : 'Picked Up';
+    $delivered_by = isset($input['delivered_by']) ? trim($input['delivered_by']) : '';
+    $time_str = date('d/m/Y, H:i');
+
+    if ($msg_id > 0) {
+        $lowerStatus = strtolower($delivery_status);
+        if ($lowerStatus == 'picked up' || $lowerStatus == 'picked_up' || $lowerStatus == 'out for delivery') {
+            $stmt = $conn->prepare("UPDATE messages SET delivery_status = ?, delivered_by = ?, picked_up_at = ? WHERE id = ?");
+            if ($stmt) {
+                $stmt->bind_param("sssi", $delivery_status, $delivered_by, $time_str, $msg_id);
+                $stmt->execute();
+            }
+        } elseif ($lowerStatus == 'delivered') {
+            $stmt = $conn->prepare("UPDATE messages SET delivery_status = 'Delivered', order_status = 'Delivered', delivered_by = ?, delivered_at = ? WHERE id = ?");
+            if ($stmt) {
+                $stmt->bind_param("ssi", $delivered_by, $time_str, $msg_id);
+                $stmt->execute();
+            }
+        } else {
+            $stmt = $conn->prepare("UPDATE messages SET delivery_status = ?, delivered_by = ? WHERE id = ?");
+            if ($stmt) {
+                $stmt->bind_param("ssi", $delivery_status, $delivered_by, $msg_id);
+                $stmt->execute();
+            }
+        }
+        echo json_encode(["success" => true, "message" => "Delivery status updated in database"]);
+        exit();
+    }
+    echo json_encode(["success" => false, "message" => "Invalid message ID"]);
+    exit();
+} elseif ($action == 'delivery-boys') {
+    $res = $conn->query("SELECT * FROM delivery_boys ORDER BY id DESC");
+    $delivery_boys = array();
+    if ($res && $res !== true) {
+        while ($row = $res->fetch_assoc()) {
+            $delivery_boys[] = $row;
+        }
+    }
+    echo json_encode(["success" => true, "delivery_boys" => $delivery_boys]);
+    exit();
+} elseif ($action == 'delete-delivery-boy') {
+    $username = isset($input['username']) ? trim($input['username']) : (isset($_GET['username']) ? trim($_GET['username']) : '');
+    if (!empty($username)) {
+        $stmt = $conn->prepare("DELETE FROM delivery_boys WHERE username = ?");
+        if ($stmt) {
+            $stmt->bind_param("s", $username);
+            $stmt->execute();
+        }
+    }
+    echo json_encode(["success" => true, "message" => "Delivery Boy Account Deleted"]);
+    exit();
+} elseif ($action == 'delivery-boy-login') {
+    $username = isset($input['username']) ? trim($input['username']) : '';
+    $password = isset($input['password']) ? trim($input['password']) : '';
+    $stmt = $conn->prepare("SELECT * FROM delivery_boys WHERE username = ? AND password = ?");
+    if ($stmt) {
+        $stmt->bind_param("ss", $username, $password);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($res && $row = $res->fetch_assoc()) {
+            echo json_encode(["success" => true, "delivery_boy" => $row]);
+            exit();
+        }
+    }
+    echo json_encode(["success" => false, "message" => "Invalid Delivery Boy credentials"]);
+    exit();
+} elseif ($action == 'create-seller') {
+    $name = isset($input['name']) ? trim($input['name']) : '';
+    $username = isset($input['username']) ? trim($input['username']) : '';
+    $password = isset($input['password']) ? trim($input['password']) : '';
+    $mobile = isset($input['mobile']) ? trim($input['mobile']) : '';
+    $location = isset($input['location']) ? trim($input['location']) : '';
+
+    $colCheck = $conn->query("SHOW COLUMNS FROM sellers LIKE 'mobile'");
+    if (!$colCheck || $colCheck->num_rows == 0) {
+        @$conn->query("ALTER TABLE sellers ADD COLUMN mobile VARCHAR(15) DEFAULT NULL");
+    }
+
+    $colCheckLoc = $conn->query("SHOW COLUMNS FROM sellers LIKE 'location'");
+    if (!$colCheckLoc || $colCheckLoc->num_rows == 0) {
+        @$conn->query("ALTER TABLE sellers ADD COLUMN location VARCHAR(255) DEFAULT NULL");
+    }
+
+    $stmt = $conn->prepare("INSERT INTO sellers (name, username, password, mobile, location) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name=VALUES(name), password=VALUES(password), mobile=VALUES(mobile), location=VALUES(location)");
+    if ($stmt) {
+        $stmt->bind_param("sssss", $name, $username, $password, $mobile, $location);
+        if ($stmt->execute()) {
+            echo json_encode(["success" => true, "message" => "Seller Created"]);
+            exit();
+        }
+    }
+    echo json_encode(["success" => false, "message" => "Seller Exists or SQL Error"]);
+} elseif ($action == 'update-seller') {
+    $username = isset($input['username']) ? trim($input['username']) : '';
+    $name = isset($input['name']) ? trim($input['name']) : '';
+    $password = isset($input['password']) ? trim($input['password']) : '';
+    $mobile = isset($input['mobile']) ? trim($input['mobile']) : '';
+    $location = isset($input['location']) ? trim($input['location']) : '';
+
+    if (!empty($username)) {
+        $stmt = $conn->prepare("UPDATE sellers SET name = ?, password = ?, mobile = ?, location = ? WHERE username = ?");
+        if ($stmt) {
+            $stmt->bind_param("sssss", $name, $password, $mobile, $location, $username);
+            $stmt->execute();
+            echo json_encode(["success" => true, "message" => "Seller updated successfully"]);
+            exit();
+        }
+    }
+    echo json_encode(["success" => false, "message" => "Invalid username"]);
+    exit();
+} elseif ($action == 'sellers') {
+    $result = $conn->query("SELECT * FROM sellers ORDER BY id DESC");
+    $sellers = array();
+    if ($result && $result !== true) {
+        while ($row = $result->fetch_assoc()) {
+            $sellers[] = $row;
+        }
+    }
+    echo json_encode(["success" => true, "sellers" => $sellers]);
+} elseif ($action == 'get-seller-sliders') {
+    $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
+    $escapedSeller = $conn->real_escape_string($seller_username);
+
+    $query = "SELECT * FROM seller_sliders ORDER BY id DESC";
+    if (!empty($escapedSeller)) {
+        $query = "SELECT * FROM seller_sliders WHERE seller_username = '$escapedSeller' ORDER BY id DESC";
+    }
+
+    $res = $conn->query($query);
+    $sliders = array();
+    if ($res && $res !== true) {
+        while ($row = $res->fetch_assoc()) {
+            $sliders[] = $row;
+        }
+    }
+    echo json_encode(["success" => true, "sliders" => $sliders]);
+    exit();
+} elseif ($action == 'add-seller-slider') {
+    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : '';
+    $tag = isset($input['tag']) ? trim($input['tag']) : 'SPECIAL OFFER 🏷️';
+    $title = isset($input['title']) ? trim($input['title']) : '';
+    $description = isset($input['description']) ? trim($input['description']) : '';
+    $bg_image_url = isset($input['bg_image_url']) ? trim($input['bg_image_url']) : '';
+    $tag_bg_color = isset($input['tag_bg_color']) ? trim($input['tag_bg_color']) : '#10B981';
+    $tag_shape = isset($input['tag_shape']) ? trim($input['tag_shape']) : 'pill';
+    $title_color = isset($input['title_color']) ? trim($input['title_color']) : '#FFFFFF';
+    $desc_color = isset($input['desc_color']) ? trim($input['desc_color']) : '#E2E8F0';
+
+    if (!empty($seller_username) && !empty($title)) {
+        $stmt = $conn->prepare("INSERT INTO seller_sliders (seller_username, tag, title, description, bg_image_url, tag_bg_color, tag_shape, title_color, desc_color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        if ($stmt) {
+            $stmt->bind_param("sssssssss", $seller_username, $tag, $title, $description, $bg_image_url, $tag_bg_color, $tag_shape, $title_color, $desc_color);
+            if ($stmt->execute()) {
+                echo json_encode(["success" => true, "message" => "Slider saved permanently in database"]);
+                exit();
+            }
+        }
+    }
+    echo json_encode(["success" => false, "message" => "Required fields missing or SQL error"]);
+    exit();
+} elseif ($action == 'update-seller-slider') {
+    $slider_id = isset($input['slider_id']) ? (int)$input['slider_id'] : 0;
+    $tag = isset($input['tag']) ? trim($input['tag']) : '';
+    $title = isset($input['title']) ? trim($input['title']) : '';
+    $description = isset($input['description']) ? trim($input['description']) : '';
+    $bg_image_url = isset($input['bg_image_url']) ? trim($input['bg_image_url']) : '';
+    $tag_bg_color = isset($input['tag_bg_color']) ? trim($input['tag_bg_color']) : '#10B981';
+    $tag_shape = isset($input['tag_shape']) ? trim($input['tag_shape']) : 'pill';
+    $title_color = isset($input['title_color']) ? trim($input['title_color']) : '#FFFFFF';
+    $desc_color = isset($input['desc_color']) ? trim($input['desc_color']) : '#E2E8F0';
+
+    if ($slider_id > 0) {
+        $stmt = $conn->prepare("UPDATE seller_sliders SET tag = ?, title = ?, description = ?, bg_image_url = ?, tag_bg_color = ?, tag_shape = ?, title_color = ?, desc_color = ? WHERE id = ?");
+        if ($stmt) {
+            $stmt->bind_param("ssssssssi", $tag, $title, $description, $bg_image_url, $tag_bg_color, $tag_shape, $title_color, $desc_color, $slider_id);
+            $stmt->execute();
+            echo json_encode(["success" => true, "message" => "Slider updated in database"]);
+            exit();
+        }
+    }
+    echo json_encode(["success" => false, "message" => "Invalid Slider ID"]);
+    exit();
+} elseif ($action == 'delete-seller-slider') {
+    $slider_id = isset($input['slider_id']) ? (int)$input['slider_id'] : (isset($_GET['slider_id']) ? (int)$_GET['slider_id'] : 0);
+    if ($slider_id > 0) {
+        $conn->query("DELETE FROM seller_sliders WHERE id = $slider_id");
+    }
+    echo json_encode(["success" => true, "message" => "Slider deleted from database"]);
+    exit();
+} elseif ($action == 'update-bill-image' || $action == 'save-order-bill-image') {
+    $msg_id = isset($input['message_id']) ? (int)$input['message_id'] : 0;
+    $bill_image = isset($input['bill_image']) ? trim($input['bill_image']) : '';
+
+    $colCheckBill = $conn->query("SHOW COLUMNS FROM messages LIKE 'bill_image'");
+    if (!$colCheckBill || $colCheckBill->num_rows == 0) {
+        @$conn->query("ALTER TABLE messages ADD COLUMN bill_image LONGTEXT DEFAULT NULL");
+    }
+
+    if ($msg_id > 0) {
+        $stmt = $conn->prepare("UPDATE messages SET bill_image = ? WHERE id = ?");
+        if ($stmt) {
+            $stmt->bind_param("si", $bill_image, $msg_id);
+            $stmt->execute();
+            echo json_encode(["success" => true, "message" => "Bill photo saved in database"]);
+            exit();
+        }
+    }
+    echo json_encode(["success" => false, "message" => "Invalid Message ID"]);
     exit();
 } elseif ($action == 'get-customer-profile') {
     $mobile = isset($_GET['mobile']) ? trim($_GET['mobile']) : (isset($input['mobile']) ? trim($input['mobile']) : '');
@@ -174,35 +517,6 @@ if ($action == 'customer-login') {
     }
     echo json_encode(["success" => true, "message" => "Customer profile & address updated in database"]);
     exit();
-} elseif ($action == 'create-seller') {
-    $name = isset($input['name']) ? trim($input['name']) : '';
-    $username = isset($input['username']) ? trim($input['username']) : '';
-    $password = isset($input['password']) ? trim($input['password']) : '';
-    $mobile = isset($input['mobile']) ? trim($input['mobile']) : '';
-
-    $colCheck = $conn->query("SHOW COLUMNS FROM sellers LIKE 'mobile'");
-    if (!$colCheck || $colCheck->num_rows == 0) {
-        @$conn->query("ALTER TABLE sellers ADD COLUMN mobile VARCHAR(15) DEFAULT NULL");
-    }
-
-    $stmt = $conn->prepare("INSERT INTO sellers (name, username, password, mobile) VALUES (?, ?, ?, ?)");
-    if ($stmt) {
-        $stmt->bind_param("ssss", $name, $username, $password, $mobile);
-        if ($stmt->execute()) {
-            echo json_encode(["success" => true, "message" => "Seller Created"]);
-            exit();
-        }
-    }
-    echo json_encode(["success" => false, "message" => "Seller Exists or SQL Error"]);
-} elseif ($action == 'sellers') {
-    $result = $conn->query("SELECT * FROM sellers");
-    $sellers = array();
-    if ($result && $result !== true) {
-        while ($row = $result->fetch_assoc()) {
-            $sellers[] = $row;
-        }
-    }
-    echo json_encode(["success" => true, "sellers" => $sellers]);
 } elseif ($action == 'search-seller') {
     $rawTerm = isset($_GET['mobile']) ? trim($_GET['mobile']) : (isset($input['mobile']) ? trim($input['mobile']) : '');
     $digits = preg_replace('/[^0-9]/', '', $rawTerm);
@@ -230,7 +544,6 @@ if ($action == 'customer-login') {
     $customer_mobile = isset($input['customer_mobile']) ? trim($input['customer_mobile']) : '';
     $message = isset($input['message']) ? trim($input['message']) : '';
     $sender_type = isset($input['sender_type']) ? trim($input['sender_type']) : 'customer';
-    $order_amount = isset($input['order_amount']) ? (float)$input['order_amount'] : (isset($input['amount']) ? (float)$input['amount'] : null);
 
     if (empty($seller_username) || empty($customer_mobile) || empty($message)) {
         echo json_encode(["success" => false, "message" => "Required fields missing"]);
@@ -247,18 +560,6 @@ if ($action == 'customer-login') {
     }
     $items_json = json_encode($items);
 
-    if ($order_amount === null || $order_amount <= 0) {
-        $calcAmt = 0.0;
-        foreach ($items as $it) {
-            if (preg_match('/₹\s*([\d\.]+)/u', $it['text'], $m)) {
-                $calcAmt += (float)$m[1];
-            }
-        }
-        if ($calcAmt > 0) {
-            $order_amount = $calcAmt;
-        }
-    }
-
     $digits = preg_replace('/[^0-9]/', '', $customer_mobile);
     $last10 = (strlen($digits) >= 10) ? substr($digits, -10) : $digits;
     $escapedSeller = $conn->real_escape_string($seller_username);
@@ -273,37 +574,21 @@ if ($action == 'customer-login') {
     $order_status = "Status";
     $logs_json = json_encode(array());
 
-    $colCheckLogs = $conn->query("SHOW COLUMNS FROM messages LIKE 'logs_json'");
-    if (!$colCheckLogs || $colCheckLogs->num_rows == 0) {
+    $colCheck = $conn->query("SHOW COLUMNS FROM messages LIKE 'logs_json'");
+    if (!$colCheck || $colCheck->num_rows == 0) {
         @$conn->query("ALTER TABLE messages ADD COLUMN logs_json TEXT DEFAULT NULL");
     }
 
-    $colCheckAmt = $conn->query("SHOW COLUMNS FROM messages LIKE 'order_amount'");
-    if (!$colCheckAmt || $colCheckAmt->num_rows == 0) {
-        @$conn->query("ALTER TABLE messages ADD COLUMN order_amount DECIMAL(10,2) DEFAULT NULL");
-    }
-
-    if ($order_amount !== null && $order_amount > 0) {
-        $stmt = $conn->prepare("INSERT INTO messages (seller_username, customer_mobile, message, items_json, order_id, order_status, logs_json, sender_type, is_read, payment_status, order_amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'unpaid', ?)");
-        if ($stmt) {
-            $stmt->bind_param("ssssssssd", $seller_username, $customer_mobile, $message, $items_json, $order_id, $order_status, $logs_json, $sender_type, $order_amount);
-            if ($stmt->execute()) {
-                echo json_encode(["success" => true, "message" => "Message sent"]);
-                exit();
-            }
-        }
-    } else {
-        $stmt = $conn->prepare("INSERT INTO messages (seller_username, customer_mobile, message, items_json, order_id, order_status, logs_json, sender_type, is_read, payment_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'unpaid')");
-        if ($stmt) {
-            $stmt->bind_param("ssssssss", $seller_username, $customer_mobile, $message, $items_json, $order_id, $order_status, $logs_json, $sender_type);
-            if ($stmt->execute()) {
-                echo json_encode(["success" => true, "message" => "Message sent"]);
-                exit();
-            }
+    $stmt = $conn->prepare("INSERT INTO messages (seller_username, customer_mobile, message, items_json, order_id, order_status, logs_json, sender_type, is_read, payment_status, delivery_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'unpaid', 'pending')");
+    if ($stmt) {
+        $stmt->bind_param("ssssssss", $seller_username, $customer_mobile, $message, $items_json, $order_id, $order_status, $logs_json, $sender_type);
+        if ($stmt->execute()) {
+            echo json_encode(["success" => true, "message" => "Message sent"]);
+            exit();
         }
     }
 
-    $stmtFallback = $conn->prepare("INSERT INTO messages (seller_username, customer_mobile, message, sender_type, is_read, payment_status) VALUES (?, ?, ?, ?, 0, 'unpaid')");
+    $stmtFallback = $conn->prepare("INSERT INTO messages (seller_username, customer_mobile, message, sender_type, is_read, payment_status, delivery_status) VALUES (?, ?, ?, ?, 0, 'unpaid', 'pending')");
     if ($stmtFallback) {
         $stmtFallback->bind_param("ssss", $seller_username, $customer_mobile, $message, $sender_type);
         if ($stmtFallback->execute()) {
@@ -358,26 +643,32 @@ if ($action == 'customer-login') {
 } elseif ($action == 'update-order-status') {
     $msg_id = isset($input['message_id']) ? (int)$input['message_id'] : 0;
     $status_text = isset($input['order_status']) ? trim($input['order_status']) : 'Ready';
-
-    $colCheck = $conn->query("SHOW COLUMNS FROM messages LIKE 'order_status'");
-    if (!$colCheck || $colCheck->num_rows == 0) {
-        @$conn->query("ALTER TABLE messages ADD COLUMN order_status VARCHAR(20) DEFAULT 'Status'");
-    }
+    $cancelled_at = isset($input['cancelled_at']) ? trim($input['cancelled_at']) : date('d/m/Y, H:i');
+    $cancel_reason = isset($input['cancel_reason']) ? trim($input['cancel_reason']) : '';
 
     if ($msg_id > 0) {
-        $stmt = $conn->prepare("UPDATE messages SET order_status = ? WHERE id = ?");
-        if ($stmt) {
-            $stmt->bind_param("si", $status_text, $msg_id);
-            $stmt->execute();
+        if (!empty($cancel_reason) || strtolower($status_text) == 'cancelled') {
+            $stmt = $conn->prepare("UPDATE messages SET order_status = 'Cancelled', delivery_status = 'Cancelled', cancelled_at = ?, cancel_reason = ? WHERE id = ?");
+            if ($stmt) {
+                $stmt->bind_param("ssi", $cancelled_at, $cancel_reason, $msg_id);
+                $stmt->execute();
+            }
+        } else {
+            $stmt = $conn->prepare("UPDATE messages SET order_status = ? WHERE id = ?");
+            if ($stmt) {
+                $stmt->bind_param("si", $status_text, $msg_id);
+                $stmt->execute();
+            }
         }
     }
     echo json_encode(["success" => true]);
+    exit();
 } elseif ($action == 'update-order-amount') {
     $msg_id = isset($input['message_id']) ? (int)$input['message_id'] : 0;
     $amount = isset($input['order_amount']) ? (float)$input['order_amount'] : (isset($input['amount']) ? (float)$input['amount'] : 0.0);
 
-    $colCheck = $conn->query("SHOW COLUMNS FROM messages LIKE 'order_amount'");
-    if (!$colCheck || $colCheck->num_rows == 0) {
+    $colCheckAmt = $conn->query("SHOW COLUMNS FROM messages LIKE 'order_amount'");
+    if (!$colCheckAmt || $colCheckAmt->num_rows == 0) {
         @$conn->query("ALTER TABLE messages ADD COLUMN order_amount DECIMAL(10,2) DEFAULT 0.00");
     }
 
@@ -389,24 +680,6 @@ if ($action == 'customer-login') {
         }
     }
     echo json_encode(["success" => true, "order_amount" => $amount]);
-    exit();
-} elseif ($action == 'update-bill-image') {
-    $msg_id = isset($input['message_id']) ? (int)$input['message_id'] : 0;
-    $bill_image = isset($input['bill_image']) ? trim($input['bill_image']) : '';
-
-    $colCheck = $conn->query("SHOW COLUMNS FROM messages LIKE 'bill_image'");
-    if (!$colCheck || $colCheck->num_rows == 0) {
-        @$conn->query("ALTER TABLE messages ADD COLUMN bill_image LONGTEXT DEFAULT NULL");
-    }
-
-    if ($msg_id > 0) {
-        $stmt = $conn->prepare("UPDATE messages SET bill_image = ? WHERE id = ?");
-        if ($stmt) {
-            $stmt->bind_param("si", $bill_image, $msg_id);
-            $stmt->execute();
-        }
-    }
-    echo json_encode(["success" => true]);
     exit();
 } elseif ($action == 'update-order-payment-status') {
     $msg_id = isset($input['message_id']) ? (int)$input['message_id'] : 0;
@@ -474,7 +747,6 @@ if ($action == 'customer-login') {
                     $unreadCount = (int)$cntRow['cnt'];
                 }
 
-                // Query customers table to fetch real customer name by mobile number
                 $cDigits = preg_replace('/[^0-9]/', '', $c);
                 $cLast10 = (strlen($cDigits) >= 10) ? substr($cDigits, -10) : $cDigits;
                 $cEscapedLike = "%" . $conn->real_escape_string($cLast10) . "%";
@@ -768,28 +1040,6 @@ if ($action == 'customer-login') {
         }
     }
     echo json_encode(["success" => true, "message" => "Unit deleted"]);
-    exit();
-} elseif ($action == 'get-header-theme') {
-    $res = $conn->query("SELECT setting_value FROM app_settings WHERE setting_key = 'global_header_theme'");
-    if ($res && $row = $res->fetch_assoc()) {
-        $themeConfig = json_decode($row['setting_value'], true);
-        if (is_array($themeConfig)) {
-            echo json_encode(["success" => true, "theme" => $themeConfig]);
-            exit();
-        }
-    }
-    echo json_encode(["success" => true, "theme" => null]);
-    exit();
-} elseif ($action == 'update-header-theme') {
-    $themeConfig = isset($input) && is_array($input) ? $input : array();
-    $jsonVal = json_encode($themeConfig);
-
-    $stmt = $conn->prepare("INSERT INTO app_settings (setting_key, setting_value) VALUES ('global_header_theme', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
-    if ($stmt) {
-        $stmt->bind_param("s", $jsonVal);
-        $stmt->execute();
-    }
-    echo json_encode(["success" => true, "message" => "Header theme saved in database"]);
     exit();
 } else {
     echo json_encode(["success" => true, "message" => "Daily Mart API Active"]);
