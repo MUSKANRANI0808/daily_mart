@@ -327,10 +327,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         decoration: HeaderThemeHelper.buildDecoration(liveConfig),
                         child: Stack(
                           children: [
-                            GroceryFloatingBackgroundParticles(
-                              particleOpacity: particleOpacity,
+                            Positioned.fill(
+                              child: GroceryFloatingBackgroundParticles(
+                                particleOpacity: particleOpacity,
+                              ),
                             ),
-                            if (enableShining) const ContinuousShiningGlassBeamWidget(),
+                            if (enableShining)
+                              const Positioned.fill(
+                                child: ContinuousShiningGlassBeamWidget(),
+                              ),
                             Positioned(
                               top: 15,
                               left: 15,

@@ -1063,13 +1063,17 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                         child: Stack(
                           children: [
                             // Floating Translucent Grocery Icons Background Particles
-                            GroceryFloatingBackgroundParticles(
-                              particleOpacity: (_headerThemeConfig['particle_opacity'] as num?)?.toDouble() ?? 0.9,
+                            Positioned.fill(
+                              child: GroceryFloatingBackgroundParticles(
+                                particleOpacity: (_headerThemeConfig['particle_opacity'] as num?)?.toDouble() ?? 0.9,
+                              ),
                             ),
 
                             // Continuous Metallic Shining Glass Light Beam
                             if (_headerThemeConfig['enable_shining'] != false)
-                              const ContinuousShiningGlassBeamWidget(),
+                              const Positioned.fill(
+                                child: ContinuousShiningGlassBeamWidget(),
+                              ),
 
                             SafeArea(
                               bottom: false,

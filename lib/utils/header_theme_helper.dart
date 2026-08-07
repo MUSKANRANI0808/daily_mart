@@ -212,22 +212,24 @@ class _ContinuousShiningGlassBeamWidgetState extends State<ContinuousShiningGlas
         final progress = _controller.value;
         final double alignX = -2.5 + (progress * 5.0);
 
-        return Positioned.fill(
-          child: FractionallySizedBox(
-            widthFactor: 0.45,
-            alignment: Alignment(alignX, 0),
-            child: Transform(
-              transform: Matrix4.skewX(-0.35),
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.white.withValues(alpha: 0.0),
-                      Colors.white.withValues(alpha: 0.08),
-                      Colors.white.withValues(alpha: 0.28),
-                      Colors.white.withValues(alpha: 0.08),
-                      Colors.white.withValues(alpha: 0.0),
-                    ],
+        return IgnorePointer(
+          child: SizedBox.expand(
+            child: FractionallySizedBox(
+              widthFactor: 0.45,
+              alignment: Alignment(alignX, 0),
+              child: Transform(
+                transform: Matrix4.skewX(-0.35),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.white.withValues(alpha: 0.0),
+                        Colors.white.withValues(alpha: 0.08),
+                        Colors.white.withValues(alpha: 0.28),
+                        Colors.white.withValues(alpha: 0.08),
+                        Colors.white.withValues(alpha: 0.0),
+                      ],
+                    ),
                   ),
                 ),
               ),
