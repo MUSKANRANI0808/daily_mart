@@ -2,6 +2,25 @@ import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 
+int safeInt(dynamic val, [int defaultValue = 0]) {
+  if (val == null) return defaultValue;
+  if (val is int) return val;
+  if (val is num) return val.toInt();
+  return int.tryParse(val.toString()) ?? defaultValue;
+}
+
+double safeDouble(dynamic val, [double defaultValue = 0.0]) {
+  if (val == null) return defaultValue;
+  if (val is double) return val;
+  if (val is num) return val.toDouble();
+  return double.tryParse(val.toString()) ?? defaultValue;
+}
+
+String safeString(dynamic val, [String defaultValue = '']) {
+  if (val == null) return defaultValue;
+  return val.toString();
+}
+
 class SellerProductsScreen extends StatefulWidget {
   final UserModel seller;
 
@@ -55,9 +74,9 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     } else {
       setState(() {
         _filteredProducts = _allProducts.where((p) {
-          final name = (p['name'] ?? '').toString().toLowerCase();
-          final desc = (p['description'] ?? '').toString().toLowerCase();
-          final unit = (p['unit'] ?? '').toString().toLowerCase();
+          final name = safeString(p['name']).toLowerCase();
+          final desc = safeString(p['description']).toLowerCase();
+          final unit = safeString(p['unit']).toLowerCase();
           return name.contains(query) || desc.contains(query) || unit.contains(query);
         }).toList();
       });
@@ -65,7 +84,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
   }
 
   /// Open Manage Custom Units Dialog
-  void _showManageUnitsDialog() {
+  void _showManageUnitsDialog({Function(String)? onUnitCreated}) {
     final unitController = TextEditingController();
 
     showModalBottomSheet(
@@ -124,7 +143,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                             ),
                             SizedBox(height: 2),
                             Text(
-                              'Create, edit or delete custom measurement units',
+                              'Add, edit or delete custom store units',
                               style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                             ),
                           ],
@@ -145,7 +164,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                         child: TextField(
                           controller: unitController,
                           decoration: InputDecoration(
-                            hintText: 'e.g. 100 Gram, 250g, 1 Kg, 1 L, 1 Pcs',
+                            hintText: 'Enter unit name (e.g. 100g, 1 Kg, 1 L, 1 Pcs)',
                             hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
                             isDense: true,
                             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -173,6 +192,10 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           setState(() {
                             _sellerUnits = updatedUnits;
                           });
+
+                          if (onUnitCreated != null) {
+                            onUnitCreated(uName);
+                          }
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF8B5CF6),
@@ -187,22 +210,33 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                   const SizedBox(height: 16),
 
                   // Custom Units List
-                  const Text('Your Store Units List:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                  const Text('Your Created Units:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
                   const SizedBox(height: 8),
                   ConstrainedBox(
                     constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.35),
                     child: _sellerUnits.isEmpty
-                        ? const Padding(
-                            padding: EdgeInsets.all(16.0),
-                            child: Text('No custom units added yet.', style: TextStyle(color: Colors.grey)),
+                        ? Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: const Center(
+                              child: Text(
+                                'No units created yet. Type above and click "Add Unit" to create your first store unit!',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                              ),
+                            ),
                           )
                         : ListView.builder(
                             shrinkWrap: true,
                             itemCount: _sellerUnits.length,
                             itemBuilder: (context, idx) {
                               final uMap = _sellerUnits[idx];
-                              final uId = (uMap['id'] as num?)?.toInt() ?? 0;
-                              final uName = (uMap['unit_name'] ?? '').toString();
+                              final uId = safeInt(uMap['id']);
+                              final uName = safeString(uMap['unit_name']);
 
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 6),
@@ -307,25 +341,22 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
 
   void _showAddEditProductDialog({Map<String, dynamic>? productToEdit}) {
     final isEditing = productToEdit != null;
-    final nameController = TextEditingController(text: isEditing ? (productToEdit['name'] ?? '') : '');
-    final descController = TextEditingController(text: isEditing ? (productToEdit['description'] ?? '') : '');
+    final nameController = TextEditingController(text: isEditing ? safeString(productToEdit['name']) : '');
+    final descController = TextEditingController(text: isEditing ? safeString(productToEdit['description']) : '');
     final qtyController = TextEditingController(
-      text: isEditing ? ((productToEdit['qty'] ?? 1).toString()) : '1',
+      text: isEditing ? safeInt(productToEdit['qty'], 1).toString() : '1',
     );
     final rateController = TextEditingController(
-      text: isEditing ? ((productToEdit['rate'] ?? 0.0).toString()) : '',
+      text: isEditing ? safeDouble(productToEdit['rate'], 0.0).toString() : '',
     );
 
-    final availableUnitNames = _sellerUnits.map((u) => (u['unit_name'] ?? '').toString()).where((s) => s.isNotEmpty).toList();
-    if (availableUnitNames.isEmpty) {
-      availableUnitNames.addAll(AuthService.defaultUnits);
-    }
+    List<String> availableUnitNames = _sellerUnits.map((u) => safeString(u['unit_name'])).where((s) => s.isNotEmpty).toList();
 
     String selectedUnit = isEditing
-        ? (productToEdit['unit'] ?? availableUnitNames.first)
-        : (availableUnitNames.isNotEmpty ? availableUnitNames.first : '1 Kg');
+        ? safeString(productToEdit['unit'])
+        : (availableUnitNames.isNotEmpty ? availableUnitNames.first : '');
 
-    if (!availableUnitNames.contains(selectedUnit)) {
+    if (selectedUnit.isNotEmpty && !availableUnitNames.contains(selectedUnit)) {
       availableUnitNames.insert(0, selectedUnit);
     }
 
@@ -448,41 +479,88 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                       const Text('Unit / Measurement *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
                       InkWell(
                         onTap: () {
-                          Navigator.pop(ctx);
-                          _showManageUnitsDialog();
+                          _showManageUnitsDialog(
+                            onUnitCreated: (newUnit) {
+                              setModalState(() {
+                                availableUnitNames = _sellerUnits.map((u) => safeString(u['unit_name'])).where((s) => s.isNotEmpty).toList();
+                                selectedUnit = newUnit;
+                              });
+                            },
+                          );
                         },
                         child: const Row(
                           children: [
                             Icon(Icons.add_circle_outline_rounded, color: Color(0xFF8B5CF6), size: 16),
                             SizedBox(width: 4),
-                            Text('+ Manage Units', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF8B5CF6))),
+                            Text('+ Create New Unit', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF8B5CF6))),
                           ],
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: availableUnitNames.map((u) {
-                      final isSel = selectedUnit == u;
-                      return ChoiceChip(
-                        label: Text(u),
-                        selected: isSel,
-                        selectedColor: const Color(0xFF8B5CF6),
-                        backgroundColor: const Color(0xFFF1F5F9),
-                        labelStyle: TextStyle(
-                          color: isSel ? Colors.white : const Color(0xFF334155),
-                          fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
-                          fontSize: 12,
+
+                  availableUnitNames.isEmpty
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF2F2),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFFCA5A5)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.info_outline_rounded, color: Color(0xFFEF4444), size: 20),
+                              const SizedBox(width: 10),
+                              const Expanded(
+                                child: Text(
+                                  'No units created yet. Please tap "+ Create New Unit" above to add your store units.',
+                                  style: TextStyle(fontSize: 12, color: Color(0xFF991B1B), fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                              ElevatedButton(
+                                onPressed: () {
+                                  _showManageUnitsDialog(
+                                    onUnitCreated: (newUnit) {
+                                      setModalState(() {
+                                        availableUnitNames = _sellerUnits.map((u) => safeString(u['unit_name'])).where((s) => s.isNotEmpty).toList();
+                                        selectedUnit = newUnit;
+                                      });
+                                    },
+                                  );
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFEF4444),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: const Text('+ Add', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                        )
+                      : Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          children: availableUnitNames.map((u) {
+                            final isSel = selectedUnit == u;
+                            return ChoiceChip(
+                              label: Text(u),
+                              selected: isSel,
+                              selectedColor: const Color(0xFF8B5CF6),
+                              backgroundColor: const Color(0xFFF1F5F9),
+                              labelStyle: TextStyle(
+                                color: isSel ? Colors.white : const Color(0xFF334155),
+                                fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
+                                fontSize: 12,
+                              ),
+                              onSelected: (val) {
+                                if (val) setModalState(() => selectedUnit = u);
+                              },
+                            );
+                          }).toList(),
                         ),
-                        onSelected: (val) {
-                          if (val) setModalState(() => selectedUnit = u);
-                        },
-                      );
-                    }).toList(),
-                  ),
                   const SizedBox(height: 14),
 
                   // Quantity & Price Row
@@ -559,12 +637,19 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                         return;
                       }
 
+                      if (selectedUnit.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please select or create a Unit for the product.')),
+                        );
+                        return;
+                      }
+
                       Navigator.pop(ctx);
                       setState(() => _isLoading = true);
 
                       final username = widget.seller.username ?? '';
                       if (isEditing) {
-                        final pId = (productToEdit['id'] as num?)?.toInt() ?? 0;
+                        final pId = safeInt(productToEdit['id']);
                         await AuthService.updateSellerProduct(
                           id: pId,
                           sellerUsername: username,
@@ -615,8 +700,8 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
   }
 
   void _confirmDeleteProduct(Map<String, dynamic> product) {
-    final pId = (product['id'] as num?)?.toInt() ?? 0;
-    final pName = product['name'] ?? 'Product';
+    final pId = safeInt(product['id']);
+    final pName = safeString(product['name'], 'Product');
 
     showDialog(
       context: context,
@@ -669,7 +754,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
           IconButton(
             icon: const Icon(Icons.straighten_rounded, color: Colors.white),
             tooltip: 'Manage Units',
-            onPressed: _showManageUnitsDialog,
+            onPressed: () => _showManageUnitsDialog(),
           ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Colors.white),
@@ -730,12 +815,12 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                 Row(
                   children: [
                     Text(
-                      '${_filteredProducts.length} Products | ${_sellerUnits.length} Units',
+                      '${_filteredProducts.length} Products | ${_sellerUnits.length} Custom Units',
                       style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
                     ),
                     const Spacer(),
                     InkWell(
-                      onTap: _showManageUnitsDialog,
+                      onTap: () => _showManageUnitsDialog(),
                       child: const Text(
                         '🏷️ Manage Units',
                         style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF8B5CF6)),
@@ -796,11 +881,11 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                         itemCount: _filteredProducts.length,
                         itemBuilder: (context, idx) {
                           final p = _filteredProducts[idx];
-                          final name = p['name'] ?? '';
-                          final desc = p['description'] ?? '';
-                          final unit = p['unit'] ?? 'Pcs';
-                          final qty = (p['qty'] ?? 1) is num ? (p['qty'] as num).toInt() : 1;
-                          final rate = (p['rate'] ?? 0.0) is num ? (p['rate'] as num).toDouble() : 0.0;
+                          final name = safeString(p['name']);
+                          final desc = safeString(p['description']);
+                          final unit = safeString(p['unit'], 'Pcs');
+                          final qty = safeInt(p['qty'], 1);
+                          final rate = safeDouble(p['rate'], 0.0);
 
                           return Container(
                             margin: const EdgeInsets.only(bottom: 12),

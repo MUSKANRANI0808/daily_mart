@@ -3532,25 +3532,10 @@ class AuthService {
   // SELLER CUSTOM UNITS CRUD API & LOCAL CACHE
   // ==========================================
 
-  static const List<String> defaultUnits = [
-    '1 Kg',
-    '500 Gram',
-    '250 Gram',
-    '100 Gram',
-    '50 Gram',
-    '1 L (Liter)',
-    '500 Ml',
-    '1 Pcs',
-    '1 Pack',
-    '1 Bottle',
-    '1 Box',
-    '1 Dozen',
-  ];
-
   /// Get Custom Units created by Seller (VPS Database with local cache fallback)
   static Future<List<Map<String, dynamic>>> getSellerUnits(String sellerUsername) async {
     final cleanSeller = sellerUsername.trim();
-    if (cleanSeller.isEmpty) return defaultUnits.map((u) => {'id': 0, 'unit_name': u}).toList();
+    if (cleanSeller.isEmpty) return [];
 
     final prefs = await SharedPreferences.getInstance();
     final cacheKey = 'seller_units_$cleanSeller';
@@ -3561,10 +3546,8 @@ class AuthService {
       if (res != null && res['success'] == true && res['units'] is List) {
         final List<dynamic> rawList = res['units'];
         final List<Map<String, dynamic>> units = rawList.map((e) => Map<String, dynamic>.from(e)).toList();
-        if (units.isNotEmpty) {
-          await prefs.setString(cacheKey, jsonEncode(units));
-          return units;
-        }
+        await prefs.setString(cacheKey, jsonEncode(units));
+        return units;
       }
     } catch (_) {}
 
@@ -3573,14 +3556,11 @@ class AuthService {
       final str = prefs.getString(cacheKey);
       if (str != null && str.isNotEmpty) {
         final List<dynamic> list = jsonDecode(str);
-        final units = list.map((e) => Map<String, dynamic>.from(e)).toList();
-        if (units.isNotEmpty) return units;
+        return list.map((e) => Map<String, dynamic>.from(e)).toList();
       }
     } catch (_) {}
 
-    // Default Fallback Initial Units
-    final initialUnits = defaultUnits.map((u) => {'id': 0, 'unit_name': u}).toList();
-    return initialUnits;
+    return [];
   }
 
   /// Add Custom Unit for Seller
@@ -3616,13 +3596,14 @@ class AuthService {
       final str = prefs.getString(cacheKey);
       if (str != null && str.isNotEmpty) {
         units = (jsonDecode(str) as List).map((e) => Map<String, dynamic>.from(e)).toList();
-      } else {
-        units = defaultUnits.map((u) => {'id': 0, 'unit_name': u}).toList();
       }
     } catch (_) {}
 
-    units.add(newUnit);
-    await prefs.setString(cacheKey, jsonEncode(units));
+    bool exists = units.any((u) => (u['unit_name'] ?? '').toString().trim().toLowerCase() == cleanUnit.toLowerCase());
+    if (!exists) {
+      units.add(newUnit);
+      await prefs.setString(cacheKey, jsonEncode(units));
+    }
     return true;
   }
 

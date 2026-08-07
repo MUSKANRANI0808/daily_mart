@@ -663,11 +663,27 @@ if ($action == 'customer-login') {
     echo json_encode(["success" => true, "units" => $units]);
     exit();
 } elseif ($action == 'add-seller-unit') {
-    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : '';
-    $unit_name = isset($input['unit_name']) ? trim($input['unit_name']) : '';
+    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : (isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($_POST['seller_username']) ? trim($_POST['seller_username']) : ''));
+    $unit_name = isset($input['unit_name']) ? trim($input['unit_name']) : (isset($_GET['unit_name']) ? trim($_GET['unit_name']) : (isset($_POST['unit_name']) ? trim($_POST['unit_name']) : ''));
 
     if (empty($seller_username) || empty($unit_name)) {
         echo json_encode(["success" => false, "message" => "Seller username and unit name required"]);
+        exit();
+    }
+
+    $escapedSeller = $conn->real_escape_string($seller_username);
+    $escapedUnit = $conn->real_escape_string($unit_name);
+    $chk = $conn->query("SELECT id FROM seller_units WHERE seller_username = '$escapedSeller' AND unit_name = '$escapedUnit' LIMIT 1");
+    if ($chk && $row = $chk->fetch_assoc()) {
+        echo json_encode([
+            "success" => true,
+            "message" => "Unit already exists",
+            "unit" => [
+                "id" => (int)$row['id'],
+                "seller_username" => $seller_username,
+                "unit_name" => $unit_name
+            ]
+        ]);
         exit();
     }
 
