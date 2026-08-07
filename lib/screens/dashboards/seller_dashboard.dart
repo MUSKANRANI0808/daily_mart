@@ -222,7 +222,7 @@ class _SellerDashboardState extends State<SellerDashboard> {
               final title = (slider['title'] ?? slider['titleText'] ?? '').toString();
               final subtitle = (slider['description'] ?? slider['subtitle'] ?? slider['descText'] ?? '').toString();
               final tag = (slider['tag'] ?? slider['tagText'] ?? '').toString();
-              final bg = (slider['bg'] ?? slider['bg_image_url'] ?? slider['bgImageUrl'] ?? slider['image'] ?? slider['imageUrl'] ?? 'preset_1').toString();
+              final bg = (slider['bg'] ?? slider['bg_image_url'] ?? slider['bgImageUrl'] ?? slider['image'] ?? slider['imageUrl'] ?? 'transparent').toString();
 
               final tagBgHex = (slider['tag_bg_color'] ?? slider['tagBgColor'] ?? '#10B981').toString();
               final tagShape = (slider['tag_shape'] ?? slider['tagShape'] ?? 'pill').toString();

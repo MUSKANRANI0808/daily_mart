@@ -226,12 +226,20 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
     required Widget child,
     BorderRadius? borderRadius,
   }) {
-    if (bg == 'none' || bg.isEmpty || bg == 'transparent') {
+    if (bg == 'none' || bg.isEmpty || bg == 'transparent' || bg == 'preset_transparent') {
       return Container(
         width: double.infinity,
         decoration: BoxDecoration(
-          color: Colors.transparent,
+          color: Colors.white.withValues(alpha: 0.15),
           borderRadius: borderRadius ?? BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.35), width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: child,
       );
@@ -243,6 +251,21 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
     );
 
     if (preset.isNotEmpty) {
+      if (bg == 'preset_transparent' || bg == 'preset_1') {
+        return Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.22),
+            borderRadius: borderRadius ?? BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1.2),
+          ),
+          child: CustomPaint(
+            painter: AbstractPatternPainter(bg),
+            child: child,
+          ),
+        );
+      }
+
       final List<Color> colors = List<Color>.from(preset['colors']);
       return Container(
         width: double.infinity,

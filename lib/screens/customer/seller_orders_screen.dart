@@ -461,7 +461,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
               final tag = item['tag'] ?? 'OFFER 🏷️';
               final title = item['title'] ?? '';
               final desc = item['description'] ?? '';
-              final bg = item['bg_image_url'] ?? 'preset_1';
+              final bg = item['bg_image_url'] ?? 'transparent';
               final tagBg = hexToColor(item['tag_bg_color']?.toString() ?? '#10B981');
               final tagShape = item['tag_shape']?.toString() ?? 'pill';
               final titleCol = hexToColor(item['title_color']?.toString() ?? '#FFFFFF');
