@@ -1270,31 +1270,36 @@ class _CustomerProductItemTile extends StatefulWidget {
 }
 
 class _CustomerProductItemTileState extends State<_CustomerProductItemTile> {
-  late String _selectedUnit;
+  String? _selectedUnit;
   late TextEditingController _qtyController;
   late List<String> _availableUnits;
 
   @override
   void initState() {
     super.initState();
-    final pUnit = (widget.item['unit'] ?? 'Pcs').toString();
-    final pQty = (widget.item['qty'] ?? 1) is num ? (widget.item['qty'] as num).toInt() : 1;
+    _selectedUnit = null; // Unselected by default!
+    _qtyController = TextEditingController(text: ''); // Empty by default!
 
-    _selectedUnit = pUnit;
-    _qtyController = TextEditingController(text: pQty.toString());
-
+    final pUnit = (widget.item['unit'] ?? '').toString();
     _availableUnits = List<String>.from(widget.sellerUnits);
+
     final uLower = pUnit.toLowerCase();
-    if (uLower.contains('kg') || uLower.contains('gram') || uLower == 'g') {
-      if (!_availableUnits.any((u) => u.toLowerCase().contains('kg'))) _availableUnits.add('Kg');
-      if (!_availableUnits.any((u) => u.toLowerCase().contains('gram') || u.toLowerCase() == 'g')) _availableUnits.add('Gram');
-    } else if (uLower.contains('l') || uLower.contains('liter') || uLower.contains('ml')) {
-      if (!_availableUnits.any((u) => u.toLowerCase().contains('l') && !u.toLowerCase().contains('ml'))) _availableUnits.add('L');
-      if (!_availableUnits.any((u) => u.toLowerCase().contains('ml'))) _availableUnits.add('Ml');
+    if (uLower.isNotEmpty) {
+      if (uLower.contains('kg') || uLower.contains('gram') || uLower == 'g') {
+        if (!_availableUnits.any((u) => u.toLowerCase().contains('kg'))) _availableUnits.add('Kg');
+        if (!_availableUnits.any((u) => u.toLowerCase().contains('gram') || u.toLowerCase() == 'g')) _availableUnits.add('Gram');
+      } else if (uLower.contains('l') || uLower.contains('liter') || uLower.contains('ml')) {
+        if (!_availableUnits.any((u) => u.toLowerCase().contains('l') && !u.toLowerCase().contains('ml'))) _availableUnits.add('L');
+        if (!_availableUnits.any((u) => u.toLowerCase().contains('ml'))) _availableUnits.add('Ml');
+      }
+      if (!listContainsCase(_availableUnits, pUnit)) {
+        _availableUnits.insert(0, pUnit);
+      }
     }
-    if (!_availableUnits.contains(pUnit)) {
-      _availableUnits.insert(0, pUnit);
-    }
+  }
+
+  bool listContainsCase(List<String> list, String val) {
+    return list.any((item) => item.toLowerCase().trim() == val.toLowerCase().trim());
   }
 
   @override
@@ -1304,7 +1309,10 @@ class _CustomerProductItemTileState extends State<_CustomerProductItemTile> {
   }
 
   double _getCalculatedAmount() {
-    final cQty = double.tryParse(_qtyController.text.trim()) ?? 0.0;
+    if (_selectedUnit == null || _selectedUnit!.isEmpty) return 0.0;
+    final cQty = double.tryParse(_qtyController.text.trim());
+    if (cQty == null || cQty <= 0) return 0.0;
+
     final sUnit = (widget.item['unit'] ?? 'Pcs').toString();
     final sQty = (widget.item['qty'] ?? 1) is num ? (widget.item['qty'] as num).toInt() : 1;
     final sRate = (widget.item['rate'] ?? 0.0) is num ? (widget.item['rate'] as num).toDouble() : 0.0;
@@ -1313,18 +1321,18 @@ class _CustomerProductItemTileState extends State<_CustomerProductItemTile> {
       sellerUnit: sUnit,
       sellerQty: sQty,
       sellerRate: sRate,
-      customerUnit: _selectedUnit,
+      customerUnit: _selectedUnit!,
       customerQty: cQty,
     );
   }
 
   void _adjustQty(double delta) {
-    final current = double.tryParse(_qtyController.text.trim()) ?? 1.0;
+    final current = double.tryParse(_qtyController.text.trim()) ?? 0.0;
     double next = current + delta;
     if (next < 0) next = 0;
 
     setState(() {
-      _qtyController.text = next.truncateToDouble() == next ? next.toInt().toString() : next.toStringAsFixed(1);
+      _qtyController.text = next == 0 ? '' : (next.truncateToDouble() == next ? next.toInt().toString() : next.toStringAsFixed(1));
     });
   }
 
@@ -1374,8 +1382,31 @@ class _CustomerProductItemTileState extends State<_CustomerProductItemTile> {
               ),
               ElevatedButton.icon(
                 onPressed: () {
+                  if (_selectedUnit == null || _selectedUnit!.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please select Unit first! ⚠️'),
+                        backgroundColor: Color(0xFFEF4444),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                    return;
+                  }
+
                   final qStr = _qtyController.text.trim();
-                  widget.onAdd(pName, _selectedUnit, qStr, amount);
+                  final qVal = double.tryParse(qStr);
+                  if (qVal == null || qVal <= 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please enter valid Quantity! ⚠️'),
+                        backgroundColor: Color(0xFFEF4444),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                    return;
+                  }
+
+                  widget.onAdd(pName, _selectedUnit!, qStr, amount);
                 },
                 icon: const Icon(Icons.add_rounded, size: 16, color: Colors.white),
                 label: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
@@ -1397,28 +1428,23 @@ class _CustomerProductItemTileState extends State<_CustomerProductItemTile> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEDE9FE),
+                  color: _selectedUnit == null ? const Color(0xFFF1F5F9) : const Color(0xFFEDE9FE),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFDDD6FE)),
+                  border: Border.all(
+                    color: _selectedUnit == null ? const Color(0xFFCBD5E1) : const Color(0xFFDDD6FE),
+                  ),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
-                    value: _availableUnits.contains(_selectedUnit) ? _selectedUnit : _availableUnits.first,
+                    value: _selectedUnit,
+                    hint: const Text('Select Unit', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF8B5CF6))),
                     isDense: true,
                     icon: const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFF6D28D9)),
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF6D28D9)),
                     onChanged: (val) {
                       if (val != null) {
                         setState(() {
-                          final oldUnit = _selectedUnit;
                           _selectedUnit = val;
-
-                          // Auto convert qty between Kg and Gram
-                          if (val.toLowerCase().contains('gram') && (oldUnit.toLowerCase().contains('kg') || _qtyController.text == '1')) {
-                            _qtyController.text = '500';
-                          } else if (val.toLowerCase().contains('kg') && (oldUnit.toLowerCase().contains('gram') || _qtyController.text == '500')) {
-                            _qtyController.text = '1';
-                          }
                         });
                       }
                     },
@@ -1433,7 +1459,7 @@ class _CustomerProductItemTileState extends State<_CustomerProductItemTile> {
               ),
               const SizedBox(width: 8),
 
-              // Qty Stepper Field (- 1 +)
+              // Qty Stepper Field (- field +)
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -1444,7 +1470,7 @@ class _CustomerProductItemTileState extends State<_CustomerProductItemTile> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     InkWell(
-                      onTap: () => _adjustQty(_selectedUnit.toLowerCase().contains('gram') ? -50 : -1),
+                      onTap: () => _adjustQty((_selectedUnit ?? '').toLowerCase().contains('gram') ? -50 : -1),
                       child: const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                         child: Icon(Icons.remove_rounded, size: 16, color: Color(0xFF475569)),
@@ -1459,6 +1485,8 @@ class _CustomerProductItemTileState extends State<_CustomerProductItemTile> {
                         onChanged: (_) => setState(() {}),
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
                         decoration: const InputDecoration(
+                          hintText: 'Qty',
+                          hintStyle: TextStyle(fontSize: 12, color: Color(0xFF94A3B8), fontWeight: FontWeight.normal),
                           isDense: true,
                           contentPadding: EdgeInsets.symmetric(vertical: 6),
                           border: InputBorder.none,
@@ -1466,7 +1494,7 @@ class _CustomerProductItemTileState extends State<_CustomerProductItemTile> {
                       ),
                     ),
                     InkWell(
-                      onTap: () => _adjustQty(_selectedUnit.toLowerCase().contains('gram') ? 50 : 1),
+                      onTap: () => _adjustQty((_selectedUnit ?? '').toLowerCase().contains('gram') ? 50 : 1),
                       child: const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                         child: Icon(Icons.add_rounded, size: 16, color: Color(0xFF475569)),
@@ -1484,7 +1512,11 @@ class _CustomerProductItemTileState extends State<_CustomerProductItemTile> {
                   const Text('Amount', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
                   Text(
                     amountStr,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF059669)),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: amount > 0 ? const Color(0xFF059669) : const Color(0xFF94A3B8),
+                    ),
                   ),
                 ],
               ),
