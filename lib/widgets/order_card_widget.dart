@@ -149,6 +149,7 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
 
     if (orderAmt == null || orderAmt <= 0) {
       double totalFromItems = 0.0;
+      bool hasUnratedItem = false;
       for (var item in items) {
         final text = (item['text'] ?? '').toString();
         final match = RegExp(r'₹\s*([\d\.]+)').firstMatch(text);
@@ -156,11 +157,17 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
           final amt = double.tryParse(match.group(1) ?? '');
           if (amt != null && amt > 0) {
             totalFromItems += amt;
+          } else {
+            hasUnratedItem = true;
           }
+        } else {
+          hasUnratedItem = true;
         }
       }
-      if (totalFromItems > 0) {
+      if (totalFromItems > 0 && !hasUnratedItem) {
         orderAmt = totalFromItems;
+      } else {
+        orderAmt = null;
       }
     }
 

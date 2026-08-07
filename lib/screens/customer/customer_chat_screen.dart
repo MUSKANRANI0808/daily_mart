@@ -775,10 +775,18 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
     });
   }
 
+  bool _hasUnratedItemInSelection() {
+    return _selectedOrderItems.any((it) {
+      final amt = (it['amount'] as num?)?.toDouble() ?? 0.0;
+      return amt <= 0;
+    });
+  }
+
   double _calculateSelectedTotal() {
+    if (_hasUnratedItemInSelection()) return 0.0;
     double sum = 0.0;
     for (var item in _selectedOrderItems) {
-      sum += (item['amount'] as double? ?? 0.0);
+      sum += (item['amount'] as num?)?.toDouble() ?? 0.0;
     }
     return sum;
   }
@@ -999,21 +1007,65 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxHeight: 255.0),
                   child: filteredList.isEmpty
-                      ? Container(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.search_off_rounded, color: Colors.grey, size: 36),
-                              const SizedBox(height: 8),
-                              Text(
-                                searchKey.isNotEmpty ? 'No products matching "$searchKey"' : 'No products in seller catalog yet.',
-                                style: const TextStyle(fontSize: 13, color: Colors.black54, fontWeight: FontWeight.bold),
-                                textAlign: TextAlign.center,
+                      ? (searchKey.trim().isNotEmpty
+                          ? SingleChildScrollView(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFFF1F2),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: const Color(0xFFFDA4AF)),
+                                    ),
+                                    child: const Row(
+                                      children: [
+                                        Icon(Icons.info_outline_rounded, color: Color(0xFFE11D48), size: 16),
+                                        SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            'Product catalog me nahi hai. Aap unit & qty select karke ise order me add kar sakte hain. Seller rate add karega.',
+                                            style: TextStyle(fontSize: 11, color: Color(0xFF9F1239), fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  _CustomUnlistedRedGlassTile(
+                                    searchName: searchKey.trim(),
+                                    sellerUnits: sellerCustomUnits,
+                                    onAdd: (name, unit, qtyStr, amount) {
+                                      _addCustomItemToOrderText(name, unit, qtyStr, 0.0);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Added "$name ($qtyStr $unit)" [Rate Pending] 🛒'),
+                                          duration: const Duration(seconds: 1),
+                                          backgroundColor: const Color(0xFFE11D48),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                        )
+                            )
+                          : Container(
+                              padding: const EdgeInsets.all(24),
+                              child: const Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.search_off_rounded, color: Colors.grey, size: 36),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'No products in seller catalog yet. Type product name in search to add custom items!',
+                                    style: TextStyle(fontSize: 13, color: Colors.black54, fontWeight: FontWeight.bold),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              ),
+                            ))
                       : ListView.builder(
                           shrinkWrap: true,
                           itemCount: filteredList.length,
@@ -1312,18 +1364,32 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
                                   ),
                                   const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFDCFCE7),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: const Color(0xFF86EFAC)),
+                                  if (_hasUnratedItemInSelection())
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFFF1F2),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: const Color(0xFFFDA4AF)),
+                                      ),
+                                      child: const Text(
+                                        'Total: Rate Pending ⏳',
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFFE11D48)),
+                                      ),
+                                    )
+                                  else
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFDCFCE7),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: const Color(0xFF86EFAC)),
+                                      ),
+                                      child: Text(
+                                        'Total: ₹${_calculateSelectedTotal().toStringAsFixed(_calculateSelectedTotal().truncateToDouble() == _calculateSelectedTotal() ? 0 : 2)}',
+                                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: Color(0xFF15803D)),
+                                      ),
                                     ),
-                                    child: Text(
-                                      'Total: ₹${_calculateSelectedTotal().toStringAsFixed(_calculateSelectedTotal().truncateToDouble() == _calculateSelectedTotal() ? 0 : 2)}',
-                                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: Color(0xFF15803D)),
-                                    ),
-                                  ),
                                   const Spacer(),
                                   TextButton.icon(
                                     onPressed: _showProductListPickerSheet,
@@ -1849,6 +1915,235 @@ class _CustomerProductItemTileState extends State<_CustomerProductItemTile> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF10B981),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  elevation: 0,
+                ),
+                child: const Text('+ Add', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Colors.white)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CustomUnlistedRedGlassTile extends StatefulWidget {
+  final String searchName;
+  final List<String> sellerUnits;
+  final Function(String name, String unit, String qtyStr, double amount) onAdd;
+
+  const _CustomUnlistedRedGlassTile({
+    required this.searchName,
+    required this.sellerUnits,
+    required this.onAdd,
+  });
+
+  @override
+  State<_CustomUnlistedRedGlassTile> createState() => _CustomUnlistedRedGlassTileState();
+}
+
+class _CustomUnlistedRedGlassTileState extends State<_CustomUnlistedRedGlassTile> {
+  String? _selectedUnit;
+  late TextEditingController _qtyController;
+  late List<String> _availableUnits;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedUnit = null;
+    _qtyController = TextEditingController(text: '');
+    _availableUnits = ['Gram', 'Kg', 'L', 'Ml', 'Pcs'];
+    for (var u in widget.sellerUnits) {
+      if (!_availableUnits.contains(u)) _availableUnits.add(u);
+    }
+  }
+
+  @override
+  void dispose() {
+    _qtyController.dispose();
+    super.dispose();
+  }
+
+  void _adjustQty(double step) {
+    double current = double.tryParse(_qtyController.text.trim()) ?? 0;
+    double next = current + step;
+    if (next < 0) next = 0;
+    setState(() {
+      _qtyController.text = (next % 1 == 0) ? next.toInt().toString() : next.toStringAsFixed(1);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF1F2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFDA4AF), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFF43F5E).withValues(alpha: 0.06),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              const CircleAvatar(
+                radius: 13,
+                backgroundColor: Color(0xFFFECDD3),
+                child: Icon(Icons.edit_note_rounded, size: 15, color: Color(0xFFE11D48)),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  widget.searchName,
+                  style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Color(0xFF881337)),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFECDD3),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  'Unlisted Item',
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF9F1239)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              // Unit Dropdown
+              Container(
+                height: 32,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFFFDA4AF)),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedUnit,
+                    hint: const Text('Unit *', style: TextStyle(fontSize: 11, color: Color(0xFFE11D48), fontWeight: FontWeight.bold)),
+                    isDense: true,
+                    items: _availableUnits
+                        .map((u) => DropdownMenuItem(value: u, child: Text(u, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))))
+                        .toList(),
+                    onChanged: (val) => setState(() => _selectedUnit = val),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+
+              // Qty Field with - + buttons
+              Container(
+                height: 32,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFFFDA4AF)),
+                ),
+                child: Row(
+                  children: [
+                    InkWell(
+                      onTap: () => _adjustQty((_selectedUnit ?? '').toLowerCase().contains('gram') ? -50 : -1),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4),
+                        child: Icon(Icons.remove, size: 12, color: Color(0xFF475569)),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 32,
+                      child: TextField(
+                        controller: _qtyController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF881337)),
+                        decoration: const InputDecoration(
+                          hintText: 'Qty',
+                          hintStyle: TextStyle(fontSize: 10, color: Color(0xFF94A3B8), fontWeight: FontWeight.normal),
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
+                          border: InputBorder.none,
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => _adjustQty((_selectedUnit ?? '').toLowerCase().contains('gram') ? 50 : 1),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4),
+                        child: Icon(Icons.add, size: 12, color: Color(0xFF475569)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+
+              // Rate Pending Text
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('₹ --', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFE11D48))),
+                  Text('Rate Pending', style: TextStyle(fontSize: 9, color: Color(0xFFBE123C), fontWeight: FontWeight.w600)),
+                ],
+              ),
+              const SizedBox(width: 8),
+
+              // + Add Button
+              ElevatedButton(
+                onPressed: () {
+                  if (_selectedUnit == null || _selectedUnit!.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please select Unit first! ⚠️'),
+                        backgroundColor: Color(0xFFE11D48),
+                        duration: Duration(milliseconds: 1500),
+                      ),
+                    );
+                    return;
+                  }
+
+                  final qStr = _qtyController.text.trim();
+                  final qVal = double.tryParse(qStr);
+                  if (qVal == null || qVal <= 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please enter valid Quantity! ⚠️'),
+                        backgroundColor: Color(0xFFE11D48),
+                        duration: Duration(milliseconds: 1500),
+                      ),
+                    );
+                    return;
+                  }
+
+                  widget.onAdd(widget.searchName, _selectedUnit!, qStr, 0.0);
+                  setState(() {
+                    _selectedUnit = null;
+                    _qtyController.clear();
+                  });
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFE11D48),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
