@@ -595,6 +595,7 @@ class AuthService {
     required String message,
     String senderType = 'customer',
     String? customOrderId,
+    double? orderAmount,
   }) async {
     try {
       String? orderTag = customOrderId;
@@ -602,13 +603,30 @@ class AuthService {
         orderTag = await getNextGlobalOrderId(sellerUsername, customerMobile: customerMobile);
       }
 
-      final res = await VpsApiService.post('send-message', {
+      double amt = orderAmount ?? 0.0;
+      if (amt <= 0 && senderType == 'customer') {
+        final matches = RegExp(r'₹\s*([\d\.]+)').allMatches(message);
+        for (var m in matches) {
+          final parsed = double.tryParse(m.group(1) ?? '');
+          if (parsed != null && parsed > 0) {
+            amt += parsed;
+          }
+        }
+      }
+
+      final payload = <String, dynamic>{
         'seller_username': sellerUsername.trim(),
         'customer_mobile': customerMobile.trim(),
         'message': message.trim(),
         'sender_type': senderType,
         'order_id': orderTag ?? '',
-      });
+      };
+      if (amt > 0) {
+        payload['order_amount'] = amt;
+        payload['amount'] = amt;
+      }
+
+      final res = await VpsApiService.post('send-message', payload);
       if (res != null && res['success'] == true) {
         return true;
       }

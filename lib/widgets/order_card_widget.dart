@@ -146,6 +146,24 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
     if (rawAmt != null && rawAmt.toString().isNotEmpty && rawAmt.toString() != 'null') {
       orderAmt = double.tryParse(rawAmt.toString());
     }
+
+    if (orderAmt == null || orderAmt <= 0) {
+      double totalFromItems = 0.0;
+      for (var item in items) {
+        final text = (item['text'] ?? '').toString();
+        final match = RegExp(r'₹\s*([\d\.]+)').firstMatch(text);
+        if (match != null) {
+          final amt = double.tryParse(match.group(1) ?? '');
+          if (amt != null && amt > 0) {
+            totalFromItems += amt;
+          }
+        }
+      }
+      if (totalFromItems > 0) {
+        orderAmt = totalFromItems;
+      }
+    }
+
     String? amountDisplay;
     if (orderAmt != null && orderAmt > 0) {
       amountDisplay = (orderAmt % 1 == 0) ? orderAmt.toInt().toString() : orderAmt.toStringAsFixed(2);

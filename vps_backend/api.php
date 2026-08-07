@@ -223,6 +223,7 @@ if ($action == 'customer-login') {
     $customer_mobile = isset($input['customer_mobile']) ? trim($input['customer_mobile']) : '';
     $message = isset($input['message']) ? trim($input['message']) : '';
     $sender_type = isset($input['sender_type']) ? trim($input['sender_type']) : 'customer';
+    $order_amount = isset($input['order_amount']) ? (float)$input['order_amount'] : (isset($input['amount']) ? (float)$input['amount'] : null);
 
     if (empty($seller_username) || empty($customer_mobile) || empty($message)) {
         echo json_encode(["success" => false, "message" => "Required fields missing"]);
@@ -239,6 +240,18 @@ if ($action == 'customer-login') {
     }
     $items_json = json_encode($items);
 
+    if ($order_amount === null || $order_amount <= 0) {
+        $calcAmt = 0.0;
+        foreach ($items as $it) {
+            if (preg_match('/₹\s*([\d\.]+)/u', $it['text'], $m)) {
+                $calcAmt += (float)$m[1];
+            }
+        }
+        if ($calcAmt > 0) {
+            $order_amount = $calcAmt;
+        }
+    }
+
     $digits = preg_replace('/[^0-9]/', '', $customer_mobile);
     $last10 = (strlen($digits) >= 10) ? substr($digits, -10) : $digits;
     $escapedSeller = $conn->real_escape_string($seller_username);
@@ -253,17 +266,33 @@ if ($action == 'customer-login') {
     $order_status = "Status";
     $logs_json = json_encode(array());
 
-    $colCheck = $conn->query("SHOW COLUMNS FROM messages LIKE 'logs_json'");
-    if (!$colCheck || $colCheck->num_rows == 0) {
+    $colCheckLogs = $conn->query("SHOW COLUMNS FROM messages LIKE 'logs_json'");
+    if (!$colCheckLogs || $colCheckLogs->num_rows == 0) {
         @$conn->query("ALTER TABLE messages ADD COLUMN logs_json TEXT DEFAULT NULL");
     }
 
-    $stmt = $conn->prepare("INSERT INTO messages (seller_username, customer_mobile, message, items_json, order_id, order_status, logs_json, sender_type, is_read, payment_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'unpaid')");
-    if ($stmt) {
-        $stmt->bind_param("ssssssss", $seller_username, $customer_mobile, $message, $items_json, $order_id, $order_status, $logs_json, $sender_type);
-        if ($stmt->execute()) {
-            echo json_encode(["success" => true, "message" => "Message sent"]);
-            exit();
+    $colCheckAmt = $conn->query("SHOW COLUMNS FROM messages LIKE 'order_amount'");
+    if (!$colCheckAmt || $colCheckAmt->num_rows == 0) {
+        @$conn->query("ALTER TABLE messages ADD COLUMN order_amount DECIMAL(10,2) DEFAULT NULL");
+    }
+
+    if ($order_amount !== null && $order_amount > 0) {
+        $stmt = $conn->prepare("INSERT INTO messages (seller_username, customer_mobile, message, items_json, order_id, order_status, logs_json, sender_type, is_read, payment_status, order_amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'unpaid', ?)");
+        if ($stmt) {
+            $stmt->bind_param("ssssssssd", $seller_username, $customer_mobile, $message, $items_json, $order_id, $order_status, $logs_json, $sender_type, $order_amount);
+            if ($stmt->execute()) {
+                echo json_encode(["success" => true, "message" => "Message sent"]);
+                exit();
+            }
+        }
+    } else {
+        $stmt = $conn->prepare("INSERT INTO messages (seller_username, customer_mobile, message, items_json, order_id, order_status, logs_json, sender_type, is_read, payment_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'unpaid')");
+        if ($stmt) {
+            $stmt->bind_param("ssssssss", $seller_username, $customer_mobile, $message, $items_json, $order_id, $order_status, $logs_json, $sender_type);
+            if ($stmt->execute()) {
+                echo json_encode(["success" => true, "message" => "Message sent"]);
+                exit();
+            }
         }
     }
 
