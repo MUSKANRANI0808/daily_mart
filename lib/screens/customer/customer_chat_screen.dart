@@ -751,12 +751,13 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
     }
   }
 
-  void _addItemToOrderText(String name, String unit, double rate) {
+  void _addItemToOrderText(String name, String unit, int qty, double rate) {
     final existingText = _msgController.text.trim();
     final lines = existingText.isEmpty ? <String>[] : existingText.split('\n').where((l) => l.trim().isNotEmpty).toList();
     final lineNum = lines.length + 1;
     final rateStr = rate > 0 ? ' - ₹${rate.toStringAsFixed(rate.truncateToDouble() == rate ? 0 : 2)}' : '';
-    final newItemStr = '$lineNum. $name ($unit)$rateStr';
+    final qtyStr = qty > 1 ? '$unit (x$qty)' : unit;
+    final newItemStr = '$lineNum. $name ($qtyStr)$rateStr';
 
     setState(() {
       if (existingText.isEmpty) {
@@ -897,6 +898,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                             final pName = item['name'] ?? '';
                             final pDesc = item['description'] ?? '';
                             final pUnit = item['unit'] ?? 'Pcs';
+                            final pQty = (item['qty'] ?? 1) is num ? (item['qty'] as num).toInt() : 1;
                             final pRate = (item['rate'] ?? 0.0) is num ? (item['rate'] as num).toDouble() : 0.0;
                             final rateStr = pRate > 0 ? '₹${pRate.toStringAsFixed(pRate.truncateToDouble() == pRate ? 0 : 2)}' : '';
 
@@ -924,7 +926,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
-                                        pUnit,
+                                        pQty > 1 ? '$pUnit (x$pQty)' : pUnit,
                                         style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF6D28D9)),
                                       ),
                                     ),
@@ -941,7 +943,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                                 ),
                                 trailing: ElevatedButton.icon(
                                   onPressed: () {
-                                    _addItemToOrderText(pName, pUnit, pRate);
+                                    _addItemToOrderText(pName, pUnit, pQty, pRate);
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                         content: Text('Added "$pName" to order list 🛒'),

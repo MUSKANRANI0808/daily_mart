@@ -4,6 +4,7 @@ class ProductModel {
   final String name;
   final String description;
   final String unit;
+  final int qty;
   final double rate;
 
   ProductModel({
@@ -12,6 +13,7 @@ class ProductModel {
     required this.name,
     this.description = '',
     this.unit = 'Pcs',
+    this.qty = 1,
     required this.rate,
   });
 
@@ -22,6 +24,7 @@ class ProductModel {
       name: json['name'] ?? '',
       description: json['description'] ?? '',
       unit: json['unit'] ?? 'Pcs',
+      qty: (json['qty'] != null) ? (int.tryParse(json['qty'].toString()) ?? 1) : 1,
       rate: (json['rate'] != null) ? (double.tryParse(json['rate'].toString()) ?? 0.0) : 0.0,
     );
   }
@@ -33,6 +36,7 @@ class ProductModel {
       'name': name,
       'description': description,
       'unit': unit,
+      'qty': qty,
       'rate': rate,
     };
   }

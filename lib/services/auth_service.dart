@@ -3397,6 +3397,7 @@ class AuthService {
     required String name,
     String description = '',
     String unit = 'Pcs',
+    int qty = 1,
     required double rate,
   }) async {
     final cleanSeller = sellerUsername.trim();
@@ -3412,6 +3413,7 @@ class AuthService {
         'name': cleanName,
         'description': description.trim(),
         'unit': unit.trim(),
+        'qty': qty,
         'rate': rate,
       });
 
@@ -3426,6 +3428,7 @@ class AuthService {
       'name': cleanName,
       'description': description.trim(),
       'unit': unit.trim(),
+      'qty': qty,
       'rate': rate,
     };
 
@@ -3452,6 +3455,7 @@ class AuthService {
     required String name,
     String description = '',
     String unit = 'Pcs',
+    int qty = 1,
     required double rate,
   }) async {
     final cleanSeller = sellerUsername.trim();
@@ -3466,6 +3470,7 @@ class AuthService {
         'name': cleanName,
         'description': description.trim(),
         'unit': unit.trim(),
+        'qty': qty,
         'rate': rate,
       });
     } catch (_) {}
@@ -3483,6 +3488,7 @@ class AuthService {
             p['name'] = cleanName;
             p['description'] = description.trim();
             p['unit'] = unit.trim();
+            p['qty'] = qty;
             p['rate'] = rate;
           }
         }
@@ -3516,6 +3522,165 @@ class AuthService {
         final products = list.map((e) => Map<String, dynamic>.from(e)).toList();
         products.removeWhere((p) => (p['id'] as num?)?.toInt() == id);
         await prefs.setString(cacheKey, jsonEncode(products));
+      }
+    } catch (_) {}
+
+    return true;
+  }
+
+  // ==========================================
+  // SELLER CUSTOM UNITS CRUD API & LOCAL CACHE
+  // ==========================================
+
+  static const List<String> defaultUnits = [
+    '1 Kg',
+    '500 Gram',
+    '250 Gram',
+    '100 Gram',
+    '50 Gram',
+    '1 L (Liter)',
+    '500 Ml',
+    '1 Pcs',
+    '1 Pack',
+    '1 Bottle',
+    '1 Box',
+    '1 Dozen',
+  ];
+
+  /// Get Custom Units created by Seller (VPS Database with local cache fallback)
+  static Future<List<Map<String, dynamic>>> getSellerUnits(String sellerUsername) async {
+    final cleanSeller = sellerUsername.trim();
+    if (cleanSeller.isEmpty) return defaultUnits.map((u) => {'id': 0, 'unit_name': u}).toList();
+
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_units_$cleanSeller';
+
+    // 1. VPS API
+    try {
+      final res = await VpsApiService.get('get-seller-units&seller_username=$cleanSeller');
+      if (res != null && res['success'] == true && res['units'] is List) {
+        final List<dynamic> rawList = res['units'];
+        final List<Map<String, dynamic>> units = rawList.map((e) => Map<String, dynamic>.from(e)).toList();
+        if (units.isNotEmpty) {
+          await prefs.setString(cacheKey, jsonEncode(units));
+          return units;
+        }
+      }
+    } catch (_) {}
+
+    // 2. Local Fallback Cache
+    try {
+      final str = prefs.getString(cacheKey);
+      if (str != null && str.isNotEmpty) {
+        final List<dynamic> list = jsonDecode(str);
+        final units = list.map((e) => Map<String, dynamic>.from(e)).toList();
+        if (units.isNotEmpty) return units;
+      }
+    } catch (_) {}
+
+    // Default Fallback Initial Units
+    final initialUnits = defaultUnits.map((u) => {'id': 0, 'unit_name': u}).toList();
+    return initialUnits;
+  }
+
+  /// Add Custom Unit for Seller
+  static Future<bool> addSellerUnit(String sellerUsername, String unitName) async {
+    final cleanSeller = sellerUsername.trim();
+    final cleanUnit = unitName.trim();
+    if (cleanSeller.isEmpty || cleanUnit.isEmpty) return false;
+
+    Map<String, dynamic>? newUnit;
+
+    // 1. VPS API
+    try {
+      final res = await VpsApiService.post('add-seller-unit', {
+        'seller_username': cleanSeller,
+        'unit_name': cleanUnit,
+      });
+      if (res != null && res['success'] == true && res['unit'] != null) {
+        newUnit = Map<String, dynamic>.from(res['unit']);
+      }
+    } catch (_) {}
+
+    newUnit ??= {
+      'id': DateTime.now().millisecondsSinceEpoch,
+      'seller_username': cleanSeller,
+      'unit_name': cleanUnit,
+    };
+
+    // 2. Local Cache Update
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_units_$cleanSeller';
+    List<Map<String, dynamic>> units = [];
+    try {
+      final str = prefs.getString(cacheKey);
+      if (str != null && str.isNotEmpty) {
+        units = (jsonDecode(str) as List).map((e) => Map<String, dynamic>.from(e)).toList();
+      } else {
+        units = defaultUnits.map((u) => {'id': 0, 'unit_name': u}).toList();
+      }
+    } catch (_) {}
+
+    units.add(newUnit);
+    await prefs.setString(cacheKey, jsonEncode(units));
+    return true;
+  }
+
+  /// Update Custom Unit
+  static Future<bool> updateSellerUnit(int id, String sellerUsername, String unitName) async {
+    final cleanSeller = sellerUsername.trim();
+    final cleanUnit = unitName.trim();
+    if (cleanUnit.isEmpty) return false;
+
+    try {
+      if (id > 0) {
+        await VpsApiService.post('update-seller-unit', {
+          'id': id,
+          'unit_name': cleanUnit,
+        });
+      }
+    } catch (_) {}
+
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_units_$cleanSeller';
+    try {
+      final str = prefs.getString(cacheKey);
+      if (str != null && str.isNotEmpty) {
+        final List<dynamic> list = jsonDecode(str);
+        final units = list.map((e) => Map<String, dynamic>.from(e)).toList();
+        for (var u in units) {
+          if ((u['id'] as num?)?.toInt() == id) {
+            u['unit_name'] = cleanUnit;
+          }
+        }
+        await prefs.setString(cacheKey, jsonEncode(units));
+      }
+    } catch (_) {}
+
+    return true;
+  }
+
+  /// Delete Custom Unit
+  static Future<bool> deleteSellerUnit(int id, String sellerUsername, String unitName) async {
+    final cleanSeller = sellerUsername.trim();
+
+    try {
+      if (id > 0) {
+        await VpsApiService.post('delete-seller-unit', {
+          'id': id,
+        });
+      }
+    } catch (_) {}
+
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_units_$cleanSeller';
+    try {
+      final str = prefs.getString(cacheKey);
+      if (str != null && str.isNotEmpty) {
+        final List<dynamic> list = jsonDecode(str);
+        final units = list.map((e) => Map<String, dynamic>.from(e)).toList();
+        units.removeWhere((u) => (u['id'] as num?)?.toInt() == id || u['unit_name'] == unitName);
+        await prefs.setString(cacheKey, jsonEncode(units));
       }
     } catch (_) {}
 

@@ -18,36 +18,28 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _allProducts = [];
   List<Map<String, dynamic>> _filteredProducts = [];
+  List<Map<String, dynamic>> _sellerUnits = [];
   String _searchQuery = '';
-
-  final List<String> _unitOptions = [
-    'Kg',
-    'Gram',
-    'L (Liter)',
-    'Ml',
-    'Pcs',
-    'Pack',
-    'Bottle',
-    'Box',
-    'Dozen'
-  ];
 
   @override
   void initState() {
     super.initState();
-    _loadProducts();
+    _loadData();
   }
 
-  Future<void> _loadProducts() async {
+  Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
     });
 
-    final products = await AuthService.getSellerProducts(widget.seller.username ?? '');
+    final username = widget.seller.username ?? '';
+    final products = await AuthService.getSellerProducts(username);
+    final units = await AuthService.getSellerUnits(username);
 
     if (mounted) {
       setState(() {
         _allProducts = products;
+        _sellerUnits = units;
         _isLoading = false;
       });
       _applyFilter();
@@ -72,14 +64,270 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     }
   }
 
+  /// Open Manage Custom Units Dialog
+  void _showManageUnitsDialog() {
+    final unitController = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final username = widget.seller.username ?? '';
+
+          return Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              left: 20,
+              right: 20,
+              top: 16,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Handle Bar
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Header Title
+                  Row(
+                    children: [
+                      const CircleAvatar(
+                        radius: 18,
+                        backgroundColor: Color(0xFFEDE9FE),
+                        child: Icon(Icons.straighten_rounded, color: Color(0xFF8B5CF6), size: 20),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Manage Store Units 🏷️',
+                              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Create, edit or delete custom measurement units',
+                              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B), size: 22),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 20),
+
+                  // Add New Unit Row
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: unitController,
+                          decoration: InputDecoration(
+                            hintText: 'e.g. 100 Gram, 250g, 1 Kg, 1 L, 1 Pcs',
+                            hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 2),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () async {
+                          final uName = unitController.text.trim();
+                          if (uName.isEmpty) return;
+
+                          unitController.clear();
+                          await AuthService.addSellerUnit(username, uName);
+                          final updatedUnits = await AuthService.getSellerUnits(username);
+
+                          setModalState(() {
+                            _sellerUnits = updatedUnits;
+                          });
+                          setState(() {
+                            _sellerUnits = updatedUnits;
+                          });
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF8B5CF6),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
+                        ),
+                        child: const Text('Add Unit', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Custom Units List
+                  const Text('Your Store Units List:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                  const SizedBox(height: 8),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.35),
+                    child: _sellerUnits.isEmpty
+                        ? const Padding(
+                            padding: EdgeInsets.all(16.0),
+                            child: Text('No custom units added yet.', style: TextStyle(color: Colors.grey)),
+                          )
+                        : ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: _sellerUnits.length,
+                            itemBuilder: (context, idx) {
+                              final uMap = _sellerUnits[idx];
+                              final uId = (uMap['id'] as num?)?.toInt() ?? 0;
+                              final uName = (uMap['unit_name'] ?? '').toString();
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 6),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: ListTile(
+                                  dense: true,
+                                  title: Text(uName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Color(0xFF0F172A))),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.edit_rounded, color: Color(0xFF3B82F6), size: 18),
+                                        onPressed: () {
+                                          _showEditUnitPrompt(ctx, uId, uName, setModalState);
+                                        },
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 18),
+                                        onPressed: () async {
+                                          await AuthService.deleteSellerUnit(uId, username, uName);
+                                          final updatedUnits = await AuthService.getSellerUnits(username);
+                                          setModalState(() {
+                                            _sellerUnits = updatedUnits;
+                                          });
+                                          setState(() {
+                                            _sellerUnits = updatedUnits;
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0F172A),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Done', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showEditUnitPrompt(BuildContext parentCtx, int unitId, String currentName, StateSetter parentSetModalState) {
+    final editController = TextEditingController(text: currentName);
+    showDialog(
+      context: parentCtx,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Edit Unit Name', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        content: TextField(
+          controller: editController,
+          decoration: InputDecoration(
+            isDense: true,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B5CF6)),
+            onPressed: () async {
+              final newName = editController.text.trim();
+              if (newName.isNotEmpty) {
+                final username = widget.seller.username ?? '';
+                Navigator.pop(ctx);
+                await AuthService.updateSellerUnit(unitId, username, newName);
+                final updatedUnits = await AuthService.getSellerUnits(username);
+                parentSetModalState(() {
+                  _sellerUnits = updatedUnits;
+                });
+                setState(() {
+                  _sellerUnits = updatedUnits;
+                });
+              }
+            },
+            child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showAddEditProductDialog({Map<String, dynamic>? productToEdit}) {
     final isEditing = productToEdit != null;
     final nameController = TextEditingController(text: isEditing ? (productToEdit['name'] ?? '') : '');
     final descController = TextEditingController(text: isEditing ? (productToEdit['description'] ?? '') : '');
+    final qtyController = TextEditingController(
+      text: isEditing ? ((productToEdit['qty'] ?? 1).toString()) : '1',
+    );
     final rateController = TextEditingController(
       text: isEditing ? ((productToEdit['rate'] ?? 0.0).toString()) : '',
     );
-    String selectedUnit = isEditing ? (productToEdit['unit'] ?? 'Pcs') : 'Kg';
+
+    final availableUnitNames = _sellerUnits.map((u) => (u['unit_name'] ?? '').toString()).where((s) => s.isNotEmpty).toList();
+    if (availableUnitNames.isEmpty) {
+      availableUnitNames.addAll(AuthService.defaultUnits);
+    }
+
+    String selectedUnit = isEditing
+        ? (productToEdit['unit'] ?? availableUnitNames.first)
+        : (availableUnitNames.isNotEmpty ? availableUnitNames.first : '1 Kg');
+
+    if (!availableUnitNames.contains(selectedUnit)) {
+      availableUnitNames.insert(0, selectedUnit);
+    }
 
     showModalBottomSheet(
       context: context,
@@ -143,7 +391,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                             ),
                             const SizedBox(height: 2),
                             const Text(
-                              'Save product item details to your store catalog',
+                              'Save product details to your store catalog',
                               style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                             ),
                           ],
@@ -163,7 +411,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                   TextField(
                     controller: nameController,
                     decoration: InputDecoration(
-                      hintText: 'e.g. Mustard Oil (सरसों तेल), Sugar, Jeera',
+                      hintText: 'e.g. Chana, Mustard Oil, Sugar, Jeera',
                       isDense: true,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -181,7 +429,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                   TextField(
                     controller: descController,
                     decoration: InputDecoration(
-                      hintText: 'e.g. Fortune Kachi Ghani 1L Bottle, Best Quality',
+                      hintText: 'e.g. Desi Chana, Best Quality',
                       isDense: true,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -193,13 +441,31 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // Unit Selection Chips
-                  const Text('Unit / Measurement *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                  // Unit Selection Header + Shortcut "+ Add Unit" Button
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Unit / Measurement *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                      InkWell(
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _showManageUnitsDialog();
+                        },
+                        child: const Row(
+                          children: [
+                            Icon(Icons.add_circle_outline_rounded, color: Color(0xFF8B5CF6), size: 16),
+                            SizedBox(width: 4),
+                            Text('+ Manage Units', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF8B5CF6))),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
                     runSpacing: 6,
-                    children: _unitOptions.map((u) {
+                    children: availableUnitNames.map((u) {
                       final isSel = selectedUnit == u;
                       return ChoiceChip(
                         label: Text(u),
@@ -219,32 +485,70 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // Rate / Price Input
-                  const Text('Rate / Price (₹) *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: rateController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(
-                      prefixText: '₹ ',
-                      prefixStyle: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF059669), fontSize: 16),
-                      hintText: '0.00',
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 2),
+                  // Quantity & Price Row
+                  Row(
+                    children: [
+                      // Qty Input
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Quantity (Qty) *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: qtyController,
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                hintText: '1',
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 2),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 12),
+                      // Rate Input
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Rate / Price (₹) *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: rateController,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              decoration: InputDecoration(
+                                prefixText: '₹ ',
+                                prefixStyle: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF059669), fontSize: 15),
+                                hintText: '0.00',
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 2),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 20),
 
-                  // Save Product Button
+                  // Save Button
                   ElevatedButton(
                     onPressed: () async {
                       final pName = nameController.text.trim();
                       final pDesc = descController.text.trim();
+                      final pQty = int.tryParse(qtyController.text.trim()) ?? 1;
                       final pRateStr = rateController.text.trim();
                       final pRate = double.tryParse(pRateStr) ?? 0.0;
 
@@ -258,27 +562,30 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                       Navigator.pop(ctx);
                       setState(() => _isLoading = true);
 
+                      final username = widget.seller.username ?? '';
                       if (isEditing) {
                         final pId = (productToEdit['id'] as num?)?.toInt() ?? 0;
                         await AuthService.updateSellerProduct(
                           id: pId,
-                          sellerUsername: widget.seller.username ?? '',
+                          sellerUsername: username,
                           name: pName,
                           description: pDesc,
                           unit: selectedUnit,
+                          qty: pQty,
                           rate: pRate,
                         );
                       } else {
                         await AuthService.addSellerProduct(
-                          sellerUsername: widget.seller.username ?? '',
+                          sellerUsername: username,
                           name: pName,
                           description: pDesc,
                           unit: selectedUnit,
+                          qty: pQty,
                           rate: pRate,
                         );
                       }
 
-                      await _loadProducts();
+                      await _loadData();
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF8B5CF6),
@@ -338,7 +645,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
               Navigator.pop(ctx);
               setState(() => _isLoading = true);
               await AuthService.deleteSellerProduct(pId, widget.seller.username ?? '');
-              await _loadProducts();
+              await _loadData();
             },
             child: const Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
@@ -360,15 +667,20 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
         elevation: 0,
         actions: [
           IconButton(
+            icon: const Icon(Icons.straighten_rounded, color: Colors.white),
+            tooltip: 'Manage Units',
+            onPressed: _showManageUnitsDialog,
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Colors.white),
             tooltip: 'Refresh Products',
-            onPressed: _loadProducts,
+            onPressed: _loadData,
           ),
         ],
       ),
       body: Column(
         children: [
-          // Top Search & Quick Add Header Box
+          // Top Search & Unit Manager Header Box
           Container(
             padding: const EdgeInsets.all(16),
             decoration: const BoxDecoration(
@@ -400,7 +712,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     ElevatedButton.icon(
                       onPressed: () => _showAddEditProductDialog(),
                       icon: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
@@ -410,6 +722,23 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         elevation: 0,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text(
+                      '${_filteredProducts.length} Products | ${_sellerUnits.length} Units',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+                    ),
+                    const Spacer(),
+                    InkWell(
+                      onTap: _showManageUnitsDialog,
+                      child: const Text(
+                        '🏷️ Manage Units',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF8B5CF6)),
                       ),
                     ),
                   ],
@@ -470,6 +799,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           final name = p['name'] ?? '';
                           final desc = p['description'] ?? '';
                           final unit = p['unit'] ?? 'Pcs';
+                          final qty = (p['qty'] ?? 1) is num ? (p['qty'] as num).toInt() : 1;
                           final rate = (p['rate'] ?? 0.0) is num ? (p['rate'] as num).toDouble() : 0.0;
 
                           return Container(
@@ -526,7 +856,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                                                 borderRadius: BorderRadius.circular(6),
                                               ),
                                               child: Text(
-                                                unit,
+                                                qty > 1 ? '$unit (x$qty)' : unit,
                                                 style: const TextStyle(
                                                   fontSize: 11,
                                                   fontWeight: FontWeight.bold,

@@ -55,7 +55,22 @@ if (!$colCheckBill || $colCheckBill->num_rows == 0) {
     name VARCHAR(255) NOT NULL,
     description TEXT DEFAULT NULL,
     unit VARCHAR(50) NOT NULL DEFAULT 'Pcs',
+    qty INT NOT NULL DEFAULT 1,
     rate DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX(seller_username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+$colCheckQty = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'qty'");
+if (!$colCheckQty || $colCheckQty->num_rows == 0) {
+    @$conn->query("ALTER TABLE seller_products ADD COLUMN qty INT NOT NULL DEFAULT 1");
+}
+
+// 4. Auto-check & create seller_units table if missing
+@$conn->query("CREATE TABLE IF NOT EXISTS seller_units (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    seller_username VARCHAR(100) NOT NULL,
+    unit_name VARCHAR(100) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX(seller_username)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
@@ -542,6 +557,8 @@ if ($action == 'customer-login') {
     $name = isset($input['name']) ? trim($input['name']) : '';
     $description = isset($input['description']) ? trim($input['description']) : '';
     $unit = isset($input['unit']) ? trim($input['unit']) : 'Pcs';
+    $qty = isset($input['qty']) ? (int)$input['qty'] : 1;
+    if ($qty <= 0) $qty = 1;
     $rate = isset($input['rate']) ? (float)$input['rate'] : 0.0;
 
     if (empty($seller_username) || empty($name)) {
@@ -549,9 +566,9 @@ if ($action == 'customer-login') {
         exit();
     }
 
-    $stmt = $conn->prepare("INSERT INTO seller_products (seller_username, name, description, unit, rate) VALUES (?, ?, ?, ?, ?)");
+    $stmt = $conn->prepare("INSERT INTO seller_products (seller_username, name, description, unit, qty, rate) VALUES (?, ?, ?, ?, ?, ?)");
     if ($stmt) {
-        $stmt->bind_param("ssssd", $seller_username, $name, $description, $unit, $rate);
+        $stmt->bind_param("ssssid", $seller_username, $name, $description, $unit, $qty, $rate);
         if ($stmt->execute()) {
             $newId = $stmt->insert_id;
             echo json_encode([
@@ -563,6 +580,7 @@ if ($action == 'customer-login') {
                     "name" => $name,
                     "description" => $description,
                     "unit" => $unit,
+                    "qty" => $qty,
                     "rate" => $rate
                 ]
             ]);
@@ -584,6 +602,7 @@ if ($action == 'customer-login') {
     if ($res && $res !== true) {
         while ($row = $res->fetch_assoc()) {
             $row['id'] = (int)$row['id'];
+            $row['qty'] = isset($row['qty']) ? (int)$row['qty'] : 1;
             $row['rate'] = (float)$row['rate'];
             $products[] = $row;
         }
@@ -595,6 +614,8 @@ if ($action == 'customer-login') {
     $name = isset($input['name']) ? trim($input['name']) : '';
     $description = isset($input['description']) ? trim($input['description']) : '';
     $unit = isset($input['unit']) ? trim($input['unit']) : 'Pcs';
+    $qty = isset($input['qty']) ? (int)$input['qty'] : 1;
+    if ($qty <= 0) $qty = 1;
     $rate = isset($input['rate']) ? (float)$input['rate'] : 0.0;
 
     if ($id <= 0 || empty($name)) {
@@ -602,9 +623,9 @@ if ($action == 'customer-login') {
         exit();
     }
 
-    $stmt = $conn->prepare("UPDATE seller_products SET name = ?, description = ?, unit = ?, rate = ? WHERE id = ?");
+    $stmt = $conn->prepare("UPDATE seller_products SET name = ?, description = ?, unit = ?, qty = ?, rate = ? WHERE id = ?");
     if ($stmt) {
-        $stmt->bind_param("sssdi", $name, $description, $unit, $rate, $id);
+        $stmt->bind_param("sssidi", $name, $description, $unit, $qty, $rate, $id);
         if ($stmt->execute()) {
             echo json_encode(["success" => true, "message" => "Product updated successfully"]);
             exit();
@@ -622,6 +643,79 @@ if ($action == 'customer-login') {
         }
     }
     echo json_encode(["success" => true, "message" => "Product deleted"]);
+    exit();
+} elseif ($action == 'get-seller-units') {
+    $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
+    if (empty($seller_username)) {
+        echo json_encode(["success" => true, "units" => array()]);
+        exit();
+    }
+
+    $escapedSeller = $conn->real_escape_string($seller_username);
+    $res = $conn->query("SELECT * FROM seller_units WHERE seller_username = '$escapedSeller' ORDER BY id ASC");
+    $units = array();
+    if ($res && $res !== true) {
+        while ($row = $res->fetch_assoc()) {
+            $row['id'] = (int)$row['id'];
+            $units[] = $row;
+        }
+    }
+    echo json_encode(["success" => true, "units" => $units]);
+    exit();
+} elseif ($action == 'add-seller-unit') {
+    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : '';
+    $unit_name = isset($input['unit_name']) ? trim($input['unit_name']) : '';
+
+    if (empty($seller_username) || empty($unit_name)) {
+        echo json_encode(["success" => false, "message" => "Seller username and unit name required"]);
+        exit();
+    }
+
+    $stmt = $conn->prepare("INSERT INTO seller_units (seller_username, unit_name) VALUES (?, ?)");
+    if ($stmt) {
+        $stmt->bind_param("ss", $seller_username, $unit_name);
+        if ($stmt->execute()) {
+            $newId = $stmt->insert_id;
+            echo json_encode([
+                "success" => true,
+                "message" => "Unit added",
+                "unit" => [
+                    "id" => $newId,
+                    "seller_username" => $seller_username,
+                    "unit_name" => $unit_name
+                ]
+            ]);
+            exit();
+        }
+    }
+    echo json_encode(["success" => false, "message" => "Failed to add unit"]);
+    exit();
+} elseif ($action == 'update-seller-unit') {
+    $id = isset($input['id']) ? (int)$input['id'] : 0;
+    $unit_name = isset($input['unit_name']) ? trim($input['unit_name']) : '';
+
+    if ($id <= 0 || empty($unit_name)) {
+        echo json_encode(["success" => false, "message" => "Unit ID and name required"]);
+        exit();
+    }
+
+    $stmt = $conn->prepare("UPDATE seller_units SET unit_name = ? WHERE id = ?");
+    if ($stmt) {
+        $stmt->bind_param("si", $unit_name, $id);
+        $stmt->execute();
+    }
+    echo json_encode(["success" => true, "message" => "Unit updated"]);
+    exit();
+} elseif ($action == 'delete-seller-unit') {
+    $id = isset($input['id']) ? (int)$input['id'] : (isset($_GET['id']) ? (int)$_GET['id'] : 0);
+    if ($id > 0) {
+        $stmt = $conn->prepare("DELETE FROM seller_units WHERE id = ?");
+        if ($stmt) {
+            $stmt->bind_param("i", $id);
+            $stmt->execute();
+        }
+    }
+    echo json_encode(["success" => true, "message" => "Unit deleted"]);
     exit();
 } else {
     echo json_encode(["success" => true, "message" => "Daily Mart API Active"]);
