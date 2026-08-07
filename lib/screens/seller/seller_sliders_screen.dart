@@ -320,9 +320,9 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
   // ULTRA-CLEAN, PROFESSIONAL & STEPPED SLIDER CREATOR DIALOG WITH LIVE PREVIEW
   Future<void> _showAddSliderDialog({Map<String, dynamic>? existingSlider}) async {
     final isEditing = existingSlider != null;
-    final tagCtrl = TextEditingController(text: existingSlider?['tag'] ?? 'SPECIAL OFFER 🏷️');
-    final titleCtrl = TextEditingController(text: existingSlider?['title'] ?? 'Fresh Delivery Right to Your Door!');
-    final descCtrl = TextEditingController(text: existingSlider?['description'] ?? 'Fastest delivery with guaranteed premium quality items.');
+    final tagCtrl = TextEditingController(text: existingSlider?['tag'] ?? '');
+    final titleCtrl = TextEditingController(text: existingSlider?['title'] ?? '');
+    final descCtrl = TextEditingController(text: existingSlider?['description'] ?? '');
     String selectedImageData = existingSlider?['bg_image_url'] ?? 'preset_1';
     bool isPickingImage = false;
     int selectedTab = 0; // 0: Text Content, 1: Style & Colors, 2: Background Image
@@ -482,34 +482,51 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: buildTagDecoration(selectedTagShape, tagBg),
-                                    child: Text(
-                                      tagCtrl.text.isEmpty ? 'TAG PREVIEW' : tagCtrl.text,
-                                      style: TextStyle(
-                                        color: selectedTagShape.toLowerCase() == 'outline'
-                                            ? tagBg
-                                            : (tagBg.computeLuminance() > 0.5 ? Colors.black : Colors.white),
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 10.5,
+                                  if (tagCtrl.text.trim().isNotEmpty) ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: buildTagDecoration(selectedTagShape, tagBg),
+                                      child: Text(
+                                        tagCtrl.text.trim(),
+                                        style: TextStyle(
+                                          color: selectedTagShape.toLowerCase() == 'outline'
+                                              ? tagBg
+                                              : (tagBg.computeLuminance() > 0.5 ? Colors.black : Colors.white),
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 10.5,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    titleCtrl.text.isEmpty ? 'Your Banner Title' : titleCtrl.text,
-                                    style: TextStyle(color: titleCol, fontWeight: FontWeight.bold, fontSize: 15),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    descCtrl.text.isEmpty ? 'Your description text will appear here.' : descCtrl.text,
-                                    style: TextStyle(color: descCol, fontSize: 11.5),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                                    const SizedBox(height: 8),
+                                  ],
+                                  if (titleCtrl.text.trim().isNotEmpty) ...[
+                                    Text(
+                                      titleCtrl.text.trim(),
+                                      style: TextStyle(color: titleCol, fontWeight: FontWeight.bold, fontSize: 15),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 3),
+                                  ],
+                                  if (descCtrl.text.trim().isNotEmpty) ...[
+                                    Text(
+                                      descCtrl.text.trim(),
+                                      style: TextStyle(color: descCol, fontSize: 11.5),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                  if (tagCtrl.text.trim().isEmpty && titleCtrl.text.trim().isEmpty && descCtrl.text.trim().isEmpty) ...[
+                                    const Center(
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(vertical: 8),
+                                        child: Text(
+                                          '🖼️ Image / Background Card Banner Only (No Text)',
+                                          style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600, fontStyle: FontStyle.italic),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -547,7 +564,29 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('Offer Tag Text', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  margin: const EdgeInsets.only(bottom: 10),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFEFF6FF),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: const Color(0xFFBFDBFE)),
+                                  ),
+                                  child: Row(
+                                    children: const [
+                                      Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF2563EB)),
+                                      SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          'All fields are optional! You can add only Heading, only Offer Tag, only Paragraph, or only Image.',
+                                          style: TextStyle(color: Color(0xFF1D4ED8), fontSize: 11, fontWeight: FontWeight.w500),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                                const Text('Offer Tag Text (Optional)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
                                 const SizedBox(height: 4),
                                 TextField(
                                   controller: tagCtrl,
@@ -564,7 +603,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                 ),
                                 const SizedBox(height: 12),
 
-                                const Text('Heading / Title *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                                const Text('Heading / Title (Optional)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
                                 const SizedBox(height: 4),
                                 TextField(
                                   controller: titleCtrl,
@@ -581,7 +620,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                 ),
                                 const SizedBox(height: 12),
 
-                                const Text('Paragraph / Description *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                                const Text('Paragraph / Description (Optional)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
                                 const SizedBox(height: 4),
                                 TextField(
                                   controller: descCtrl,
@@ -932,9 +971,12 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                             final title = titleCtrl.text.trim();
                             final desc = descCtrl.text.trim();
 
-                            if (title.isEmpty || desc.isEmpty) {
+                            if (tag.isEmpty && title.isEmpty && desc.isEmpty && selectedImageData.isEmpty) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Please enter heading and description.')),
+                                const SnackBar(
+                                  content: Text('Kripya kam se kam ek cheez (Heading, Offer Tag, Paragraph ya Image) zaroor bharein!'),
+                                  backgroundColor: Color(0xFFEF4444),
+                                ),
                               );
                               return;
                             }
@@ -945,7 +987,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                               success = await AuthService.updateSellerSlider(
                                 sliderId: existingSlider['id'],
                                 sellerUsername: widget.seller.username ?? '',
-                                tag: tag.isEmpty ? 'SPECIAL OFFER 🏷️' : tag,
+                                tag: tag,
                                 title: title,
                                 description: desc,
                                 bgImageUrl: selectedImageData,
@@ -957,7 +999,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                             } else {
                               success = await AuthService.addSellerSlider(
                                 sellerUsername: widget.seller.username ?? '',
-                                tag: tag.isEmpty ? 'SPECIAL OFFER 🏷️' : tag,
+                                tag: tag,
                                 title: title,
                                 description: desc,
                                 bgImageUrl: selectedImageData,
@@ -1138,9 +1180,9 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                           separatorBuilder: (ctx, idx) => const SizedBox(height: 16),
                           itemBuilder: (ctx, idx) {
                             final slider = _sliders[idx];
-                            final tag = slider['tag'] ?? 'SPECIAL OFFER 🏷️';
-                            final title = slider['title'] ?? '';
-                            final desc = slider['description'] ?? '';
+                            final tag = (slider['tag'] ?? '').toString();
+                            final title = (slider['title'] ?? '').toString();
+                            final desc = (slider['description'] ?? '').toString();
                             final bg = slider['bg_image_url'] ?? 'preset_1';
                             final tagBg = hexToColor(slider['tag_bg_color'] ?? '#10B981');
                             final tagShape = slider['tag_shape'] ?? 'pill';
@@ -1157,33 +1199,39 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                          decoration: buildTagDecoration(tagShape, tagBg),
-                                          child: Text(
-                                            tag,
-                                            style: TextStyle(
-                                              color: tagShape.toLowerCase() == 'outline'
-                                                  ? tagBg
-                                                  : (tagBg.computeLuminance() > 0.5 ? Colors.black : Colors.white),
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 11,
+                                        if (tag.trim().isNotEmpty) ...[
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                            decoration: buildTagDecoration(tagShape, tagBg),
+                                            child: Text(
+                                              tag,
+                                              style: TextStyle(
+                                                color: tagShape.toLowerCase() == 'outline'
+                                                    ? tagBg
+                                                    : (tagBg.computeLuminance() > 0.5 ? Colors.black : Colors.white),
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 11,
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                        const SizedBox(height: 10),
-                                        Padding(
-                                          padding: const EdgeInsets.only(right: 76),
-                                          child: Text(
-                                            title,
-                                            style: TextStyle(color: titleCol, fontWeight: FontWeight.bold, fontSize: 16),
+                                          const SizedBox(height: 10),
+                                        ],
+                                        if (title.trim().isNotEmpty) ...[
+                                          Padding(
+                                            padding: const EdgeInsets.only(right: 76),
+                                            child: Text(
+                                              title,
+                                              style: TextStyle(color: titleCol, fontWeight: FontWeight.bold, fontSize: 16),
+                                            ),
                                           ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          desc,
-                                          style: TextStyle(color: descCol, fontSize: 12),
-                                        ),
+                                          const SizedBox(height: 4),
+                                        ],
+                                        if (desc.trim().isNotEmpty) ...[
+                                          Text(
+                                            desc,
+                                            style: TextStyle(color: descCol, fontSize: 12),
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   ),
