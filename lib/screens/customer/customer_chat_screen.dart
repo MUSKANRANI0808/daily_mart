@@ -36,6 +36,8 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
   List<Map<String, dynamic>> _sellerProducts = [];
   bool _isListMode = false;
   List<Map<String, dynamic>> _selectedOrderItems = [];
+  bool _isChatSearching = false;
+  final TextEditingController _chatSearchController = TextEditingController();
 
   late Razorpay _razorpay;
   int _activePendingMsgId = 0;
@@ -66,6 +68,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
   void dispose() {
     _msgController.dispose();
     _chatScrollController.dispose();
+    _chatSearchController.dispose();
     _razorpay.clear();
     super.dispose();
   }
@@ -1117,54 +1120,107 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
         backgroundColor: const Color(0xFF0F172A), // Dark Black-Navy Header Contrast
         elevation: 1,
         iconTheme: const IconThemeData(color: Colors.white),
-        title: Row(
-          children: [
-            const CircleAvatar(
-              backgroundColor: Color(0xFF10B981), // Emerald Green Accent
-              child: Icon(Icons.storefront_rounded, color: Colors.white, size: 20),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.sellerName,
-                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+        title: _isChatSearching
+            ? Container(
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFF334155)),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: TextField(
+                  controller: _chatSearchController,
+                  autofocus: true,
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                  onChanged: (val) => setState(() {}),
+                  decoration: const InputDecoration(
+                    hintText: 'Search order name, item, status...',
+                    hintStyle: TextStyle(color: Colors.white54, fontSize: 13),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 10),
                   ),
-                  Text(
-                    'Mobile: +91 ${widget.sellerMobile}',
-                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                ),
+              )
+            : Row(
+                children: [
+                  const CircleAvatar(
+                    backgroundColor: Color(0xFF10B981), // Emerald Green Accent
+                    child: Icon(Icons.storefront_rounded, color: Colors.white, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.sellerName,
+                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          'Mobile: +91 ${widget.sellerMobile}',
+                          style: const TextStyle(color: Colors.white70, fontSize: 11),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
+        actions: [
+          if (_isChatSearching) ...[
+            if (_chatSearchController.text.isNotEmpty)
+              IconButton(
+                icon: const Icon(Icons.clear_rounded, color: Colors.white70),
+                onPressed: () {
+                  setState(() {
+                    _chatSearchController.clear();
+                  });
+                },
+              ),
+            IconButton(
+              icon: const Icon(Icons.close_rounded, color: Colors.white),
+              onPressed: () {
+                setState(() {
+                  _isChatSearching = false;
+                  _chatSearchController.clear();
+                });
+              },
+            ),
+          ] else ...[
+            IconButton(
+              icon: const Icon(Icons.phone_in_talk_rounded, color: Color(0xFF10B981)),
+              tooltip: 'Call Seller',
+              onPressed: () async {
+                final mobile = widget.sellerMobile.trim();
+                if (mobile.isNotEmpty) {
+                  final Uri telUri = Uri(scheme: 'tel', path: mobile);
+                  try {
+                    if (await canLaunchUrl(telUri)) {
+                      await launchUrl(telUri, mode: LaunchMode.externalApplication);
+                    } else {
+                      await launchUrl(telUri);
+                    }
+                  } catch (e) {
+                    debugPrint('Error launching call dialer: $e');
+                  }
+                }
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.search_rounded, color: Colors.white),
+              tooltip: 'Search Orders',
+              onPressed: () {
+                setState(() {
+                  _isChatSearching = true;
+                });
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+              onPressed: _loadMessages,
             ),
           ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.phone_in_talk_rounded, color: Color(0xFF10B981)),
-            tooltip: 'Call Seller',
-            onPressed: () async {
-              final mobile = widget.sellerMobile.trim();
-              if (mobile.isNotEmpty) {
-                final Uri telUri = Uri(scheme: 'tel', path: mobile);
-                try {
-                  if (await canLaunchUrl(telUri)) {
-                    await launchUrl(telUri, mode: LaunchMode.externalApplication);
-                  } else {
-                    await launchUrl(telUri);
-                  }
-                } catch (e) {
-                  debugPrint('Error launching call dialer: $e');
-                }
-              }
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-            onPressed: _loadMessages,
-          ),
         ],
       ),
       body: Container(
@@ -1189,29 +1245,71 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                           style: TextStyle(color: Colors.black45, fontSize: 14),
                         ),
                       )
-                    : ListView.builder(
-                        reverse: true,
-                        padding: const EdgeInsets.all(14),
-                        itemCount: _messages.length,
-                        itemBuilder: (ctx, idx) {
-                          final reversedMsgs = _messages.reversed.toList();
-                          final msg = reversedMsgs[idx];
-                          final senderType = msg['sender_type'] ?? 'customer';
-                          final isCustomer = senderType == 'customer';
+                    : Builder(
+                        builder: (context) {
+                          final query = _chatSearchController.text.trim();
+                          final lowerQuery = query.toLowerCase();
 
-                          return Align(
-                            alignment: isCustomer ? Alignment.centerRight : Alignment.centerLeft,
-                            child: Container(
-                              constraints: BoxConstraints(
-                                maxWidth: MediaQuery.of(context).size.width * 0.84,
+                          final filteredMessages = _messages.where((msg) {
+                            if (lowerQuery.isEmpty) return true;
+                            final text = (msg['message'] ?? '').toString().toLowerCase();
+                            final orderId = (msg['order_id'] ?? msg['_calculated_order_id'] ?? '').toString().toLowerCase();
+                            final status = (msg['order_status'] ?? '').toString().toLowerCase();
+                            final itemsJson = (msg['items_json'] ?? '').toString().toLowerCase();
+                            final amount = (msg['order_amount'] ?? msg['amount'] ?? '').toString().toLowerCase();
+
+                            return text.contains(lowerQuery) ||
+                                orderId.contains(lowerQuery) ||
+                                status.contains(lowerQuery) ||
+                                itemsJson.contains(lowerQuery) ||
+                                amount.contains(lowerQuery);
+                          }).toList();
+
+                          if (filteredMessages.isEmpty) {
+                            return Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24.0),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.search_off_rounded, color: Colors.black38, size: 44),
+                                    const SizedBox(height: 10),
+                                    Text(
+                                      'No orders matching "$query"',
+                                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              child: OrderCardWidget(
-                                messageData: msg,
-                                isSeller: false,
-                                onDeleteTap: isCustomer ? () => _confirmDeleteMessage(msg) : null,
-                                onPayNowTap: () => _showUpiPaymentQrSheet(msg),
-                              ),
-                            ),
+                            );
+                          }
+
+                          return ListView.builder(
+                            reverse: true,
+                            padding: const EdgeInsets.all(14),
+                            itemCount: filteredMessages.length,
+                            itemBuilder: (ctx, idx) {
+                              final reversedMsgs = filteredMessages.reversed.toList();
+                              final msg = reversedMsgs[idx];
+                              final senderType = msg['sender_type'] ?? 'customer';
+                              final isCustomer = senderType == 'customer';
+
+                              return Align(
+                                alignment: isCustomer ? Alignment.centerRight : Alignment.centerLeft,
+                                child: Container(
+                                  constraints: BoxConstraints(
+                                    maxWidth: MediaQuery.of(context).size.width * 0.84,
+                                  ),
+                                  child: OrderCardWidget(
+                                    messageData: msg,
+                                    isSeller: false,
+                                    searchQuery: query,
+                                    onDeleteTap: isCustomer ? () => _confirmDeleteMessage(msg) : null,
+                                    onPayNowTap: () => _showUpiPaymentQrSheet(msg),
+                                  ),
+                                ),
+                              );
+                            },
                           );
                         },
                       ),
@@ -1556,17 +1654,6 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            // Quick List Picker Icon Button
-                            IconButton(
-                              icon: const Icon(Icons.playlist_add_rounded, color: Color(0xFF8B5CF6), size: 26),
-                              tooltip: 'Select from Product List',
-                              onPressed: () {
-                                setState(() {
-                                  _isListMode = true;
-                                });
-                                _showProductListPickerSheet();
-                              },
-                            ),
                             Expanded(
                               child: Container(
                                 decoration: BoxDecoration(

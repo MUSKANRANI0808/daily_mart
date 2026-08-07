@@ -7,6 +7,7 @@ import '../services/auth_service.dart';
 class OrderCardWidget extends StatefulWidget {
   final Map<String, dynamic> messageData;
   final bool isSeller; // true if seller, false if customer
+  final String? searchQuery;
   final Function(int itemIndex)? onItemTap;
   final VoidCallback? onStatusTap;
   final VoidCallback? onDeleteTap;
@@ -17,6 +18,7 @@ class OrderCardWidget extends StatefulWidget {
     super.key,
     required this.messageData,
     required this.isSeller,
+    this.searchQuery,
     this.onItemTap,
     this.onStatusTap,
     this.onDeleteTap,
@@ -100,6 +102,51 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
       } catch (_) {}
     }
     return [];
+  }
+
+  Widget _buildHighlightedText(
+    String text,
+    String? query, {
+    required TextStyle baseStyle,
+    TextStyle? highlightStyle,
+  }) {
+    final cleanQuery = (query ?? '').trim();
+    if (cleanQuery.isEmpty) {
+      return Text(text, style: baseStyle);
+    }
+
+    final lowerText = text.toLowerCase();
+    final lowerQuery = cleanQuery.toLowerCase();
+    if (!lowerText.contains(lowerQuery)) {
+      return Text(text, style: baseStyle);
+    }
+
+    final defaultHighlightStyle = highlightStyle ??
+        baseStyle.copyWith(
+          backgroundColor: const Color(0xFFFEF08A),
+          color: const Color(0xFF854D0E),
+          fontWeight: FontWeight.bold,
+        );
+
+    final spans = <TextSpan>[];
+    int start = 0;
+    while (true) {
+      final index = lowerText.indexOf(lowerQuery, start);
+      if (index < 0) {
+        spans.add(TextSpan(text: text.substring(start), style: baseStyle));
+        break;
+      }
+      if (index > start) {
+        spans.add(TextSpan(text: text.substring(start, index), style: baseStyle));
+      }
+      final match = text.substring(index, index + cleanQuery.length);
+      spans.add(TextSpan(text: match, style: defaultHighlightStyle));
+      start = index + cleanQuery.length;
+    }
+
+    return RichText(
+      text: TextSpan(children: spans),
+    );
   }
 
   @override
@@ -288,9 +335,10 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
                               ),
                               const SizedBox(width: 8),
                               Expanded(
-                                child: Text(
+                                child: _buildHighlightedText(
                                   itemText,
-                                  style: TextStyle(
+                                  widget.searchQuery,
+                                  baseStyle: TextStyle(
                                     color: Colors.black87,
                                     fontSize: 14,
                                     fontWeight: FontWeight.w500,
@@ -712,10 +760,11 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
                   children: [
                     const Icon(Icons.bookmark_rounded, size: 11.5, color: Colors.white),
                     const SizedBox(width: 3.5),
-                    Text(
+                    _buildHighlightedText(
                       displayOrderId,
-                      style: const TextStyle(
-                        color: Colors.white, // Crisp Pure White
+                      widget.searchQuery,
+                      baseStyle: const TextStyle(
+                        color: Colors.white,
                         fontWeight: FontWeight.w900,
                         fontSize: 11.5,
                         letterSpacing: 0.3,
