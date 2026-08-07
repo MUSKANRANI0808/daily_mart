@@ -1704,6 +1704,10 @@ class _CustomerProductItemTileState extends State<_CustomerProductItemTile> {
                   }
 
                   widget.onAdd(pName, _selectedUnit!, qStr, amount);
+                  setState(() {
+                    _selectedUnit = null;
+                    _qtyController.clear();
+                  });
                 },
                 icon: const Icon(Icons.add_rounded, size: 16, color: Colors.white),
                 label: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
