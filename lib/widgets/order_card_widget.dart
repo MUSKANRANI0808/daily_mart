@@ -287,110 +287,179 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
           const SizedBox(height: 10),
 
           // Row 1: Action Controls [Status] | [₹ 250] | [ 💳 Pay Now ] OR [ PAID ✅ ]
-          Row(
-            children: [
-              // Status Pill (Glassmorphic Light Green if Ready, Soft Red if Cancelled) - Disabled when PAID or Picked Up
-              InkWell(
-                onTap: (widget.isSeller && !isPaid && !isPickedUpOrBeyond) ? widget.onStatusTap : null,
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isReady
-                        ? const Color(0xFFDCFCE7)
-                        : (isCancelled ? const Color(0xFFFEF2F2) : const Color(0xFFF1F5F9)),
-                    borderRadius: BorderRadius.circular(12),
-                    border: isReady
-                        ? Border.all(color: const Color(0xFF86EFAC))
-                        : (isCancelled ? Border.all(color: const Color(0xFFFCA5A5)) : null),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (isReady) ...[
-                        const Icon(Icons.check_rounded, size: 13, color: Color(0xFF15803D)),
-                        const SizedBox(width: 4),
-                      ] else if (isCancelled) ...[
-                        const Icon(Icons.cancel_rounded, size: 13, color: Color(0xFFDC2626)),
-                        const SizedBox(width: 4),
-                      ],
-                      Text(
-                        isReady ? 'Ready' : (isCancelled ? 'Cancelled' : 'Status'),
-                        style: TextStyle(
-                          color: isReady
-                              ? const Color(0xFF15803D)
-                              : (isCancelled ? const Color(0xFFDC2626) : Colors.black87),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Rupee Amount Badge - Disabled when PAID or Picked Up
-              if (widget.isSeller || amountDisplay != null) ...[
-                const SizedBox(width: 5),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                // Status Pill (Glassmorphic Light Green if Ready, Soft Red if Cancelled) - Disabled when PAID or Picked Up
                 InkWell(
-                  onTap: (widget.isSeller && !isPaid && !isPickedUpOrBeyond) ? widget.onAmountTap : null,
+                  onTap: (widget.isSeller && !isPaid && !isPickedUpOrBeyond) ? widget.onStatusTap : null,
                   borderRadius: BorderRadius.circular(12),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: amountDisplay != null ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                      color: isReady
+                          ? const Color(0xFFDCFCE7)
+                          : (isCancelled ? const Color(0xFFFEF2F2) : const Color(0xFFF1F5F9)),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: amountDisplay != null
-                            ? const Color(0xFFF59E0B).withValues(alpha: 0.7)
-                            : const Color(0xFFCBD5E1),
-                        width: 0.9,
-                      ),
+                      border: isReady
+                          ? Border.all(color: const Color(0xFF86EFAC))
+                          : (isCancelled ? Border.all(color: const Color(0xFFFCA5A5)) : null),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if (isReady) ...[
+                          const Icon(Icons.check_rounded, size: 13, color: Color(0xFF15803D)),
+                          const SizedBox(width: 4),
+                        ] else if (isCancelled) ...[
+                          const Icon(Icons.cancel_rounded, size: 13, color: Color(0xFFDC2626)),
+                          const SizedBox(width: 4),
+                        ],
                         Text(
-                          '₹',
+                          isReady ? 'Ready' : (isCancelled ? 'Cancelled' : 'Status'),
                           style: TextStyle(
-                            color: amountDisplay != null ? const Color(0xFFFBBF24) : const Color(0xFF475569),
+                            color: isReady
+                                ? const Color(0xFF15803D)
+                                : (isCancelled ? const Color(0xFFDC2626) : Colors.black87),
                             fontWeight: FontWeight.bold,
                             fontSize: 11,
                           ),
                         ),
-                        if (amountDisplay != null) ...[
-                          const SizedBox(width: 3),
-                          Text(
-                            amountDisplay,
-                            style: const TextStyle(
-                              color: Color(0xFFFBBF24), // Glowing Amber Gold
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                   ),
                 ),
-              ],
 
-              // BILL IMAGE / (+) CAMERA BADGE RIGHT BESIDE AMOUNT:
-              if (billImage.isNotEmpty) ...[
-                const SizedBox(width: 5),
-                InkWell(
-                  onTap: () => _showBillImageDialog(billImage, isPickedUpOrBeyond),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                // Rupee Amount Badge - Disabled when PAID or Picked Up
+                if (widget.isSeller || amountDisplay != null) ...[
+                  const SizedBox(width: 5),
+                  InkWell(
+                    onTap: (widget.isSeller && !isPaid && !isPickedUpOrBeyond) ? widget.onAmountTap : null,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: amountDisplay != null ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: amountDisplay != null
+                              ? const Color(0xFFF59E0B).withValues(alpha: 0.7)
+                              : const Color(0xFFCBD5E1),
+                          width: 0.9,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '₹',
+                            style: TextStyle(
+                              color: amountDisplay != null ? const Color(0xFFFBBF24) : const Color(0xFF475569),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11,
+                            ),
+                          ),
+                          if (amountDisplay != null) ...[
+                            const SizedBox(width: 3),
+                            Text(
+                              amountDisplay,
+                              style: const TextStyle(
+                                color: Color(0xFFFBBF24), // Glowing Amber Gold
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+
+                // BILL IMAGE / (+) CAMERA BADGE RIGHT BESIDE AMOUNT:
+                if (billImage.isNotEmpty) ...[
+                  const SizedBox(width: 5),
+                  InkWell(
+                    onTap: () => _showBillImageDialog(billImage, isPickedUpOrBeyond),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF), // Light Ice Blue
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF2563EB), width: 1.1),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF2563EB).withValues(alpha: 0.15),
+                            blurRadius: 4,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.receipt_long_rounded, size: 13, color: Color(0xFF2563EB)),
+                          SizedBox(width: 3),
+                          Text(
+                            'Bill',
+                            style: TextStyle(
+                              color: Color(0xFF2563EB),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ] else if (widget.isSeller && !isPickedUpOrBeyond) ...[
+                  const SizedBox(width: 5),
+                  InkWell(
+                    onTap: _pickAndSaveBillImage,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9), // Slate Soft Grey
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF64748B), width: 0.9),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.camera_alt_rounded, size: 12, color: Color(0xFF475569)),
+                          SizedBox(width: 2),
+                          Text(
+                            '+',
+                            style: TextStyle(
+                              color: Color(0xFF0F172A),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+
+                // PAYMENT SECTION RIGHT BESIDE AMOUNT:
+                // If Paid: Show Glowing Green [ PAID ✅ ] Stamp
+                // Else if Customer & Amount Available & Not Paid: Show Interactive [ 💳 Pay Now ]
+                if (isPaid) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEFF6FF), // Light Ice Blue
+                      color: const Color(0xFFDCFCE7),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF2563EB), width: 1.1),
+                      border: Border.all(color: const Color(0xFF16A34A), width: 1.2),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF2563EB).withValues(alpha: 0.15),
+                          color: const Color(0xFF16A34A).withValues(alpha: 0.15),
                           blurRadius: 4,
                           offset: const Offset(0, 1),
                         ),
@@ -399,126 +468,60 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.receipt_long_rounded, size: 13, color: Color(0xFF2563EB)),
-                        SizedBox(width: 3),
-                        Text(
-                          'Bill',
-                          style: TextStyle(
-                            color: Color(0xFF2563EB),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ] else if (widget.isSeller && !isPickedUpOrBeyond) ...[
-                const SizedBox(width: 5),
-                InkWell(
-                  onTap: _pickAndSaveBillImage,
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9), // Slate Soft Grey
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF64748B), width: 0.9),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.camera_alt_rounded, size: 12, color: Color(0xFF475569)),
-                        SizedBox(width: 2),
-                        Text(
-                          '+',
-                          style: TextStyle(
-                            color: Color(0xFF0F172A),
-                            fontWeight: FontWeight.w900,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-
-              // PAYMENT SECTION RIGHT BESIDE AMOUNT:
-              // If Paid: Show Glowing Green [ PAID ✅ ] Stamp
-              // Else if Customer & Amount Available & Not Paid: Show Interactive [ 💳 Pay Now ]
-              if (isPaid) ...[
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFDCFCE7),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF16A34A), width: 1.2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF16A34A).withValues(alpha: 0.15),
-                        blurRadius: 4,
-                        offset: const Offset(0, 1),
-                      ),
-                    ],
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.verified_rounded, color: Color(0xFF15803D), size: 13),
-                      SizedBox(width: 4),
-                      Text(
-                        'PAID',
-                        style: TextStyle(
-                          color: Color(0xFF15803D),
-                          fontWeight: FontWeight.w900,
-                          fontSize: 11,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ] else if (!widget.isSeller && !isCancelled && amountDisplay != null && orderAmt != null && orderAmt > 0) ...[
-                const SizedBox(width: 6),
-                InkWell(
-                  onTap: widget.onPayNowTap,
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF10B981), Color(0xFF059669)],
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF10B981).withValues(alpha: 0.3),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.payment_rounded, color: Colors.white, size: 13),
+                        Icon(Icons.verified_rounded, color: Color(0xFF15803D), size: 13),
                         SizedBox(width: 4),
                         Text(
-                          'Pay Now',
+                          'PAID',
                           style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF15803D),
+                            fontWeight: FontWeight.w900,
                             fontSize: 11,
+                            letterSpacing: 0.5,
                           ),
                         ),
                       ],
                     ),
                   ),
-                ),
+                ] else if (!widget.isSeller && !isCancelled && amountDisplay != null && orderAmt != null && orderAmt > 0) ...[
+                  const SizedBox(width: 6),
+                  InkWell(
+                    onTap: widget.onPayNowTap,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF10B981), Color(0xFF059669)],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.payment_rounded, color: Colors.white, size: 13),
+                          SizedBox(width: 4),
+                          Text(
+                            'Pay Now',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
 
           // Row 2: Date Timestamp (Moved down!) + UTR Ref + Read Ticks + Delete Icon

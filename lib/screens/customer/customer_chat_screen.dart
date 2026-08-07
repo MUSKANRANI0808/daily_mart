@@ -1084,67 +1084,72 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                   children: [
                     // Mode Selector Bar: List 📋 vs Chat 💬
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: const BoxDecoration(
                         color: Color(0xFFF1F5F9),
                         border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
                       ),
-                      child: Row(
-                        children: [
-                          InkWell(
-                            onTap: _showProductListPickerSheet,
-                            borderRadius: BorderRadius.circular(20),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            InkWell(
+                              onTap: _showProductListPickerSheet,
+                              borderRadius: BorderRadius.circular(20),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF8B5CF6),
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.3),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.format_list_bulleted_add, color: Colors.white, size: 16),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      'List 📋 (Select Items)',
+                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF8B5CF6),
+                                color: Colors.white,
                                 borderRadius: BorderRadius.circular(20),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF8B5CF6).withValues(alpha: 0.3),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
+                                border: Border.all(color: const Color(0xFFCBD5E1)),
                               ),
                               child: const Row(
                                 children: [
-                                  Icon(Icons.format_list_bulleted_add, color: Colors.white, size: 16),
-                                  SizedBox(width: 6),
+                                  Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF475569), size: 14),
+                                  SizedBox(width: 4),
                                   Text(
-                                    'List 📋 (Select Items)',
-                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                    'Chat 💬',
+                                    style: TextStyle(color: Color(0xFF475569), fontWeight: FontWeight.bold, fontSize: 11.5),
                                   ),
                                 ],
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: const Color(0xFFCBD5E1)),
-                            ),
-                            child: const Row(
-                              children: [
-                                Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF475569), size: 14),
-                                SizedBox(width: 4),
-                                Text(
-                                  'Chat 💬',
-                                  style: TextStyle(color: Color(0xFF475569), fontWeight: FontWeight.bold, fontSize: 11.5),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Spacer(),
-                          if (_sellerProducts.isNotEmpty)
-                            Text(
-                              '${_sellerProducts.length} Items Available',
-                              style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
-                            ),
-                        ],
+                            if (_sellerProducts.isNotEmpty) ...[
+                              const SizedBox(width: 12),
+                              Text(
+                                '${_sellerProducts.length} Items Available',
+                                style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
                     ),
 
