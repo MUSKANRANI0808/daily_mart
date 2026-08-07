@@ -130,6 +130,27 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
 
   Future<void> _loadMessages() async {
     _checkBlockedStatus();
+
+    // 1. Instant Cache Load (0 ms perceived latency)
+    final cached = await AuthService.getCachedMessages(
+      sellerUsername: widget.sellerUsername,
+      customerMobile: widget.customer.mobile ?? '',
+    );
+    if (cached.isNotEmpty && mounted) {
+      await AuthService.annotateMessagesWithLifetimeHierarchy(
+        sellerUsername: widget.sellerUsername,
+        customerMobile: widget.customer.mobile ?? '',
+        messages: cached,
+      );
+      if (mounted) {
+        setState(() {
+          _messages = cached;
+          _isLoading = false;
+        });
+      }
+    }
+
+    // 2. Background Revalidation from VPS Server
     final msgs = await AuthService.getMessages(
       sellerUsername: widget.sellerUsername,
       customerMobile: widget.customer.mobile ?? '',

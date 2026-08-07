@@ -169,6 +169,27 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
 
   Future<void> _loadMessages() async {
     _checkBlockedStatus();
+
+    // 1. Instant Cache Load (0 ms perceived latency)
+    final cached = await AuthService.getCachedMessages(
+      sellerUsername: widget.seller.username ?? '',
+      customerMobile: widget.customerMobile,
+    );
+    if (cached.isNotEmpty && mounted) {
+      await AuthService.annotateMessagesWithLifetimeHierarchy(
+        sellerUsername: widget.seller.username ?? '',
+        customerMobile: widget.customerMobile,
+        messages: cached,
+      );
+      if (mounted) {
+        setState(() {
+          _messages = cached;
+          _isLoading = false;
+        });
+      }
+    }
+
+    // 2. Background Revalidation from VPS Server
     final msgs = await AuthService.getMessages(
       sellerUsername: widget.seller.username ?? '',
       customerMobile: widget.customerMobile,
