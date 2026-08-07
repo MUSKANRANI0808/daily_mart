@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
+import '../../utils/header_theme_helper.dart';
 import '../customer/search_seller_screen.dart';
 import '../customer/seller_orders_screen.dart';
 import '../role_selection_screen.dart';
@@ -168,11 +169,22 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   bool _isLoading = true;
   final TextEditingController _sellerSearchController = TextEditingController();
   String _searchQuery = '';
+  Map<String, dynamic> _headerThemeConfig = {};
 
   @override
   void initState() {
     super.initState();
+    _loadHeaderTheme();
     _checkSavedSellerAndLoad();
+  }
+
+  Future<void> _loadHeaderTheme() async {
+    final config = await AuthService.getHeaderThemeConfig();
+    if (mounted) {
+      setState(() {
+        _headerThemeConfig = config;
+      });
+    }
   }
 
   @override
@@ -280,18 +292,10 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
             children: [
               // User Welcome Card
               // Luxury Black & White Customer Welcome Header Card
-              Container(
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 400),
                 width: double.infinity,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [
-                      Color(0xFF0F172A), // Midnight Deep Slate Black
-                      Color(0xFF1E293B), // Charcoal Slate
-                      Color(0xFF020617), // Rich Pure Obsidian Black
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                decoration: HeaderThemeHelper.buildDecoration(_headerThemeConfig).copyWith(
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: Colors.white.withValues(alpha: 0.15), width: 1.2),
                   boxShadow: [

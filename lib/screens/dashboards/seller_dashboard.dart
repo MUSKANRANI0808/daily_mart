@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
+import '../../utils/header_theme_helper.dart';
 import '../seller/seller_chat_screen.dart';
 import '../seller/seller_sliders_screen.dart';
 import '../role_selection_screen.dart';
@@ -31,12 +32,23 @@ class _SellerDashboardState extends State<SellerDashboard> {
   final PageController _sliderPageController = PageController(viewportFraction: 0.92);
   Timer? _sliderTimer;
   List<Map<String, dynamic>> _sliders = [];
+  Map<String, dynamic> _headerThemeConfig = {};
 
   @override
   void initState() {
     super.initState();
+    _loadHeaderTheme();
     _loadConversations();
     _loadSellerSliders();
+  }
+
+  Future<void> _loadHeaderTheme() async {
+    final config = await AuthService.getHeaderThemeConfig();
+    if (mounted) {
+      setState(() {
+        _headerThemeConfig = config;
+      });
+    }
   }
 
   @override
@@ -444,24 +456,23 @@ class _SellerDashboardState extends State<SellerDashboard> {
             // Pro-Level Animated Organic Wave Header Container
             ClipPath(
               clipper: HeaderArcWaveClipper(),
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Color(0xFF0F172A), // Deep Midnight Obsidian Slate
-                      Color(0xFF1E1B4B), // Deep Corporate Royal Indigo
-                      Color(0xFF312E81), // Rich Business Sapphire Violet
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 400),
+                decoration: HeaderThemeHelper.buildDecoration(_headerThemeConfig),
                 child: Stack(
                   children: [
                     // Floating Translucent Grocery Icons Background Particles
-                    const Positioned.fill(
-                      child: GroceryFloatingBackgroundParticles(),
+                    Positioned.fill(
+                      child: GroceryFloatingBackgroundParticles(
+                        particleOpacity: (_headerThemeConfig['particle_opacity'] as num?)?.toDouble() ?? 0.9,
+                      ),
                     ),
+
+                    // Continuous Metallic Shining Glass Light Beam
+                    if (_headerThemeConfig['enable_shining'] != false)
+                      const Positioned.fill(
+                        child: ContinuousShiningGlassBeamWidget(),
+                      ),
 
                     SafeArea(
                       bottom: false,
@@ -512,6 +523,7 @@ class _SellerDashboardState extends State<SellerDashboard> {
                             IconButton(
                               icon: const Icon(Icons.refresh_rounded, color: Colors.white),
                               onPressed: () {
+                                _loadHeaderTheme();
                                 _loadConversations();
                                 _loadSellerSliders();
                               },
@@ -894,7 +906,8 @@ class _PulsingStoreBadgeState extends State<PulsingStoreBadge> with SingleTicker
 
 /// Floating Grocery Background Icons Animation
 class GroceryFloatingBackgroundParticles extends StatefulWidget {
-  const GroceryFloatingBackgroundParticles({super.key});
+  final double particleOpacity;
+  const GroceryFloatingBackgroundParticles({super.key, this.particleOpacity = 0.9});
 
   @override
   State<GroceryFloatingBackgroundParticles> createState() => _GroceryFloatingBackgroundParticlesState();
@@ -951,6 +964,9 @@ class _GroceryFloatingBackgroundParticlesState extends State<GroceryFloatingBack
             final offsetX = math.sin(val + phase) * (p['dx'] as double);
             final offsetY = math.cos(val + phase) * (p['dy'] as double);
 
+            final baseOp = p['opacity'] as double;
+            final finalOp = (baseOp * widget.particleOpacity).clamp(0.0, 1.0);
+
             return Positioned(
               top: p['top'] != null ? (p['top'] as double) + offsetY : null,
               bottom: p['bottom'] != null ? (p['bottom'] as double) + offsetY : null,
@@ -959,7 +975,7 @@ class _GroceryFloatingBackgroundParticlesState extends State<GroceryFloatingBack
               child: Icon(
                 p['icon'] as IconData,
                 size: p['size'] as double,
-                color: Colors.white.withValues(alpha: p['opacity'] as double),
+                color: Colors.white.withValues(alpha: finalOp),
               ),
             );
           }).toList(),
