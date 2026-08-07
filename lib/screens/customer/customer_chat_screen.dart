@@ -34,7 +34,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
   bool _isLoading = true;
   bool _isBlocked = false;
   List<Map<String, dynamic>> _sellerProducts = [];
-  bool _isListMode = true;
+  bool _isListMode = false;
   List<Map<String, dynamic>> _selectedOrderItems = [];
 
   late Razorpay _razorpay;
@@ -1285,161 +1285,189 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                       ),
                     ),
 
-                    // Bottom Area: Structured Selected Items List OR Standard Chat Field
-                    if (_isListMode && _selectedOrderItems.isNotEmpty)
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.08),
-                              blurRadius: 10,
-                              offset: const Offset(0, -2),
-                            ),
-                          ],
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Header Row
-                            Row(
-                              children: [
-                                Text(
-                                  'Selected Items (${_selectedOrderItems.length})',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
-                                ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFDCFCE7),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: const Color(0xFF86EFAC)),
+                    // Bottom Area: List Mode (Selected Items Container or Pick Products Button) OR Chat Mode (Manual Field)
+                    if (_isListMode)
+                      if (_selectedOrderItems.isNotEmpty)
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.08),
+                                blurRadius: 10,
+                                offset: const Offset(0, -2),
+                              ),
+                            ],
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Header Row
+                              Row(
+                                children: [
+                                  Text(
+                                    'Selected Items (${_selectedOrderItems.length})',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
                                   ),
-                                  child: Text(
-                                    'Total: ₹${_calculateSelectedTotal().toStringAsFixed(_calculateSelectedTotal().truncateToDouble() == _calculateSelectedTotal() ? 0 : 2)}',
-                                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: Color(0xFF15803D)),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFDCFCE7),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: const Color(0xFF86EFAC)),
+                                    ),
+                                    child: Text(
+                                      'Total: ₹${_calculateSelectedTotal().toStringAsFixed(_calculateSelectedTotal().truncateToDouble() == _calculateSelectedTotal() ? 0 : 2)}',
+                                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: Color(0xFF15803D)),
+                                    ),
                                   ),
-                                ),
-                                const Spacer(),
-                                TextButton.icon(
-                                  onPressed: _showProductListPickerSheet,
-                                  icon: const Icon(Icons.add_circle_outline_rounded, size: 16, color: Color(0xFF8B5CF6)),
-                                  label: const Text('+ Add More', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF8B5CF6))),
-                                  style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
+                                  const Spacer(),
+                                  TextButton.icon(
+                                    onPressed: _showProductListPickerSheet,
+                                    icon: const Icon(Icons.add_circle_outline_rounded, size: 16, color: Color(0xFF8B5CF6)),
+                                    label: const Text('+ Add More', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF8B5CF6))),
+                                    style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
 
-                            // List of Items (Slide to Delete & Tap to Edit)
-                            ConstrainedBox(
-                              constraints: const BoxConstraints(maxHeight: 160),
-                              child: SingleChildScrollView(
-                                child: Column(
-                                  children: List.generate(_selectedOrderItems.length, (idx) {
-                                    final it = _selectedOrderItems[idx];
-                                    final amt = (it['amount'] as num?)?.toDouble() ?? 0.0;
-                                    final amtStr = amt > 0 ? '₹${amt.toStringAsFixed(amt.truncateToDouble() == amt ? 0 : 2)}' : '';
+                              // List of Items (Slide to Delete & Tap to Edit)
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(maxHeight: 160),
+                                child: SingleChildScrollView(
+                                  child: Column(
+                                    children: List.generate(_selectedOrderItems.length, (idx) {
+                                      final it = _selectedOrderItems[idx];
+                                      final amt = (it['amount'] as num?)?.toDouble() ?? 0.0;
+                                      final amtStr = amt > 0 ? '₹${amt.toStringAsFixed(amt.truncateToDouble() == amt ? 0 : 2)}' : '';
 
-                                    return Dismissible(
-                                      key: Key('selected_item_${it['name']}_$idx'),
-                                      direction: DismissDirection.endToStart,
-                                      background: Container(
-                                        alignment: Alignment.centerRight,
-                                        padding: const EdgeInsets.only(right: 16),
-                                        margin: const EdgeInsets.only(bottom: 6),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFEF4444),
-                                          borderRadius: BorderRadius.circular(10),
-                                        ),
-                                        child: const Row(
-                                          mainAxisAlignment: MainAxisAlignment.end,
-                                          children: [
-                                            Icon(Icons.delete_forever_rounded, color: Colors.white, size: 18),
-                                            SizedBox(width: 4),
-                                            Text('Remove', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                                          ],
-                                        ),
-                                      ),
-                                      onDismissed: (direction) {
-                                        final removedName = it['name'];
-                                        setState(() {
-                                          _selectedOrderItems.removeAt(idx);
-                                          _syncSelectedItemsToMsgController();
-                                        });
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('Removed "$removedName" from list'),
-                                            duration: const Duration(seconds: 1),
+                                      return Dismissible(
+                                        key: Key('selected_item_${it['name']}_$idx'),
+                                        direction: DismissDirection.endToStart,
+                                        background: Container(
+                                          alignment: Alignment.centerRight,
+                                          padding: const EdgeInsets.only(right: 16),
+                                          margin: const EdgeInsets.only(bottom: 6),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFEF4444),
+                                            borderRadius: BorderRadius.circular(10),
                                           ),
-                                        );
-                                      },
-                                      child: Container(
-                                        margin: const EdgeInsets.only(bottom: 6),
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFF8FAFC),
-                                          borderRadius: BorderRadius.circular(10),
-                                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                                        ),
-                                        child: InkWell(
-                                          onTap: () => _showEditSelectedItemDialog(idx),
-                                          child: Row(
+                                          child: const Row(
+                                            mainAxisAlignment: MainAxisAlignment.end,
                                             children: [
-                                              Text(
-                                                '${idx + 1}.',
-                                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF64748B)),
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Expanded(
-                                                child: Text(
-                                                  '${it['name']} (${it['qty']} ${it['unit']})',
-                                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                              if (amtStr.isNotEmpty)
-                                                Text(
-                                                  amtStr,
-                                                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF059669)),
-                                                ),
-                                              const SizedBox(width: 6),
-                                              const Icon(Icons.edit_outlined, size: 16, color: Color(0xFF8B5CF6)),
+                                              Icon(Icons.delete_forever_rounded, color: Colors.white, size: 18),
+                                              SizedBox(width: 4),
+                                              Text('Remove', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                                             ],
                                           ),
                                         ),
-                                      ),
-                                    );
-                                  }),
+                                        onDismissed: (direction) {
+                                          final removedName = it['name'];
+                                          setState(() {
+                                            _selectedOrderItems.removeAt(idx);
+                                            _syncSelectedItemsToMsgController();
+                                          });
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text('Removed "$removedName" from list'),
+                                              duration: const Duration(seconds: 1),
+                                            ),
+                                          );
+                                        },
+                                        child: Container(
+                                          margin: const EdgeInsets.only(bottom: 6),
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFF8FAFC),
+                                            borderRadius: BorderRadius.circular(10),
+                                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                                          ),
+                                          child: InkWell(
+                                            onTap: () => _showEditSelectedItemDialog(idx),
+                                            child: Row(
+                                              children: [
+                                                Text(
+                                                  '${idx + 1}.',
+                                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF64748B)),
+                                                ),
+                                                const SizedBox(width: 6),
+                                                Expanded(
+                                                  child: Text(
+                                                    '${it['name']} (${it['qty']} ${it['unit']})',
+                                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                                if (amtStr.isNotEmpty)
+                                                  Text(
+                                                    amtStr,
+                                                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF059669)),
+                                                  ),
+                                                const SizedBox(width: 6),
+                                                const Icon(Icons.edit_outlined, size: 16, color: Color(0xFF8B5CF6)),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }),
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 8),
+                              const SizedBox(height: 8),
 
-                            // Send Order Button
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: _sendMessage,
-                                icon: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
-                                label: const Text('Send Order', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF10B981),
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  elevation: 0,
+                              // Send Order Button
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: _sendMessage,
+                                  icon: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                                  label: const Text('Send Order', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF10B981),
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    elevation: 0,
+                                  ),
                                 ),
                               ),
+                            ],
+                          ),
+                        )
+                      else
+                        // Empty List Mode: Open Products Sheet Button
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.06),
+                                blurRadius: 10,
+                                offset: const Offset(0, -2),
+                              ),
+                            ],
+                          ),
+                          child: ElevatedButton.icon(
+                            onPressed: _showProductListPickerSheet,
+                            icon: const Icon(Icons.format_list_bulleted_add, color: Colors.white, size: 20),
+                            label: const Text('Open Products List 📋', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF8B5CF6),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              minimumSize: const Size(double.infinity, 48),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              elevation: 0,
                             ),
-                          ],
-                        ),
-                      )
+                          ),
+                        )
                     else
-                      // Standard Input Bar
+                      // Standard Chat Mode Input Bar (Manual Typing Textfield)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         decoration: BoxDecoration(
@@ -1459,7 +1487,12 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                             IconButton(
                               icon: const Icon(Icons.playlist_add_rounded, color: Color(0xFF8B5CF6), size: 26),
                               tooltip: 'Select from Product List',
-                              onPressed: _showProductListPickerSheet,
+                              onPressed: () {
+                                setState(() {
+                                  _isListMode = true;
+                                });
+                                _showProductListPickerSheet();
+                              },
                             ),
                             Expanded(
                               child: Container(
