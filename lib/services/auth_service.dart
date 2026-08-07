@@ -3859,4 +3859,54 @@ class AuthService {
 
     return true;
   }
+
+  static const String _keyGlobalHeaderTheme = 'global_header_theme_config';
+
+  /// Get Global Animated Header Theme Configuration (Cache-First + VPS Sync)
+  static Future<Map<String, dynamic>> getHeaderThemeConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    final defaultConfig = <String, dynamic>{
+      'preset_id': 'midnight_navy',
+      'color1': '#0F172A',
+      'color2': '#1E1B4B',
+      'color3': '#312E81',
+      'direction': 'diagonal', // 'horizontal', 'vertical', 'diagonal', 'radial'
+      'shading': 'dark', // 'light', 'medium', 'dark', 'ultra_dark'
+      'enable_shining': true,
+      'particle_opacity': 0.9,
+    };
+
+    // 1. Try Local SharedPreferences Cache first (0ms latency)
+    Map<String, dynamic>? cached;
+    final str = prefs.getString(_keyGlobalHeaderTheme);
+    if (str != null && str.isNotEmpty) {
+      try {
+        cached = Map<String, dynamic>.from(jsonDecode(str));
+      } catch (_) {}
+    }
+
+    // 2. Fetch fresh config from VPS Server in background
+    try {
+      final res = await VpsApiService.get('get-header-theme');
+      if (res != null && res['success'] == true && res['theme'] != null) {
+        final serverConfig = Map<String, dynamic>.from(res['theme']);
+        await prefs.setString(_keyGlobalHeaderTheme, jsonEncode(serverConfig));
+        return serverConfig;
+      }
+    } catch (_) {}
+
+    return cached ?? defaultConfig;
+  }
+
+  /// Save Global Animated Header Theme Configuration (Local-First + VPS Sync)
+  static Future<bool> saveHeaderThemeConfig(Map<String, dynamic> config) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyGlobalHeaderTheme, jsonEncode(config));
+
+    try {
+      await VpsApiService.post('update-header-theme', config);
+    } catch (_) {}
+
+    return true;
+  }
 }

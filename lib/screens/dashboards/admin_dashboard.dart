@@ -5,6 +5,8 @@ import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/notification_service.dart';
 import '../../utils/csv_exporter.dart';
+import '../../utils/header_theme_helper.dart';
+import '../customer/seller_orders_screen.dart';
 import '../role_selection_screen.dart';
 
 class AppScrollBehavior extends MaterialScrollBehavior {
@@ -239,6 +241,407 @@ class _AdminDashboardState extends State<AdminDashboard> {
             child: const Text('Add Location', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showManageHeaderThemeDialog() async {
+    final currentConfig = await AuthService.getHeaderThemeConfig();
+    String selectedPreset = currentConfig['preset_id'] ?? 'midnight_navy';
+    String color1Hex = currentConfig['color1'] ?? '#0F172A';
+    String color2Hex = currentConfig['color2'] ?? '#1E1B4B';
+    String color3Hex = currentConfig['color3'] ?? '#312E81';
+    String selectedDirection = currentConfig['direction'] ?? 'diagonal';
+    String selectedShading = currentConfig['shading'] ?? 'dark';
+    bool enableShining = currentConfig['enable_shining'] ?? true;
+    double particleOpacity = (currentConfig['particle_opacity'] as num?)?.toDouble() ?? 0.9;
+
+    final c1Controller = TextEditingController(text: color1Hex);
+    final c2Controller = TextEditingController(text: color2Hex);
+    final c3Controller = TextEditingController(text: color3Hex);
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final liveConfig = {
+            'preset_id': selectedPreset,
+            'color1': c1Controller.text.trim(),
+            'color2': c2Controller.text.trim(),
+            'color3': c3Controller.text.trim(),
+            'direction': selectedDirection,
+            'shading': selectedShading,
+            'enable_shining': enableShining,
+            'particle_opacity': particleOpacity,
+          };
+
+          return AlertDialog(
+            scrollable: true,
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: const [
+                Icon(Icons.palette_rounded, color: Color(0xFF8B5CF6), size: 24),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Header Theme & Colors Manager 🎨',
+                    style: TextStyle(color: Color(0xFF0F172A), fontSize: 17, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: 500,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Customize the animated top header banner colors, gradient direction, intensity shading, and shining glass shimmer beam across the app.',
+                    style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // LIVE ANIMATED HEADER PREVIEW CARD
+                  Container(
+                    width: double.infinity,
+                    height: 140,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: ClipPath(
+                      clipper: HeaderArcWaveClipper(),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        decoration: HeaderThemeHelper.buildDecoration(liveConfig),
+                        child: Stack(
+                          children: [
+                            GroceryFloatingBackgroundParticles(
+                              particleOpacity: particleOpacity,
+                            ),
+                            if (enableShining) const ContinuousShiningGlassBeamWidget(),
+                            Positioned(
+                              top: 15,
+                              left: 15,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: const [
+                                  Text(
+                                    'Live Theme Preview 🏪',
+                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                                  ),
+                                  SizedBox(height: 2),
+                                  Text(
+                                    'Daily Mart Header Canvas',
+                                    style: TextStyle(color: Colors.white70, fontSize: 11),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 1. PRESET THEMES SELECTOR
+                  const Text(
+                    'Choose Preset Theme:',
+                    style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: HeaderThemeHelper.presets.map((preset) {
+                      final isSelected = selectedPreset == preset['id'];
+                      return ChoiceChip(
+                        label: Text('${preset['icon']} ${preset['name']}'),
+                        selected: isSelected,
+                        selectedColor: const Color(0xFF8B5CF6),
+                        backgroundColor: const Color(0xFFF1F5F9),
+                        labelStyle: TextStyle(
+                          color: isSelected ? Colors.white : const Color(0xFF334155),
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          fontSize: 11.5,
+                        ),
+                        onSelected: (val) {
+                          if (val) {
+                            setDialogState(() {
+                              selectedPreset = preset['id'];
+                              if (preset['id'] != 'custom') {
+                                c1Controller.text = preset['color1'];
+                                c2Controller.text = preset['color2'];
+                                c3Controller.text = preset['color3'];
+                                selectedDirection = preset['direction'];
+                                selectedShading = preset['shading'];
+                              }
+                            });
+                          }
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 2. GRADIENT DIRECTION SELECTION
+                  const Text(
+                    'Gradient Direction (Horizontal / Vertical / Sidha):',
+                    style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      {'id': 'horizontal', 'label': '↔️ Horizontal (Sidha Left-Right)'},
+                      {'id': 'vertical', 'label': '↕️ Vertical (Top-Bottom)'},
+                      {'id': 'diagonal', 'label': '↘️ Diagonal (TopLeft-BottomRight)'},
+                      {'id': 'radial', 'label': '🎯 Radial Glow (Center Outward)'},
+                    ].map((d) {
+                      final isSelected = selectedDirection == d['id'];
+                      return ChoiceChip(
+                        label: Text(d['label']!),
+                        selected: isSelected,
+                        selectedColor: const Color(0xFF0EA5E9),
+                        backgroundColor: const Color(0xFFF1F5F9),
+                        labelStyle: TextStyle(
+                          color: isSelected ? Colors.white : const Color(0xFF334155),
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          fontSize: 11.5,
+                        ),
+                        onSelected: (val) {
+                          if (val) {
+                            setDialogState(() {
+                              selectedDirection = d['id']!;
+                              selectedPreset = 'custom';
+                            });
+                          }
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 3. CUSTOM HEX COLORS (Color 1 & Color 2 & Color 3)
+                  const Text(
+                    'Custom Gradient Colors (Color 1 & Color 2 Hex):',
+                    style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: c1Controller,
+                          style: const TextStyle(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.bold),
+                          decoration: InputDecoration(
+                            labelText: 'Color 1 (Start)',
+                            labelStyle: const TextStyle(fontSize: 11),
+                            prefixIcon: Container(
+                              margin: const EdgeInsets.all(8),
+                              width: 18,
+                              height: 18,
+                              decoration: BoxDecoration(
+                                color: HeaderThemeHelper.hexToColor(c1Controller.text),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.grey),
+                              ),
+                            ),
+                            border: const OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                          onChanged: (_) => setDialogState(() => selectedPreset = 'custom'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextFormField(
+                          controller: c2Controller,
+                          style: const TextStyle(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.bold),
+                          decoration: InputDecoration(
+                            labelText: 'Color 2 (End)',
+                            labelStyle: const TextStyle(fontSize: 11),
+                            prefixIcon: Container(
+                              margin: const EdgeInsets.all(8),
+                              width: 18,
+                              height: 18,
+                              decoration: BoxDecoration(
+                                color: HeaderThemeHelper.hexToColor(c2Controller.text),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.grey),
+                              ),
+                            ),
+                            border: const OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                          onChanged: (_) => setDialogState(() => selectedPreset = 'custom'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextFormField(
+                          controller: c3Controller,
+                          style: const TextStyle(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.bold),
+                          decoration: InputDecoration(
+                            labelText: 'Color 3 (Accent)',
+                            labelStyle: const TextStyle(fontSize: 11),
+                            prefixIcon: Container(
+                              margin: const EdgeInsets.all(8),
+                              width: 18,
+                              height: 18,
+                              decoration: BoxDecoration(
+                                color: HeaderThemeHelper.hexToColor(c3Controller.text),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.grey),
+                              ),
+                            ),
+                            border: const OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                          onChanged: (_) => setDialogState(() => selectedPreset = 'custom'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 4. SHADING INTENSITY (Halka / Gahara)
+                  const Text(
+                    'Color Shading Intensity (Halka / Gahara Color):',
+                    style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      {'id': 'light', 'label': '☀️ Soft Light (Halka)'},
+                      {'id': 'medium', 'label': '🌤️ Medium Vivid'},
+                      {'id': 'dark', 'label': '🌙 Deep Dark (Gahara)'},
+                      {'id': 'ultra_dark', 'label': '🖤 Ultra Dark Obsidian'},
+                    ].map((s) {
+                      final isSelected = selectedShading == s['id'];
+                      return ChoiceChip(
+                        label: Text(s['label']!),
+                        selected: isSelected,
+                        selectedColor: const Color(0xFF10B981),
+                        backgroundColor: const Color(0xFFF1F5F9),
+                        labelStyle: TextStyle(
+                          color: isSelected ? Colors.white : const Color(0xFF334155),
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          fontSize: 11.5,
+                        ),
+                        onSelected: (val) {
+                          if (val) {
+                            setDialogState(() {
+                              selectedShading = s['id']!;
+                            });
+                          }
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 5. SHINING METALLIC BEAM TOGGLE
+                  SwitchListTile(
+                    activeThumbColor: const Color(0xFF8B5CF6),
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text(
+                      'Continuous Shining Glass Light Beam ✨',
+                      style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    subtitle: const Text(
+                      'Enable sweeping animated metallic glass shimmer beam overlay across header.',
+                      style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                    ),
+                    value: enableShining,
+                    onChanged: (val) {
+                      setDialogState(() => enableShining = val);
+                    },
+                  ),
+                  const SizedBox(height: 10),
+
+                  // 6. PARTICLE ICON OPACITY SLIDER
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Floating Icons Opacity:',
+                        style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      Text(
+                        '${(particleOpacity * 100).round()}%',
+                        style: const TextStyle(color: Color(0xFF8B5CF6), fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                  Slider(
+                    value: particleOpacity,
+                    min: 0.2,
+                    max: 1.0,
+                    divisions: 8,
+                    activeColor: const Color(0xFF8B5CF6),
+                    onChanged: (val) {
+                      setDialogState(() => particleOpacity = val);
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF8B5CF6),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                label: const Text('Save & Publish Theme 🎨', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final nav = Navigator.of(ctx);
+
+                  final finalConfig = {
+                    'preset_id': selectedPreset,
+                    'color1': c1Controller.text.trim(),
+                    'color2': c2Controller.text.trim(),
+                    'color3': c3Controller.text.trim(),
+                    'direction': selectedDirection,
+                    'shading': selectedShading,
+                    'enable_shining': enableShining,
+                    'particle_opacity': particleOpacity,
+                  };
+
+                  await AuthService.saveHeaderThemeConfig(finalConfig);
+                  nav.pop();
+
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('App Animated Header Theme Updated & Published Successfully! 🎨✨'),
+                      backgroundColor: Color(0xFF8B5CF6),
+                    ),
+                  );
+                },
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1179,6 +1582,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
               actions: [
                 IconButton(
+                  icon: const Icon(Icons.palette_rounded, color: Color(0xFF8B5CF6)),
+                  tooltip: 'Manage Header Theme & Colors',
+                  onPressed: _showManageHeaderThemeDialog,
+                ),
+                IconButton(
                   icon: const Icon(Icons.refresh_rounded, color: Color(0xFF0EA5E9)),
                   tooltip: 'Refresh Data',
                   onPressed: _loadAllData,
@@ -1468,6 +1876,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ],
           ),
           const Spacer(),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF8B5CF6),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              elevation: 1,
+            ),
+            icon: const Icon(Icons.palette_rounded, color: Colors.white, size: 18),
+            label: const Text(
+              'Header Theme & Colors 🎨',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+            onPressed: _showManageHeaderThemeDialog,
+          ),
+          const SizedBox(width: 8),
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Color(0xFF0EA5E9)),
             tooltip: 'Refresh Data',
@@ -1535,6 +1958,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
             onTap: () {
               setState(() => _selectedIndex = 2);
               Navigator.pop(context);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.palette_rounded, color: Color(0xFF8B5CF6)),
+            title: const Text('Header Theme & Colors 🎨', style: TextStyle(color: Colors.white)),
+            onTap: () {
+              Navigator.pop(context);
+              _showManageHeaderThemeDialog();
             },
           ),
           const Spacer(),

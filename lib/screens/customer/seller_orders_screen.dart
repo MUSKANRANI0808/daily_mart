@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
+import '../../utils/header_theme_helper.dart';
 import '../dashboards/customer_dashboard.dart';
 import '../role_selection_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -108,6 +109,7 @@ class CustomerSellerOrdersScreen extends StatefulWidget {
 class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen> {
   List<Map<String, dynamic>> _messages = [];
   List<Map<String, dynamic>> _sliders = [];
+  Map<String, dynamic> _headerThemeConfig = {};
   bool _isLoading = true;
   int _currentSliderPage = 0;
   String _selectedOrderFilter = 'All'; // 'All', 'Pending', 'Delivered', 'Cancelled'
@@ -364,6 +366,13 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
       sellerUsername: widget.sellerUsername,
       customerMobile: widget.customer.mobile ?? '',
     );
+    final headerTheme = await AuthService.getHeaderThemeConfig();
+    if (mounted) {
+      setState(() {
+        _headerThemeConfig = headerTheme;
+      });
+    }
+
     if (cached.isNotEmpty && mounted) {
       await AuthService.annotateMessagesWithLifetimeHierarchy(
         sellerUsername: widget.sellerUsername,
@@ -1048,24 +1057,19 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                     // Pro-Level Animated Organic Wave Header Container
                     ClipPath(
                       clipper: HeaderArcWaveClipper(),
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Color(0xFF0F172A), // Deep Midnight Obsidian Slate
-                              Color(0xFF1E1B4B), // Deep Corporate Royal Indigo
-                              Color(0xFF312E81), // Rich Business Sapphire Violet
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                        ),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 400),
+                        decoration: HeaderThemeHelper.buildDecoration(_headerThemeConfig),
                         child: Stack(
                           children: [
                             // Floating Translucent Grocery Icons Background Particles
-                            const Positioned.fill(
-                              child: GroceryFloatingBackgroundParticles(),
+                            GroceryFloatingBackgroundParticles(
+                              particleOpacity: (_headerThemeConfig['particle_opacity'] as num?)?.toDouble() ?? 0.9,
                             ),
+
+                            // Continuous Metallic Shining Glass Light Beam
+                            if (_headerThemeConfig['enable_shining'] != false)
+                              const ContinuousShiningGlassBeamWidget(),
 
                             SafeArea(
                               bottom: false,
@@ -1425,7 +1429,8 @@ class _PulsingStoreBadgeState extends State<PulsingStoreBadge> with SingleTicker
 
 /// Floating Grocery Background Icons Animation
 class GroceryFloatingBackgroundParticles extends StatefulWidget {
-  const GroceryFloatingBackgroundParticles({super.key});
+  final double particleOpacity;
+  const GroceryFloatingBackgroundParticles({super.key, this.particleOpacity = 0.9});
 
   @override
   State<GroceryFloatingBackgroundParticles> createState() => _GroceryFloatingBackgroundParticlesState();
@@ -1481,6 +1486,7 @@ class _GroceryFloatingBackgroundParticlesState extends State<GroceryFloatingBack
             final phase = (p['phase'] as double);
             final offsetX = math.sin(val + phase) * (p['dx'] as double);
             final offsetY = math.cos(val + phase) * (p['dy'] as double);
+            final finalOpacity = ((p['opacity'] as double) * widget.particleOpacity).clamp(0.0, 1.0);
 
             return Positioned(
               top: p['top'] != null ? (p['top'] as double) + offsetY : null,
@@ -1490,7 +1496,7 @@ class _GroceryFloatingBackgroundParticlesState extends State<GroceryFloatingBack
               child: Icon(
                 p['icon'] as IconData,
                 size: p['size'] as double,
-                color: Colors.white.withValues(alpha: p['opacity'] as double),
+                color: Colors.white.withValues(alpha: finalOpacity),
               ),
             );
           }).toList(),
