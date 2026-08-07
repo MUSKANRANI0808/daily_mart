@@ -997,7 +997,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
 
                 // Filtered Products List with Interactive Unit, Qty & Auto-Calculate Amount
                 ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.5),
+                  constraints: const BoxConstraints(maxHeight: 255.0),
                   child: filteredList.isEmpty
                       ? Container(
                           padding: const EdgeInsets.all(24),
