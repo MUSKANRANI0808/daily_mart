@@ -546,7 +546,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                       const SizedBox(height: 20),
 
                       const Text(
-                        'Customer Login 🛍️',
+                        'Customer Login',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 28,

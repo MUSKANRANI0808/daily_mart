@@ -484,7 +484,7 @@ class _SellerLoginScreenState extends State<SellerLoginScreen> {
                     const SizedBox(height: 20),
 
                     const Text(
-                      'Seller Portal Login 🏪',
+                      'Seller Portal Login',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 28,
@@ -646,7 +646,7 @@ class _SellerLoginScreenState extends State<SellerLoginScreen> {
                               ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                               : const Icon(Icons.send_rounded, color: Colors.white, size: 18),
                           label: const Text(
-                            'Send OTP SMS 📩',
+                            'Send OTP SMS',
                             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                           ),
                         ),
@@ -742,7 +742,7 @@ class _SellerLoginScreenState extends State<SellerLoginScreen> {
                           child: _isLoading
                               ? const CircularProgressIndicator(color: Colors.white)
                               : const Text(
-                                  'Login to Portal 🚪',
+                                  'Login to Portal',
                                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                                 ),
                         ),

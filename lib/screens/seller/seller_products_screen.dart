@@ -888,105 +888,111 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           final rate = safeDouble(p['rate'], 0.0);
 
                           return Container(
-                            margin: const EdgeInsets.only(bottom: 12),
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: const Color(0xFFE2E8F0)),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.03),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 3),
+                                  color: Colors.black.withValues(alpha: 0.02),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
                                 ),
                               ],
                             ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(14.0),
-                              child: Row(
-                                children: [
-                                  CircleAvatar(
-                                    radius: 22,
-                                    backgroundColor: const Color(0xFFF1F5F9),
-                                    child: Text(
-                                      name.isNotEmpty ? name[0].toUpperCase() : 'P',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF8B5CF6),
-                                        fontSize: 18,
-                                      ),
+                            child: Row(
+                              children: [
+                                // 1. Initial Letter Badge
+                                CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor: const Color(0xFFEDE9FE),
+                                  child: Text(
+                                    name.isNotEmpty ? name[0].toUpperCase() : 'P',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF8B5CF6),
+                                      fontSize: 14,
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                name,
-                                                style: const TextStyle(
-                                                  fontSize: 15,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Color(0xFF0F172A),
-                                                ),
-                                              ),
-                                            ),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFEDE9FE),
-                                                borderRadius: BorderRadius.circular(6),
-                                              ),
-                                              child: Text(
-                                                qty > 1 ? '$unit (x$qty)' : unit,
-                                                style: const TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Color(0xFF6D28D9),
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        if (desc.isNotEmpty) ...[
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            desc,
-                                            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                                          ),
-                                        ],
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          '₹${rate.toStringAsFixed(rate.truncateToDouble() == rate ? 0 : 2)}',
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                            color: Color(0xFF059669),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Column(
+                                ),
+                                const SizedBox(width: 10),
+
+                                // 2. Product Name & Optional Description
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.edit_rounded, color: Color(0xFF3B82F6), size: 20),
-                                        onPressed: () => _showAddEditProductDialog(productToEdit: p),
-                                        tooltip: 'Edit Product',
+                                      Text(
+                                        name,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF0F172A),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      IconButton(
-                                        icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 20),
-                                        onPressed: () => _confirmDeleteProduct(p),
-                                        tooltip: 'Delete Product',
-                                      ),
+                                      if (desc.isNotEmpty)
+                                        Text(
+                                          desc,
+                                          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                     ],
                                   ),
-                                ],
-                              ),
+                                ),
+                                const SizedBox(width: 8),
+
+                                // 3. Unit Badge
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                                  ),
+                                  child: Text(
+                                    qty > 1 ? '$unit (x$qty)' : unit,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF475569),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+
+                                // 4. Rate / Price
+                                Text(
+                                  '₹${rate.toStringAsFixed(rate.truncateToDouble() == rate ? 0 : 2)}',
+                                  style: const TextStyle(
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF059669),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+
+                                // 5. Action Icons (Edit & Delete side by side)
+                                IconButton(
+                                  icon: const Icon(Icons.edit_rounded, color: Color(0xFF8B5CF6), size: 18),
+                                  onPressed: () => _showAddEditProductDialog(productToEdit: p),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                  tooltip: 'Edit Product',
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 18),
+                                  onPressed: () => _confirmDeleteProduct(p),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                  tooltip: 'Delete Product',
+                                ),
+                              ],
                             ),
                           );
                         },
