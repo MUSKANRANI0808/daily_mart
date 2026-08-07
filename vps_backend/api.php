@@ -75,6 +75,13 @@ if (!$colCheckQty || $colCheckQty->num_rows == 0) {
     INDEX(seller_username)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+// 5. Auto-check & create app_settings table if missing
+@$conn->query("CREATE TABLE IF NOT EXISTS app_settings (
+    setting_key VARCHAR(100) PRIMARY KEY,
+    setting_value LONGTEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
 if ($action == 'customer-login') {
     $mobile = isset($input['mobile']) ? trim($input['mobile']) : '';
     $name = isset($input['name']) ? trim($input['name']) : '';
@@ -761,6 +768,28 @@ if ($action == 'customer-login') {
         }
     }
     echo json_encode(["success" => true, "message" => "Unit deleted"]);
+    exit();
+} elseif ($action == 'get-header-theme') {
+    $res = $conn->query("SELECT setting_value FROM app_settings WHERE setting_key = 'global_header_theme'");
+    if ($res && $row = $res->fetch_assoc()) {
+        $themeConfig = json_decode($row['setting_value'], true);
+        if (is_array($themeConfig)) {
+            echo json_encode(["success" => true, "theme" => $themeConfig]);
+            exit();
+        }
+    }
+    echo json_encode(["success" => true, "theme" => null]);
+    exit();
+} elseif ($action == 'update-header-theme') {
+    $themeConfig = isset($input) && is_array($input) ? $input : array();
+    $jsonVal = json_encode($themeConfig);
+
+    $stmt = $conn->prepare("INSERT INTO app_settings (setting_key, setting_value) VALUES ('global_header_theme', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+    if ($stmt) {
+        $stmt->bind_param("s", $jsonVal);
+        $stmt->execute();
+    }
+    echo json_encode(["success" => true, "message" => "Header theme saved in database"]);
     exit();
 } else {
     echo json_encode(["success" => true, "message" => "Daily Mart API Active"]);

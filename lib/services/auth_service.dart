@@ -3862,7 +3862,7 @@ class AuthService {
 
   static const String _keyGlobalHeaderTheme = 'global_header_theme_config';
 
-  /// Get Global Animated Header Theme Configuration (Cache-First + VPS Sync)
+  /// Get Global Animated Header Theme Configuration (Database-First + Local Cache Fallback)
   static Future<Map<String, dynamic>> getHeaderThemeConfig() async {
     final prefs = await SharedPreferences.getInstance();
     final defaultConfig = <String, dynamic>{
@@ -3876,16 +3876,7 @@ class AuthService {
       'particle_opacity': 0.9,
     };
 
-    // 1. Try Local SharedPreferences Cache first (0ms latency)
-    Map<String, dynamic>? cached;
-    final str = prefs.getString(_keyGlobalHeaderTheme);
-    if (str != null && str.isNotEmpty) {
-      try {
-        cached = Map<String, dynamic>.from(jsonDecode(str));
-      } catch (_) {}
-    }
-
-    // 2. Fetch fresh config from VPS Server in background
+    // 1. Fetch fresh config from Server Database first
     try {
       final res = await VpsApiService.get('get-header-theme');
       if (res != null && res['success'] == true && res['theme'] != null) {
@@ -3895,7 +3886,15 @@ class AuthService {
       }
     } catch (_) {}
 
-    return cached ?? defaultConfig;
+    // 2. Fallback to Local SharedPreferences Cache if offline
+    final str = prefs.getString(_keyGlobalHeaderTheme);
+    if (str != null && str.isNotEmpty) {
+      try {
+        return Map<String, dynamic>.from(jsonDecode(str));
+      } catch (_) {}
+    }
+
+    return defaultConfig;
   }
 
   /// Save Global Animated Header Theme Configuration (Local-First + VPS Sync)
