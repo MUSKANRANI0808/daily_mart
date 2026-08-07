@@ -396,6 +396,11 @@ class AuthService {
     return true;
   }
 
+  /// Get Cached Sellers List instantly from SharedPreferences (0 ms delay)
+  static Future<List<Map<String, dynamic>>> getCachedSellersList() async {
+    return getLocalSellers();
+  }
+
   /// Get list of all created Sellers
   static Future<List<Map<String, dynamic>>> getSellersList() async {
     try {
@@ -2405,6 +2410,22 @@ class AuthService {
     return null;
   }
 
+  /// Get Cached Delivery Boys List instantly from SharedPreferences (0 ms delay)
+  static Future<List<Map<String, dynamic>>> getCachedDeliveryBoys() async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<String> list = prefs.getStringList(_keyDeliveryBoys) ?? [];
+    final res = <Map<String, dynamic>>[];
+    for (var str in list) {
+      try {
+        final decoded = jsonDecode(str);
+        if (decoded is Map<String, dynamic>) {
+          res.add(decoded);
+        }
+      } catch (_) {}
+    }
+    return res;
+  }
+
   /// Get All Delivery Boys (Admin View)
   static Future<List<Map<String, dynamic>>> getDeliveryBoys() async {
     // 1. Fetch from VPS MySQL Database
@@ -3015,7 +3036,40 @@ class AuthService {
       return dtB.compareTo(dtA);
     });
 
+    if (flatOrders.isNotEmpty) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final encData = jsonEncode(flatOrders.map((o) {
+          final copy = Map<String, dynamic>.from(o);
+          copy.remove('raw_date');
+          copy.remove('raw_pickup_time');
+          copy.remove('raw_delivered_time');
+          return copy;
+        }).toList());
+        await prefs.setString('cache_admin_flat_orders', encData);
+      } catch (_) {}
+    }
+
     return flatOrders;
+  }
+
+  /// Get Cached All Orders Flat List for Admin instantly from SharedPreferences (0 ms delay)
+  static Future<List<Map<String, dynamic>>> getCachedAllOrdersFlatListForAdmin() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? cachedStr = prefs.getString('cache_admin_flat_orders');
+    if (cachedStr != null && cachedStr.isNotEmpty) {
+      try {
+        final List decoded = jsonDecode(cachedStr);
+        final list = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+        for (var ord in list) {
+          if (ord['date'] != null) {
+            ord['raw_date'] = DateTime.tryParse(ord['date'].toString());
+          }
+        }
+        return list;
+      } catch (_) {}
+    }
+    return [];
   }
 
   static Map<String, dynamic> _parseFlatOrderRow({

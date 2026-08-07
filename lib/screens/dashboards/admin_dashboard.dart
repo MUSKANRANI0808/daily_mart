@@ -101,10 +101,25 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Future<void> _loadAllData() async {
-    setState(() => _isLoading = true);
+    // 1. Load instantly from SharedPreferences Local Cache (0 ms perceived latency)
+    final cachedSellers = await AuthService.getCachedSellersList();
+    final cachedDeliveryBoys = await AuthService.getCachedDeliveryBoys();
+    final cachedFlatOrders = await AuthService.getCachedAllOrdersFlatListForAdmin();
+
+    if ((cachedSellers.isNotEmpty || cachedDeliveryBoys.isNotEmpty || cachedFlatOrders.isNotEmpty) && mounted) {
+      setState(() {
+        _sellers = cachedSellers;
+        _deliveryBoys = cachedDeliveryBoys;
+        _flatOrdersList = cachedFlatOrders;
+        _isLoading = false;
+      });
+    }
+
+    // 2. Refresh from VPS Server Database in background
     final sellers = await AuthService.getSellersList();
     final deliveryBoys = await AuthService.getDeliveryBoys();
     final flatOrders = await AuthService.getAllOrdersFlatListForAdmin();
+
     if (mounted) {
       setState(() {
         _sellers = sellers;
