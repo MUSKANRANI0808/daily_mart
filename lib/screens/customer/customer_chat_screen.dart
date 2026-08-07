@@ -1604,22 +1604,45 @@ class _CustomerProductItemTileState extends State<_CustomerProductItemTile> {
     _selectedUnit = null; // Unselected by default!
     _qtyController = TextEditingController(text: ''); // Empty by default!
 
-    final pUnit = (widget.item['unit'] ?? '').toString();
-    _availableUnits = List<String>.from(widget.sellerUnits);
-
+    final pUnit = (widget.item['unit'] ?? '').toString().trim();
     final uLower = pUnit.toLowerCase();
-    if (uLower.isNotEmpty) {
-      if (uLower.contains('kg') || uLower.contains('gram') || uLower == 'g') {
-        if (!_availableUnits.any((u) => u.toLowerCase().contains('kg'))) _availableUnits.add('Kg');
-        if (!_availableUnits.any((u) => u.toLowerCase().contains('gram') || u.toLowerCase() == 'g')) _availableUnits.add('Gram');
-      } else if (uLower.contains('l') || uLower.contains('liter') || uLower.contains('ml')) {
-        if (!_availableUnits.any((u) => u.toLowerCase().contains('l') && !u.toLowerCase().contains('ml'))) _availableUnits.add('L');
-        if (!_availableUnits.any((u) => u.toLowerCase().contains('ml'))) _availableUnits.add('Ml');
-      }
-      if (!listContainsCase(_availableUnits, pUnit)) {
-        _availableUnits.insert(0, pUnit);
+
+    final set = <String>{};
+    if (pUnit.isNotEmpty) set.add(pUnit);
+
+    // 1. Weight Product (Kg, Gram, g, quintal)
+    if (uLower.contains('kg') || uLower.contains('gram') || uLower == 'g' || uLower.contains('quintal')) {
+      set.add('Gram');
+      set.add('Kg');
+      for (var u in widget.sellerUnits) {
+        final ul = u.toLowerCase().trim();
+        if (ul.contains('kg') || ul.contains('gram') || ul == 'g') {
+          set.add(u);
+        }
       }
     }
+    // 2. Volume / Liquid Product (L, Liter, Ml)
+    else if (uLower.contains('l') || uLower.contains('liter') || uLower.contains('ml')) {
+      set.add('L');
+      set.add('Ml');
+      for (var u in widget.sellerUnits) {
+        final ul = u.toLowerCase().trim();
+        if (ul.contains('l') || ul.contains('liter') || ul.contains('ml')) {
+          set.add(u);
+        }
+      }
+    }
+    // 3. Count / Piece Product (Pcs, Packet, Box, Dozen, etc.)
+    else {
+      for (var u in widget.sellerUnits) {
+        final ul = u.toLowerCase().trim();
+        if (!ul.contains('kg') && !ul.contains('gram') && ul != 'g' && !ul.contains('liter') && !ul.contains('ml') && ul != 'l') {
+          set.add(u);
+        }
+      }
+    }
+
+    _availableUnits = set.toList();
   }
 
   bool listContainsCase(List<String> list, String val) {
