@@ -1325,13 +1325,6 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                                 ),
                               ),
                             ),
-                            if (_sellerProducts.isNotEmpty) ...[
-                              const SizedBox(width: 12),
-                              Text(
-                                '${_sellerProducts.length} Items Available',
-                                style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
-                              ),
-                            ],
                           ],
                         ),
                       ),
@@ -1364,20 +1357,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
                                   ),
                                   const SizedBox(width: 8),
-                                  if (_hasUnratedItemInSelection())
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFFFF1F2),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: const Color(0xFFFDA4AF)),
-                                      ),
-                                      child: const Text(
-                                        'Total: Rate Pending ⏳',
-                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFFE11D48)),
-                                      ),
-                                    )
-                                  else
+                                  if (!_hasUnratedItemInSelection())
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                       decoration: BoxDecoration(
@@ -1410,7 +1390,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                                       final it = _selectedOrderItems[idx];
                                       final amt = (it['amount'] as num?)?.toDouble() ?? 0.0;
                                       final amtStr = amt > 0 ? '₹${amt.toStringAsFixed(amt.truncateToDouble() == amt ? 0 : 2)}' : '';
-
+                                      final isUnratedItem = amt <= 0;
                                       return Dismissible(
                                         key: Key('selected_item_${it['name']}_$idx'),
                                         direction: DismissDirection.endToStart,
@@ -1448,9 +1428,12 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                                           margin: const EdgeInsets.only(bottom: 6),
                                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                           decoration: BoxDecoration(
-                                            color: const Color(0xFFF8FAFC),
+                                            color: isUnratedItem ? const Color(0xFFFFF1F2) : const Color(0xFFF8FAFC),
                                             borderRadius: BorderRadius.circular(10),
-                                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                                            border: Border.all(
+                                              color: isUnratedItem ? const Color(0xFFFDA4AF) : const Color(0xFFE2E8F0),
+                                              width: isUnratedItem ? 1.2 : 1.0,
+                                            ),
                                           ),
                                           child: InkWell(
                                             onTap: () => _showEditSelectedItemDialog(idx),
@@ -1458,13 +1441,21 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                                               children: [
                                                 Text(
                                                   '${idx + 1}.',
-                                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF64748B)),
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 12,
+                                                    color: isUnratedItem ? const Color(0xFF9F1239) : const Color(0xFF64748B),
+                                                  ),
                                                 ),
                                                 const SizedBox(width: 6),
                                                 Expanded(
                                                   child: Text(
                                                     '${it['name']} (${it['qty']} ${it['unit']})',
-                                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                                                    style: TextStyle(
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 13,
+                                                      color: isUnratedItem ? const Color(0xFF881337) : const Color(0xFF0F172A),
+                                                    ),
                                                     maxLines: 1,
                                                     overflow: TextOverflow.ellipsis,
                                                   ),
@@ -1473,9 +1464,25 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                                                   Text(
                                                     amtStr,
                                                     style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF059669)),
+                                                  )
+                                                else
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFFFECDD3),
+                                                      borderRadius: BorderRadius.circular(6),
+                                                    ),
+                                                    child: const Text(
+                                                      'Rate Pending',
+                                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF9F1239)),
+                                                    ),
                                                   ),
                                                 const SizedBox(width: 6),
-                                                const Icon(Icons.edit_outlined, size: 16, color: Color(0xFF8B5CF6)),
+                                                Icon(
+                                                  Icons.edit_outlined,
+                                                  size: 16,
+                                                  color: isUnratedItem ? const Color(0xFFE11D48) : const Color(0xFF8B5CF6),
+                                                ),
                                               ],
                                             ),
                                           ),
