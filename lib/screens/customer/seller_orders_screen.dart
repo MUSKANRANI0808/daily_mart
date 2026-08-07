@@ -1206,45 +1206,8 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                                   if (_sliders.isNotEmpty) ...[
                                     _buildSliderSection(),
                                     const SizedBox(height: 28),
-                                  ] else ...[
-                                    const SizedBox(height: 70),
-                                    if (_headerThemeConfig['is_festival_active'] == true && (_headerThemeConfig['festival_title'] ?? '').toString().isNotEmpty)
-                                      Container(
-                                        margin: const EdgeInsets.only(bottom: 24),
-                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                        decoration: BoxDecoration(
-                                          gradient: const LinearGradient(
-                                            colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
-                                          ),
-                                          borderRadius: BorderRadius.circular(20),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: const Color(0xFFF59E0B).withValues(alpha: 0.4),
-                                              blurRadius: 10,
-                                              offset: const Offset(0, 4),
-                                            ),
-                                          ],
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const Icon(Icons.stars_rounded, color: Colors.white, size: 18),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              _headerThemeConfig['festival_title'].toString(),
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 13,
-                                                letterSpacing: 0.8,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      )
-                                    else
-                                      const SizedBox(height: 30),
-                                  ],
+                                  ] else
+                                    const SizedBox(height: 90),
                                 ],
                               ),
                             ),
