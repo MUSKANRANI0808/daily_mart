@@ -243,13 +243,15 @@ class _SellerDashboardState extends State<SellerDashboard> {
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.2),
-                        blurRadius: 14,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
+                    boxShadow: (bg == 'none' || bg == 'transparent' || bg.isEmpty)
+                        ? []
+                        : [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.2),
+                              blurRadius: 14,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: SellerSlidersScreen.buildBannerBackground(

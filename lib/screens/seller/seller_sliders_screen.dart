@@ -230,15 +230,8 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
       return Container(
         width: double.infinity,
         decoration: BoxDecoration(
-          color: const Color(0xFF0F172A),
+          color: Colors.transparent,
           borderRadius: borderRadius ?? BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.15),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
         ),
         child: child,
       );
@@ -828,24 +821,24 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                   child: ListView(
                                     scrollDirection: Axis.horizontal,
                                     children: [
-                                      // NO IMAGE OPTION (DEFAULT)
+                                      // NO IMAGE OPTION (FULL TRANSPARENT DEFAULT)
                                       GestureDetector(
                                         onTap: () => setDialogState(() => selectedImageData = 'none'),
                                         child: Container(
                                           width: 100,
                                           margin: const EdgeInsets.only(right: 8),
                                           decoration: BoxDecoration(
-                                            color: const Color(0xFF0F172A),
+                                            color: const Color(0xFFF1F5F9),
                                             borderRadius: BorderRadius.circular(10),
                                             border: (selectedImageData == 'none' || selectedImageData.isEmpty)
                                                 ? Border.all(color: const Color(0xFF10B981), width: 2.5)
-                                                : Border.all(color: Colors.black12),
+                                                : Border.all(color: const Color(0xFFCBD5E1)),
                                           ),
                                           child: const Center(
                                             child: Text(
-                                              '🚫 No Image\n(Clean Dark)',
+                                              '🚫 Full Transparent\n(No Color)',
                                               style: TextStyle(
-                                                color: Colors.white,
+                                                color: Color(0xFF0F172A),
                                                 fontWeight: FontWeight.bold,
                                                 fontSize: 10,
                                               ),
