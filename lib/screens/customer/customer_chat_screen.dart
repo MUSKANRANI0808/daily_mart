@@ -946,19 +946,13 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                 // Title Header
                 Row(
                   children: [
-                    const CircleAvatar(
-                      radius: 18,
-                      backgroundColor: Color(0xFFEDE9FE),
-                      child: Icon(Icons.list_alt_rounded, color: Color(0xFF8B5CF6), size: 20),
-                    ),
-                    const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '${widget.sellerName} Products List 📋',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                          const Text(
+                            'Products List',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
