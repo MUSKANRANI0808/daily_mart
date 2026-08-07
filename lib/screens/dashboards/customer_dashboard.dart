@@ -308,6 +308,10 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                 ),
                 child: Stack(
                   children: [
+                    // Flipkart Style Festive Lottie Animation Overlay
+                    Positioned.fill(
+                      child: FestivalLottieHeaderWidget(config: _headerThemeConfig),
+                    ),
                     // Subtle Decorative Background Shapes
                     Positioned(
                       right: -20,

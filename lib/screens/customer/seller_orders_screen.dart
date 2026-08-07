@@ -1071,6 +1071,11 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                               ),
                             ),
 
+                            // Flipkart Style Festive Lottie Animation Overlay
+                            Positioned.fill(
+                              child: FestivalLottieHeaderWidget(config: _headerThemeConfig),
+                            ),
+
                             // Continuous Metallic Shining Glass Light Beam
                             if (_headerThemeConfig['enable_shining'] != false)
                               const Positioned.fill(

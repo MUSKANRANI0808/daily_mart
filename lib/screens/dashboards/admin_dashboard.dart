@@ -256,9 +256,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
     bool enableShining = currentConfig['enable_shining'] ?? true;
     double particleOpacity = (currentConfig['particle_opacity'] as num?)?.toDouble() ?? 0.9;
 
+    bool isFestivalActive = currentConfig['is_festival_active'] ?? false;
+    String festivalTitle = currentConfig['festival_title'] ?? 'FREEDOM SALE 🇮🇳';
+    String lottieUrl = currentConfig['lottie_url'] ?? 'https://assets3.lottiefiles.com/packages/lf20_u4jjb9bd.json';
+    double lottieOpacity = (currentConfig['lottie_opacity'] as num?)?.toDouble() ?? 0.75;
+
     final c1Controller = TextEditingController(text: color1Hex);
     final c2Controller = TextEditingController(text: color2Hex);
     final c3Controller = TextEditingController(text: color3Hex);
+    final festivalTitleCtrl = TextEditingController(text: festivalTitle);
+    final lottieUrlCtrl = TextEditingController(text: lottieUrl);
 
     if (!mounted) return;
 
@@ -275,6 +282,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
             'shading': selectedShading,
             'enable_shining': enableShining,
             'particle_opacity': particleOpacity,
+            'is_festival_active': isFestivalActive,
+            'festival_title': festivalTitleCtrl.text.trim(),
+            'lottie_url': lottieUrlCtrl.text.trim(),
+            'lottie_opacity': lottieOpacity,
           };
 
           return AlertDialog(
@@ -332,6 +343,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                 particleOpacity: particleOpacity,
                               ),
                             ),
+                            if (isFestivalActive && lottieUrlCtrl.text.isNotEmpty)
+                              Positioned.fill(
+                                child: FestivalLottieHeaderWidget(config: liveConfig),
+                              ),
                             if (enableShining)
                               const Positioned.fill(
                                 child: ContinuousShiningGlassBeamWidget(),
@@ -341,14 +356,32 @@ class _AdminDashboardState extends State<AdminDashboard> {
                               left: 15,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
-                                children: const [
-                                  Text(
-                                    'Live Theme Preview 🏪',
-                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Text(
+                                        'Live Theme Preview 🏪',
+                                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                                      ),
+                                      if (isFestivalActive && festivalTitleCtrl.text.isNotEmpty) ...[
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFF59E0B),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
+                                            festivalTitleCtrl.text,
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
                                   ),
-                                  SizedBox(height: 2),
-                                  Text(
-                                    'Daily Mart Header Canvas',
+                                  const SizedBox(height: 2),
+                                  const Text(
+                                    'Daily Mart Animated Header Canvas',
                                     style: TextStyle(color: Colors.white70, fontSize: 11),
                                   ),
                                 ],
@@ -685,6 +718,103 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       setDialogState(() => particleOpacity = val);
                     },
                   ),
+                  const Divider(height: 30),
+
+                  // 7. FESTIVAL & SEASONAL ANIMATION MANAGER (FLIPKART STYLE)
+                  Row(
+                    children: const [
+                      Icon(Icons.festival_rounded, color: Color(0xFFF59E0B), size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        'Flipkart Style Festive Animated Theme 🎆',
+                        style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13.5),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Enable smooth floating vector Lottie animations (Freedom Sale, Diwali Fireworks, Flipkart Grocery, Flash Sale) or paste any custom Lottie JSON URL / prompt.',
+                    style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                  ),
+                  const SizedBox(height: 10),
+
+                  SwitchListTile(
+                    activeThumbColor: const Color(0xFFF59E0B),
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text(
+                      'Enable Festive Header Animation 🎈',
+                      style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    subtitle: const Text('Overlay floating festive vector graphics over header background.'),
+                    value: isFestivalActive,
+                    onChanged: (val) {
+                      setDialogState(() => isFestivalActive = val);
+                    },
+                  ),
+
+                  if (isFestivalActive) ...[
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: festivalTitleCtrl,
+                      onChanged: (_) => setDialogState(() {}),
+                      decoration: const InputDecoration(
+                        labelText: 'Festive Banner Title / Badge (e.g. FREEDOM SALE 🇮🇳)',
+                        prefixIcon: Icon(Icons.stars_rounded, color: Color(0xFFF59E0B), size: 18),
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    const Text(
+                      'Choose Festival Animation Preset:',
+                      style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: HeaderThemeHelper.festivalPresets.map((f) {
+                        final isSelected = lottieUrlCtrl.text.trim() == f['url'];
+                        return ChoiceChip(
+                          label: Text(f['name']!),
+                          selected: isSelected,
+                          selectedColor: const Color(0xFFF59E0B),
+                          backgroundColor: const Color(0xFFFEF3C7),
+                          labelStyle: TextStyle(
+                            color: isSelected ? Colors.white : const Color(0xFF92400E),
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            fontSize: 11,
+                          ),
+                          onSelected: (val) {
+                            if (val) {
+                              setDialogState(() {
+                                lottieUrlCtrl.text = f['url']!;
+                                festivalTitleCtrl.text = f['title']!;
+                                c1Controller.text = f['color1']!;
+                                c2Controller.text = f['color2']!;
+                                c3Controller.text = f['color3']!;
+                                selectedPreset = 'custom';
+                              });
+                            }
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 12),
+
+                    TextField(
+                      controller: lottieUrlCtrl,
+                      onChanged: (_) => setDialogState(() {}),
+                      decoration: const InputDecoration(
+                        labelText: 'Custom Lottie JSON URL / Code Prompt',
+                        hintText: 'Paste https://assets.../lottie.json URL',
+                        prefixIcon: Icon(Icons.link_rounded, color: Color(0xFF0EA5E9), size: 18),
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -714,6 +844,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     'shading': selectedShading,
                     'enable_shining': enableShining,
                     'particle_opacity': particleOpacity,
+                    'is_festival_active': isFestivalActive,
+                    'festival_title': festivalTitleCtrl.text.trim(),
+                    'lottie_url': lottieUrlCtrl.text.trim(),
+                    'lottie_opacity': lottieOpacity,
                   };
 
                   await AuthService.saveHeaderThemeConfig(finalConfig);
