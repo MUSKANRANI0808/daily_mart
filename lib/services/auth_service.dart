@@ -3355,4 +3355,170 @@ class AuthService {
 
     return true;
   }
+
+  // ==========================================
+  // SELLER PRODUCTS CRUD API & LOCAL CACHE
+  // ==========================================
+
+  /// Get Products for a Seller (from VPS Database with local cache fallback)
+  static Future<List<Map<String, dynamic>>> getSellerProducts(String sellerUsername) async {
+    final cleanSeller = sellerUsername.trim();
+    if (cleanSeller.isEmpty) return [];
+
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_products_$cleanSeller';
+
+    // 1. Fetch from VPS API
+    try {
+      final res = await VpsApiService.get('get-seller-products&seller_username=$cleanSeller');
+      if (res != null && res['success'] == true && res['products'] is List) {
+        final List<dynamic> rawList = res['products'];
+        final List<Map<String, dynamic>> products = rawList.map((e) => Map<String, dynamic>.from(e)).toList();
+        await prefs.setString(cacheKey, jsonEncode(products));
+        return products;
+      }
+    } catch (_) {}
+
+    // 2. Local Fallback Cache
+    try {
+      final str = prefs.getString(cacheKey);
+      if (str != null && str.isNotEmpty) {
+        final List<dynamic> list = jsonDecode(str);
+        return list.map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+    } catch (_) {}
+
+    return [];
+  }
+
+  /// Add a Product for a Seller
+  static Future<bool> addSellerProduct({
+    required String sellerUsername,
+    required String name,
+    String description = '',
+    String unit = 'Pcs',
+    required double rate,
+  }) async {
+    final cleanSeller = sellerUsername.trim();
+    final cleanName = name.trim();
+    if (cleanSeller.isEmpty || cleanName.isEmpty) return false;
+
+    Map<String, dynamic>? newProd;
+
+    // 1. Save to VPS API Database
+    try {
+      final res = await VpsApiService.post('add-seller-product', {
+        'seller_username': cleanSeller,
+        'name': cleanName,
+        'description': description.trim(),
+        'unit': unit.trim(),
+        'rate': rate,
+      });
+
+      if (res != null && res['success'] == true && res['product'] != null) {
+        newProd = Map<String, dynamic>.from(res['product']);
+      }
+    } catch (_) {}
+
+    newProd ??= {
+      'id': DateTime.now().millisecondsSinceEpoch,
+      'seller_username': cleanSeller,
+      'name': cleanName,
+      'description': description.trim(),
+      'unit': unit.trim(),
+      'rate': rate,
+    };
+
+    // 2. Save/Update Local Cache
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_products_$cleanSeller';
+    List<Map<String, dynamic>> products = [];
+    try {
+      final str = prefs.getString(cacheKey);
+      if (str != null && str.isNotEmpty) {
+        products = (jsonDecode(str) as List).map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+    } catch (_) {}
+
+    products.insert(0, newProd);
+    await prefs.setString(cacheKey, jsonEncode(products));
+    return true;
+  }
+
+  /// Update an existing Product for a Seller
+  static Future<bool> updateSellerProduct({
+    required int id,
+    required String sellerUsername,
+    required String name,
+    String description = '',
+    String unit = 'Pcs',
+    required double rate,
+  }) async {
+    final cleanSeller = sellerUsername.trim();
+    final cleanName = name.trim();
+    if (id <= 0 || cleanName.isEmpty) return false;
+
+    // 1. VPS API Update
+    try {
+      await VpsApiService.post('update-seller-product', {
+        'id': id,
+        'seller_username': cleanSeller,
+        'name': cleanName,
+        'description': description.trim(),
+        'unit': unit.trim(),
+        'rate': rate,
+      });
+    } catch (_) {}
+
+    // 2. Local Cache Update
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_products_$cleanSeller';
+    try {
+      final str = prefs.getString(cacheKey);
+      if (str != null && str.isNotEmpty) {
+        final List<dynamic> list = jsonDecode(str);
+        final products = list.map((e) => Map<String, dynamic>.from(e)).toList();
+        for (var p in products) {
+          if ((p['id'] as num?)?.toInt() == id) {
+            p['name'] = cleanName;
+            p['description'] = description.trim();
+            p['unit'] = unit.trim();
+            p['rate'] = rate;
+          }
+        }
+        await prefs.setString(cacheKey, jsonEncode(products));
+      }
+    } catch (_) {}
+
+    return true;
+  }
+
+  /// Delete a Product for a Seller
+  static Future<bool> deleteSellerProduct(int id, String sellerUsername) async {
+    final cleanSeller = sellerUsername.trim();
+    if (id <= 0) return false;
+
+    // 1. VPS API Delete
+    try {
+      await VpsApiService.post('delete-seller-product', {
+        'id': id,
+        'seller_username': cleanSeller,
+      });
+    } catch (_) {}
+
+    // 2. Local Cache Update
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_products_$cleanSeller';
+    try {
+      final str = prefs.getString(cacheKey);
+      if (str != null && str.isNotEmpty) {
+        final List<dynamic> list = jsonDecode(str);
+        final products = list.map((e) => Map<String, dynamic>.from(e)).toList();
+        products.removeWhere((p) => (p['id'] as num?)?.toInt() == id);
+        await prefs.setString(cacheKey, jsonEncode(products));
+      }
+    } catch (_) {}
+
+    return true;
+  }
 }

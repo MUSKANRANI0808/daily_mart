@@ -48,6 +48,18 @@ if (!$colCheckBill || $colCheckBill->num_rows == 0) {
     @$conn->query("ALTER TABLE messages ADD COLUMN bill_image LONGTEXT DEFAULT NULL");
 }
 
+// 3. Auto-check & create seller_products table if missing
+@$conn->query("CREATE TABLE IF NOT EXISTS seller_products (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    seller_username VARCHAR(100) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    description TEXT DEFAULT NULL,
+    unit VARCHAR(50) NOT NULL DEFAULT 'Pcs',
+    rate DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX(seller_username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
 if ($action == 'customer-login') {
     $mobile = isset($input['mobile']) ? trim($input['mobile']) : '';
     $name = isset($input['name']) ? trim($input['name']) : '';
@@ -525,6 +537,92 @@ if ($action == 'customer-login') {
         }
     }
     echo json_encode(["success" => false, "message" => "Invalid credentials"]);
+} elseif ($action == 'add-seller-product') {
+    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : '';
+    $name = isset($input['name']) ? trim($input['name']) : '';
+    $description = isset($input['description']) ? trim($input['description']) : '';
+    $unit = isset($input['unit']) ? trim($input['unit']) : 'Pcs';
+    $rate = isset($input['rate']) ? (float)$input['rate'] : 0.0;
+
+    if (empty($seller_username) || empty($name)) {
+        echo json_encode(["success" => false, "message" => "Seller username and product name are required"]);
+        exit();
+    }
+
+    $stmt = $conn->prepare("INSERT INTO seller_products (seller_username, name, description, unit, rate) VALUES (?, ?, ?, ?, ?)");
+    if ($stmt) {
+        $stmt->bind_param("ssssd", $seller_username, $name, $description, $unit, $rate);
+        if ($stmt->execute()) {
+            $newId = $stmt->insert_id;
+            echo json_encode([
+                "success" => true,
+                "message" => "Product added successfully",
+                "product" => [
+                    "id" => $newId,
+                    "seller_username" => $seller_username,
+                    "name" => $name,
+                    "description" => $description,
+                    "unit" => $unit,
+                    "rate" => $rate
+                ]
+            ]);
+            exit();
+        }
+    }
+    echo json_encode(["success" => false, "message" => "Failed to add product"]);
+    exit();
+} elseif ($action == 'get-seller-products') {
+    $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
+    if (empty($seller_username)) {
+        echo json_encode(["success" => true, "products" => array()]);
+        exit();
+    }
+
+    $escapedSeller = $conn->real_escape_string($seller_username);
+    $res = $conn->query("SELECT * FROM seller_products WHERE seller_username = '$escapedSeller' ORDER BY id DESC");
+    $products = array();
+    if ($res && $res !== true) {
+        while ($row = $res->fetch_assoc()) {
+            $row['id'] = (int)$row['id'];
+            $row['rate'] = (float)$row['rate'];
+            $products[] = $row;
+        }
+    }
+    echo json_encode(["success" => true, "products" => $products]);
+    exit();
+} elseif ($action == 'update-seller-product') {
+    $id = isset($input['id']) ? (int)$input['id'] : 0;
+    $name = isset($input['name']) ? trim($input['name']) : '';
+    $description = isset($input['description']) ? trim($input['description']) : '';
+    $unit = isset($input['unit']) ? trim($input['unit']) : 'Pcs';
+    $rate = isset($input['rate']) ? (float)$input['rate'] : 0.0;
+
+    if ($id <= 0 || empty($name)) {
+        echo json_encode(["success" => false, "message" => "Product ID and name required"]);
+        exit();
+    }
+
+    $stmt = $conn->prepare("UPDATE seller_products SET name = ?, description = ?, unit = ?, rate = ? WHERE id = ?");
+    if ($stmt) {
+        $stmt->bind_param("sssdi", $name, $description, $unit, $rate, $id);
+        if ($stmt->execute()) {
+            echo json_encode(["success" => true, "message" => "Product updated successfully"]);
+            exit();
+        }
+    }
+    echo json_encode(["success" => false, "message" => "Failed to update product"]);
+    exit();
+} elseif ($action == 'delete-seller-product') {
+    $id = isset($input['id']) ? (int)$input['id'] : (isset($_GET['id']) ? (int)$_GET['id'] : 0);
+    if ($id > 0) {
+        $stmt = $conn->prepare("DELETE FROM seller_products WHERE id = ?");
+        if ($stmt) {
+            $stmt->bind_param("i", $id);
+            $stmt->execute();
+        }
+    }
+    echo json_encode(["success" => true, "message" => "Product deleted"]);
+    exit();
 } else {
     echo json_encode(["success" => true, "message" => "Daily Mart API Active"]);
 }

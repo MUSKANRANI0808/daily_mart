@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../models/user_model.dart';
 import '../dashboards/seller_dashboard.dart';
 import 'seller_accounts_screen.dart';
+import 'seller_products_screen.dart';
 import 'seller_profile_screen.dart';
 
 class SellerMainNavScreen extends StatefulWidget {
@@ -69,6 +70,7 @@ class _SellerMainNavScreenState extends State<SellerMainNavScreen> {
     final List<Widget> pages = [
       SellerDashboard(seller: widget.seller),
       SellerAccountsScreen(seller: widget.seller),
+      SellerProductsScreen(seller: widget.seller),
       SellerProfileScreen(seller: widget.seller),
     ];
 
@@ -131,6 +133,11 @@ class _SellerMainNavScreenState extends State<SellerMainNavScreen> {
                 icon: Icon(Icons.account_balance_wallet_rounded),
                 activeIcon: Icon(Icons.account_balance_wallet_rounded, size: 26),
                 label: 'Account',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.inventory_2_rounded),
+                activeIcon: Icon(Icons.inventory_2_rounded, size: 26),
+                label: 'Products',
               ),
               BottomNavigationBarItem(
                 icon: Icon(Icons.person_rounded),

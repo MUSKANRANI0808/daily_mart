@@ -33,6 +33,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
   List<Map<String, dynamic>> _messages = [];
   bool _isLoading = true;
   bool _isBlocked = false;
+  List<Map<String, dynamic>> _sellerProducts = [];
 
   late Razorpay _razorpay;
   int _activePendingMsgId = 0;
@@ -47,6 +48,16 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
     _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
     _checkBlockedStatus();
     _loadMessages();
+    _loadSellerProducts();
+  }
+
+  Future<void> _loadSellerProducts() async {
+    final products = await AuthService.getSellerProducts(widget.sellerUsername);
+    if (mounted) {
+      setState(() {
+        _sellerProducts = products;
+      });
+    }
   }
 
   @override
@@ -740,6 +751,243 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
     }
   }
 
+  void _addItemToOrderText(String name, String unit, double rate) {
+    final existingText = _msgController.text.trim();
+    final lines = existingText.isEmpty ? <String>[] : existingText.split('\n').where((l) => l.trim().isNotEmpty).toList();
+    final lineNum = lines.length + 1;
+    final rateStr = rate > 0 ? ' - ₹${rate.toStringAsFixed(rate.truncateToDouble() == rate ? 0 : 2)}' : '';
+    final newItemStr = '$lineNum. $name ($unit)$rateStr';
+
+    setState(() {
+      if (existingText.isEmpty) {
+        _msgController.text = newItemStr;
+      } else {
+        _msgController.text = '$existingText\n$newItemStr';
+      }
+      _msgController.selection = TextSelection.fromPosition(TextPosition(offset: _msgController.text.length));
+    });
+  }
+
+  void _showProductListPickerSheet() {
+    String searchKey = '';
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final query = searchKey.trim().toLowerCase();
+          final filteredList = _sellerProducts.where((p) {
+            final n = (p['name'] ?? '').toString().toLowerCase();
+            final d = (p['description'] ?? '').toString().toLowerCase();
+            final u = (p['unit'] ?? '').toString().toLowerCase();
+            return query.isEmpty || n.contains(query) || d.contains(query) || u.contains(query);
+          }).toList();
+
+          return Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+              left: 16,
+              right: 16,
+              top: 14,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Handle Bar
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Title Header
+                Row(
+                  children: [
+                    const CircleAvatar(
+                      radius: 18,
+                      backgroundColor: Color(0xFFEDE9FE),
+                      child: Icon(Icons.list_alt_rounded, color: Color(0xFF8B5CF6), size: 20),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${widget.sellerName} Products List 📋',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const Text(
+                            'Search & tap products to add into your order list',
+                            style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B), size: 22),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                // Search Box
+                TextField(
+                  autofocus: true,
+                  onChanged: (val) {
+                    setModalState(() {
+                      searchKey = val;
+                    });
+                  },
+                  decoration: InputDecoration(
+                    hintText: 'Search products by name or description...',
+                    hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                    prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF8B5CF6), size: 20),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                    fillColor: const Color(0xFFF1F5F9),
+                    filled: true,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Filtered Products List
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.45),
+                  child: filteredList.isEmpty
+                      ? Container(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.search_off_rounded, color: Colors.grey, size: 36),
+                              const SizedBox(height: 8),
+                              Text(
+                                searchKey.isNotEmpty ? 'No products matching "$searchKey"' : 'No products in seller catalog yet.',
+                                style: const TextStyle(fontSize: 13, color: Colors.black54, fontWeight: FontWeight.bold),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: filteredList.length,
+                          itemBuilder: (context, idx) {
+                            final item = filteredList[idx];
+                            final pName = item['name'] ?? '';
+                            final pDesc = item['description'] ?? '';
+                            final pUnit = item['unit'] ?? 'Pcs';
+                            final pRate = (item['rate'] ?? 0.0) is num ? (item['rate'] as num).toDouble() : 0.0;
+                            final rateStr = pRate > 0 ? '₹${pRate.toStringAsFixed(pRate.truncateToDouble() == pRate ? 0 : 2)}' : '';
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                              ),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                title: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        pName,
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A)),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEDE9FE),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        pUnit,
+                                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF6D28D9)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (pDesc.isNotEmpty)
+                                      Text(pDesc, style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
+                                    if (rateStr.isNotEmpty)
+                                      Text(rateStr, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF059669))),
+                                  ],
+                                ),
+                                trailing: ElevatedButton.icon(
+                                  onPressed: () {
+                                    _addItemToOrderText(pName, pUnit, pRate);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Added "$pName" to order list 🛒'),
+                                        duration: const Duration(seconds: 1),
+                                        backgroundColor: const Color(0xFF10B981),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.add_rounded, size: 16, color: Colors.white),
+                                  label: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF10B981),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    elevation: 0,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+                const SizedBox(height: 8),
+
+                // Done Button
+                ElevatedButton.icon(
+                  onPressed: () => Navigator.pop(ctx),
+                  icon: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                  label: const Text('Done Selecting Items', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F172A),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -867,56 +1115,134 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                     ],
                   ),
                 )
-              : Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
-                        blurRadius: 10,
-                        offset: const Offset(0, -2),
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Mode Selector Bar: List 📋 vs Chat 💬
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF1F5F9),
+                        border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
                       ),
-                    ],
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: TextField(
-                            controller: _msgController,
-                            keyboardType: TextInputType.multiline,
-                            maxLines: 5,
-                            minLines: 1,
-                            textInputAction: TextInputAction.newline,
-                            style: const TextStyle(color: Color(0xFF0F172A), fontSize: 15),
-                            decoration: const InputDecoration(
-                              hintText: 'Type your order...',
-                              hintStyle: TextStyle(color: Colors.grey),
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(vertical: 12),
+                      child: Row(
+                        children: [
+                          InkWell(
+                            onTap: _showProductListPickerSheet,
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF8B5CF6),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF8B5CF6).withValues(alpha: 0.3),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.format_list_bulleted_add, color: Colors.white, size: 16),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'List 📋 (Select Items)',
+                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: const Color(0xFFCBD5E1)),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF475569), size: 14),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Chat 💬',
+                                  style: TextStyle(color: Color(0xFF475569), fontWeight: FontWeight.bold, fontSize: 11.5),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Spacer(),
+                          if (_sellerProducts.isNotEmpty)
+                            Text(
+                              '${_sellerProducts.length} Items Available',
+                              style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+                            ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      CircleAvatar(
-                        backgroundColor: const Color(0xFF10B981),
-                        radius: 22,
-                        child: IconButton(
-                          icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-                          onPressed: _sendMessage,
-                        ),
+                    ),
+
+                    // Input Bar
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.06),
+                            blurRadius: 10,
+                            offset: const Offset(0, -2),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          // Quick List Picker Icon Button
+                          IconButton(
+                            icon: const Icon(Icons.playlist_add_rounded, color: Color(0xFF8B5CF6), size: 26),
+                            tooltip: 'Select from Product List',
+                            onPressed: _showProductListPickerSheet,
+                          ),
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              child: TextField(
+                                controller: _msgController,
+                                keyboardType: TextInputType.multiline,
+                                maxLines: 5,
+                                minLines: 1,
+                                textInputAction: TextInputAction.newline,
+                                style: const TextStyle(color: Color(0xFF0F172A), fontSize: 15),
+                                decoration: const InputDecoration(
+                                  hintText: 'Type order or tap List 📋...',
+                                  hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
+                                  border: InputBorder.none,
+                                  contentPadding: EdgeInsets.symmetric(vertical: 12),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          CircleAvatar(
+                            backgroundColor: const Color(0xFF10B981),
+                            radius: 22,
+                            child: IconButton(
+                              icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                              onPressed: _sendMessage,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
         ],
       ),
