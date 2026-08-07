@@ -902,95 +902,92 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                                 ),
                               ],
                             ),
-                            child: Row(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                // 1. Initial Letter Badge
-                                CircleAvatar(
-                                  radius: 16,
-                                  backgroundColor: const Color(0xFFEDE9FE),
-                                  child: Text(
-                                    name.isNotEmpty ? name[0].toUpperCase() : 'P',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF8B5CF6),
-                                      fontSize: 14,
+                                // Row 1: Full-width Product Name & Description at TOP
+                                Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 14,
+                                      backgroundColor: const Color(0xFFEDE9FE),
+                                      child: Text(
+                                        name.isNotEmpty ? name[0].toUpperCase() : 'P',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF8B5CF6),
+                                          fontSize: 13,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-
-                                // 2. Product Name & Optional Description
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        name,
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        desc.isNotEmpty ? '$name ($desc)' : name,
                                         style: const TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.bold,
                                           color: Color(0xFF0F172A),
                                         ),
-                                        maxLines: 1,
+                                        maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-                                      if (desc.isNotEmpty)
-                                        Text(
-                                          desc,
-                                          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-
-                                // 3. Unit Badge
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF1F5F9),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: const Color(0xFFCBD5E1)),
-                                  ),
-                                  child: Text(
-                                    qty > 1 ? '$unit (x$qty)' : unit,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF475569),
                                     ),
-                                  ),
+                                  ],
                                 ),
-                                const SizedBox(width: 10),
+                                const SizedBox(height: 6),
 
-                                // 4. Rate / Price
-                                Text(
-                                  '₹${rate.toStringAsFixed(rate.truncateToDouble() == rate ? 0 : 2)}',
-                                  style: const TextStyle(
-                                    fontSize: 14.5,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF059669),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
+                                // Row 2: Slim details row [Unit Badge] | [Price] | [Edit & Delete Icons]
+                                Row(
+                                  children: [
+                                    // Unit Badge
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF1F5F9),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                                      ),
+                                      child: Text(
+                                        qty > 1 ? '$unit (x$qty)' : unit,
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF475569),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
 
-                                // 5. Action Icons (Edit & Delete side by side)
-                                IconButton(
-                                  icon: const Icon(Icons.edit_rounded, color: Color(0xFF8B5CF6), size: 18),
-                                  onPressed: () => _showAddEditProductDialog(productToEdit: p),
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                  tooltip: 'Edit Product',
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 18),
-                                  onPressed: () => _confirmDeleteProduct(p),
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                  tooltip: 'Delete Product',
+                                    // Price / Rate
+                                    Text(
+                                      '₹${rate.toStringAsFixed(rate.truncateToDouble() == rate ? 0 : 2)}',
+                                      style: const TextStyle(
+                                        fontSize: 14.5,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF059669),
+                                      ),
+                                    ),
+                                    const Spacer(),
+
+                                    // Action Icons (Edit & Delete side by side)
+                                    IconButton(
+                                      icon: const Icon(Icons.edit_rounded, color: Color(0xFF8B5CF6), size: 18),
+                                      onPressed: () => _showAddEditProductDialog(productToEdit: p),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                      tooltip: 'Edit Product',
+                                    ),
+                                    const SizedBox(width: 4),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 18),
+                                      onPressed: () => _confirmDeleteProduct(p),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                      tooltip: 'Delete Product',
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
