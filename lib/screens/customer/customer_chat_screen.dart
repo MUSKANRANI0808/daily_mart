@@ -769,6 +769,23 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
     });
   }
 
+  void _addCustomItemToOrderText(String name, String unit, String qtyStr, double amount) {
+    final existingText = _msgController.text.trim();
+    final lines = existingText.isEmpty ? <String>[] : existingText.split('\n').where((l) => l.trim().isNotEmpty).toList();
+    final lineNum = lines.length + 1;
+    final amtStr = amount > 0 ? ' - ₹${amount.toStringAsFixed(amount.truncateToDouble() == amount ? 0 : 2)}' : '';
+    final newItemStr = '$lineNum. $name ($qtyStr $unit)$amtStr';
+
+    setState(() {
+      if (existingText.isEmpty) {
+        _msgController.text = newItemStr;
+      } else {
+        _msgController.text = '$existingText\n$newItemStr';
+      }
+      _msgController.selection = TextSelection.fromPosition(TextPosition(offset: _msgController.text.length));
+    });
+  }
+
   void _showProductListPickerSheet() {
     String searchKey = '';
     showModalBottomSheet(
@@ -784,6 +801,8 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
             final u = (p['unit'] ?? '').toString().toLowerCase();
             return query.isEmpty || n.contains(query) || d.contains(query) || u.contains(query);
           }).toList();
+
+          final sellerCustomUnits = _sellerProducts.map((p) => (p['unit'] ?? '').toString()).where((u) => u.isNotEmpty).toSet().toList();
 
           return Container(
             decoration: const BoxDecoration(
@@ -833,7 +852,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                           const Text(
-                            'Search & tap products to add into your order list',
+                            'Select unit, quantity & auto-calculate amount',
                             style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                           ),
                         ],
@@ -849,7 +868,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
 
                 // Search Box
                 TextField(
-                  autofocus: true,
+                  autofocus: false,
                   onChanged: (val) {
                     setModalState(() {
                       searchKey = val;
@@ -871,9 +890,9 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // Filtered Products List
+                // Filtered Products List with Interactive Unit, Qty & Auto-Calculate Amount
                 ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.45),
+                  constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.5),
                   child: filteredList.isEmpty
                       ? Container(
                           padding: const EdgeInsets.all(24),
@@ -895,75 +914,19 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                           itemCount: filteredList.length,
                           itemBuilder: (context, idx) {
                             final item = filteredList[idx];
-                            final pName = item['name'] ?? '';
-                            final pDesc = item['description'] ?? '';
-                            final pUnit = item['unit'] ?? 'Pcs';
-                            final pQty = (item['qty'] ?? 1) is num ? (item['qty'] as num).toInt() : 1;
-                            final pRate = (item['rate'] ?? 0.0) is num ? (item['rate'] as num).toDouble() : 0.0;
-                            final rateStr = pRate > 0 ? '₹${pRate.toStringAsFixed(pRate.truncateToDouble() == pRate ? 0 : 2)}' : '';
-
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF8FAFC),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                              ),
-                              child: ListTile(
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                title: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        pName,
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A)),
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFEDE9FE),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        pQty > 1 ? '$pUnit (x$pQty)' : pUnit,
-                                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF6D28D9)),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (pDesc.isNotEmpty)
-                                      Text(pDesc, style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
-                                    if (rateStr.isNotEmpty)
-                                      Text(rateStr, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF059669))),
-                                  ],
-                                ),
-                                trailing: ElevatedButton.icon(
-                                  onPressed: () {
-                                    _addItemToOrderText(pName, pUnit, pQty, pRate);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Added "$pName" to order list 🛒'),
-                                        duration: const Duration(seconds: 1),
-                                        backgroundColor: const Color(0xFF10B981),
-                                      ),
-                                    );
-                                  },
-                                  icon: const Icon(Icons.add_rounded, size: 16, color: Colors.white),
-                                  label: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
-                                  style: ElevatedButton.styleFrom(
+                            return _CustomerProductItemTile(
+                              item: item,
+                              sellerUnits: sellerCustomUnits,
+                              onAdd: (name, unit, qtyStr, amount) {
+                                _addCustomItemToOrderText(name, unit, qtyStr, amount);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Added "$name ($qtyStr $unit)" to order 🛒'),
+                                    duration: const Duration(seconds: 1),
                                     backgroundColor: const Color(0xFF10B981),
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    minimumSize: Size.zero,
-                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    elevation: 0,
                                   ),
-                                ),
-                              ),
+                                );
+                              },
                             );
                           },
                         ),
@@ -979,7 +942,6 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                     backgroundColor: const Color(0xFF0F172A),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    elevation: 0,
                   ),
                 ),
               ],
@@ -1249,6 +1211,287 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
         ],
       ),
     ),
+    );
+  }
+}
+
+double calculateProductAmount({
+  required String sellerUnit,
+  required int sellerQty,
+  required double sellerRate,
+  required String customerUnit,
+  required double customerQty,
+}) {
+  if (sellerQty <= 0 || sellerRate <= 0 || customerQty <= 0) return 0.0;
+
+  final sUnit = sellerUnit.trim().toLowerCase();
+  final cUnit = customerUnit.trim().toLowerCase();
+
+  // 1. Weight Units: Kg, Gram, g
+  bool isSellerWeight = sUnit.contains('kg') || sUnit.contains('gram') || sUnit == 'g';
+  bool isCustomerWeight = cUnit.contains('kg') || cUnit.contains('gram') || cUnit == 'g';
+
+  if (isSellerWeight && isCustomerWeight) {
+    double sellerGrams = (sUnit.contains('kg')) ? (sellerQty * 1000.0) : sellerQty.toDouble();
+    double customerGrams = (cUnit.contains('kg')) ? (customerQty * 1000.0) : customerQty;
+    double pricePerGram = sellerRate / sellerGrams;
+    return customerGrams * pricePerGram;
+  }
+
+  // 2. Volume Units: L, Liter, Ml
+  bool isSellerVolume = sUnit.contains('l') || sUnit.contains('liter') || sUnit.contains('ml');
+  bool isCustomerVolume = cUnit.contains('l') || cUnit.contains('liter') || cUnit.contains('ml');
+
+  if (isSellerVolume && isCustomerVolume) {
+    double sellerMls = (sUnit.contains('ml')) ? sellerQty.toDouble() : (sellerQty * 1000.0);
+    double customerMls = (cUnit.contains('ml')) ? customerQty : (customerQty * 1000.0);
+    double pricePerMl = sellerRate / sellerMls;
+    return customerMls * pricePerMl;
+  }
+
+  // 3. Piece / Count Units or Same Unit
+  double baseRatePerItem = sellerRate / sellerQty;
+  return customerQty * baseRatePerItem;
+}
+
+class _CustomerProductItemTile extends StatefulWidget {
+  final Map<String, dynamic> item;
+  final List<String> sellerUnits;
+  final Function(String name, String unit, String qtyStr, double amount) onAdd;
+
+  const _CustomerProductItemTile({
+    required this.item,
+    required this.sellerUnits,
+    required this.onAdd,
+  });
+
+  @override
+  State<_CustomerProductItemTile> createState() => _CustomerProductItemTileState();
+}
+
+class _CustomerProductItemTileState extends State<_CustomerProductItemTile> {
+  late String _selectedUnit;
+  late TextEditingController _qtyController;
+  late List<String> _availableUnits;
+
+  @override
+  void initState() {
+    super.initState();
+    final pUnit = (widget.item['unit'] ?? 'Pcs').toString();
+    final pQty = (widget.item['qty'] ?? 1) is num ? (widget.item['qty'] as num).toInt() : 1;
+
+    _selectedUnit = pUnit;
+    _qtyController = TextEditingController(text: pQty.toString());
+
+    _availableUnits = List<String>.from(widget.sellerUnits);
+    final uLower = pUnit.toLowerCase();
+    if (uLower.contains('kg') || uLower.contains('gram') || uLower == 'g') {
+      if (!_availableUnits.any((u) => u.toLowerCase().contains('kg'))) _availableUnits.add('Kg');
+      if (!_availableUnits.any((u) => u.toLowerCase().contains('gram') || u.toLowerCase() == 'g')) _availableUnits.add('Gram');
+    } else if (uLower.contains('l') || uLower.contains('liter') || uLower.contains('ml')) {
+      if (!_availableUnits.any((u) => u.toLowerCase().contains('l') && !u.toLowerCase().contains('ml'))) _availableUnits.add('L');
+      if (!_availableUnits.any((u) => u.toLowerCase().contains('ml'))) _availableUnits.add('Ml');
+    }
+    if (!_availableUnits.contains(pUnit)) {
+      _availableUnits.insert(0, pUnit);
+    }
+  }
+
+  @override
+  void dispose() {
+    _qtyController.dispose();
+    super.dispose();
+  }
+
+  double _getCalculatedAmount() {
+    final cQty = double.tryParse(_qtyController.text.trim()) ?? 0.0;
+    final sUnit = (widget.item['unit'] ?? 'Pcs').toString();
+    final sQty = (widget.item['qty'] ?? 1) is num ? (widget.item['qty'] as num).toInt() : 1;
+    final sRate = (widget.item['rate'] ?? 0.0) is num ? (widget.item['rate'] as num).toDouble() : 0.0;
+
+    return calculateProductAmount(
+      sellerUnit: sUnit,
+      sellerQty: sQty,
+      sellerRate: sRate,
+      customerUnit: _selectedUnit,
+      customerQty: cQty,
+    );
+  }
+
+  void _adjustQty(double delta) {
+    final current = double.tryParse(_qtyController.text.trim()) ?? 1.0;
+    double next = current + delta;
+    if (next < 0) next = 0;
+
+    setState(() {
+      _qtyController.text = next.truncateToDouble() == next ? next.toInt().toString() : next.toStringAsFixed(1);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pName = (widget.item['name'] ?? '').toString();
+    final pDesc = (widget.item['description'] ?? '').toString();
+    final amount = _getCalculatedAmount();
+    final amountStr = amount > 0 ? '₹${amount.toStringAsFixed(amount.truncateToDouble() == amount ? 0 : 2)}' : '₹0';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Row 1: Product Name & Add Button
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      pName,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
+                    ),
+                    if (pDesc.isNotEmpty)
+                      Text(
+                        pDesc,
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                      ),
+                  ],
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: () {
+                  final qStr = _qtyController.text.trim();
+                  widget.onAdd(pName, _selectedUnit, qStr, amount);
+                },
+                icon: const Icon(Icons.add_rounded, size: 16, color: Colors.white),
+                label: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  elevation: 0,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // Row 2: Unit Dropdown | Qty Selector (- field +) | Auto-Calculated Amount
+          Row(
+            children: [
+              // Unit Dropdown
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEDE9FE),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFDDD6FE)),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _availableUnits.contains(_selectedUnit) ? _selectedUnit : _availableUnits.first,
+                    isDense: true,
+                    icon: const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFF6D28D9)),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF6D28D9)),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() {
+                          final oldUnit = _selectedUnit;
+                          _selectedUnit = val;
+
+                          // Auto convert qty between Kg and Gram
+                          if (val.toLowerCase().contains('gram') && (oldUnit.toLowerCase().contains('kg') || _qtyController.text == '1')) {
+                            _qtyController.text = '500';
+                          } else if (val.toLowerCase().contains('kg') && (oldUnit.toLowerCase().contains('gram') || _qtyController.text == '500')) {
+                            _qtyController.text = '1';
+                          }
+                        });
+                      }
+                    },
+                    items: _availableUnits.map((u) {
+                      return DropdownMenuItem<String>(
+                        value: u,
+                        child: Text(u),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              // Qty Stepper Field (- 1 +)
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    InkWell(
+                      onTap: () => _adjustQty(_selectedUnit.toLowerCase().contains('gram') ? -50 : -1),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        child: Icon(Icons.remove_rounded, size: 16, color: Color(0xFF475569)),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 44,
+                      child: TextField(
+                        controller: _qtyController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        textAlign: TextAlign.center,
+                        onChanged: (_) => setState(() {}),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(vertical: 6),
+                          border: InputBorder.none,
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => _adjustQty(_selectedUnit.toLowerCase().contains('gram') ? 50 : 1),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        child: Icon(Icons.add_rounded, size: 16, color: Color(0xFF475569)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+
+              // Auto-Calculated Amount
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  const Text('Amount', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+                  Text(
+                    amountStr,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF059669)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
