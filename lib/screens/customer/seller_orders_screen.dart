@@ -11,6 +11,7 @@ import '../role_selection_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'customer_chat_screen.dart';
 import 'customer_main_nav_screen.dart';
+import '../seller/seller_sliders_screen.dart';
 
 class AbstractPatternPainter extends CustomPainter {
   final String presetId;
@@ -246,72 +247,10 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
     required Widget child,
     BorderRadius? borderRadius,
   }) {
-    final preset = presetThemes.firstWhere(
-      (p) => p['id'] == bg,
-      orElse: () => {},
-    );
-
-    if (preset.isNotEmpty) {
-      final List<Color> colors = List<Color>.from(preset['colors']);
-      return Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: colors,
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: borderRadius ?? BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: colors.last.withOpacity(0.2),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: CustomPaint(
-          painter: AbstractPatternPainter(bg),
-          child: child,
-        ),
-      );
-    }
-
-    DecorationImage? decImg;
-    if (bg.startsWith('data:image')) {
-      try {
-        final base64Str = bg.split(',').last;
-        decImg = DecorationImage(
-          image: MemoryImage(base64Decode(base64Str)),
-          fit: BoxFit.cover,
-          colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.35), BlendMode.darken),
-        );
-      } catch (_) {}
-    } else if (bg.startsWith('http')) {
-      decImg = DecorationImage(
-        image: NetworkImage(bg),
-        fit: BoxFit.cover,
-        colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.35), BlendMode.darken),
-      );
-    }
-
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: decImg == null
-            ? const LinearGradient(colors: [Color(0xFF1E293B), Color(0xFF0F172A)])
-            : null,
-        borderRadius: borderRadius ?? BorderRadius.circular(16),
-        image: decImg,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.12),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+    return SellerSlidersScreen.buildBannerBackground(
+      bg: bg,
       child: child,
+      borderRadius: borderRadius,
     );
   }
 
