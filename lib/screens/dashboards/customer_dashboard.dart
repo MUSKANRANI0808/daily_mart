@@ -292,10 +292,14 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
             children: [
               // User Welcome Card
               // Luxury Black & White Customer Welcome Header Card
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 400),
+              Container(
                 width: double.infinity,
-                decoration: HeaderThemeHelper.buildDecoration(_headerThemeConfig).copyWith(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: Colors.white.withValues(alpha: 0.15), width: 1.2),
                   boxShadow: [
@@ -308,10 +312,6 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                 ),
                 child: Stack(
                   children: [
-                    // Flipkart Style Festive Lottie Animation Overlay
-                    Positioned.fill(
-                      child: FestivalLottieHeaderWidget(config: _headerThemeConfig),
-                    ),
                     // Subtle Decorative Background Shapes
                     Positioned(
                       right: -20,
