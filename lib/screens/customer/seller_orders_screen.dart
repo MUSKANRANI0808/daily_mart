@@ -115,7 +115,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
   bool _isLoading = true;
   int _currentSliderPage = 0;
   String _selectedOrderFilter = 'All'; // 'All', 'Pending', 'Delivered', 'Cancelled'
-  final PageController _sliderController = PageController(viewportFraction: 0.92);
+  final PageController _sliderController = PageController();
 
   @override
   void initState() {
@@ -533,7 +533,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                 width: _currentSliderPage == index ? 20 : 7,
                 height: 7,
                 decoration: BoxDecoration(
-                  color: _currentSliderPage == index ? const Color(0xFF8B5CF6) : Colors.white38,
+                  color: _currentSliderPage == index ? const Color(0xFF8B5CF6) : const Color(0xFFCBD5E1),
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
@@ -1219,12 +1219,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                                     ),
                                   ),
 
-                                  // Top Banner 3D Carousel Slider & Indicator Dots
-                                  if (_sliders.isNotEmpty) ...[
-                                    _buildSliderSection(),
-                                    const SizedBox(height: 28),
-                                  ] else
-                                    const SizedBox(height: 90),
+                                  const SizedBox(height: 95),
                                 ],
                               ),
                             ),
@@ -1232,6 +1227,13 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                         ),
                       ),
                     ),
+
+                    // 3D Banner Carousel Slider placed OUTSIDE top wave header, right ABOVE Recent Orders
+                    if (_sliders.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      _buildSliderSection(),
+                      const SizedBox(height: 8),
+                    ],
 
                     // Section Title Header
                     const Padding(
