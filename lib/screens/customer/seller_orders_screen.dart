@@ -1081,6 +1081,11 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                                           onPressed: _callSeller,
                                         ),
                                         IconButton(
+                                          icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+                                          tooltip: 'Refresh Data 🔄',
+                                          onPressed: _loadData,
+                                        ),
+                                        IconButton(
                                           icon: const Icon(Icons.exit_to_app_rounded, color: Colors.white),
                                           tooltip: 'Exit to Seller List 🚪',
                                           onPressed: _exitToSellerList,
