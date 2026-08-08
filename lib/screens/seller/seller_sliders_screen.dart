@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../models/user_model.dart';
@@ -289,17 +291,9 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
     DecorationImage? decImg;
     final BoxFit fit = (imgFit == 'contain') ? BoxFit.contain : BoxFit.cover;
 
-    ColorFilter? filter;
-    if (removeWhiteBg) {
-      filter = const ColorFilter.matrix(<double>[
-        1, 0, 0, 0, 0,
-        0, 1, 0, 0, 0,
-        0, 0, 1, 0, 0,
-        -0.8, -0.8, -0.8, 2.4, 0,
-      ]);
-    } else if (overlayDim > 0.0) {
-      filter = ColorFilter.mode(Colors.black.withValues(alpha: overlayDim.clamp(0.0, 1.0)), BlendMode.darken);
-    }
+    final ColorFilter? filter = overlayDim > 0.0
+        ? ColorFilter.mode(Colors.black.withValues(alpha: overlayDim.clamp(0.0, 1.0)), BlendMode.darken)
+        : null;
 
     if (bg.startsWith('data:image')) {
       try {
@@ -353,6 +347,55 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
     final u = (widget.seller.username ?? '').trim();
     if (u.isNotEmpty) return u;
     return (widget.seller.mobile ?? '').trim();
+  }
+
+  static Future<String> removeWhiteFromBase64(String base64Str) async {
+    if (!base64Str.startsWith('data:image')) return base64Str;
+    try {
+      final base64Pure = base64Str.split(',').last;
+      final bytes = base64Decode(base64Pure);
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (byteData == null) return base64Str;
+
+      final pixels = byteData.buffer.asUint8List();
+      for (int i = 0; i < pixels.length; i += 4) {
+        final r = pixels[i];
+        final g = pixels[i + 1];
+        final b = pixels[i + 2];
+
+        // If pixel is white or light off-white (R > 225, G > 225, B > 225)
+        if (r > 225 && g > 225 && b > 225) {
+          pixels[i + 3] = 0; // 100% Pure Transparent Alpha
+        } else if (r > 200 && g > 200 && b > 200) {
+          final maxC = r > g ? (r > b ? r : b) : (g > b ? g : b);
+          final factor = (255 - maxC) / 55;
+          pixels[i + 3] = (pixels[i + 3] * factor).clamp(0, 255).toInt();
+        }
+      }
+
+      final completer = Completer<ui.Image>();
+      ui.decodeImageFromPixels(
+        pixels,
+        image.width,
+        image.height,
+        ui.PixelFormat.rgba8888,
+        (img) => completer.complete(img),
+      );
+      final transparentImg = await completer.future;
+
+      final newByteData = await transparentImg.toByteData(format: ui.ImageByteFormat.png);
+      if (newByteData != null) {
+        final newBase64 = base64Encode(newByteData.buffer.asUint8List());
+        return 'data:image/png;base64,$newBase64';
+      }
+    } catch (e) {
+      debugPrint('Error removing white background: $e');
+    }
+    return base64Str;
   }
 
   Future<void> _loadSliders() async {
@@ -440,7 +483,10 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                 );
                 if (image != null) {
                   final bytes = await image.readAsBytes();
-                  final base64Str = 'data:image/png;base64,${base64Encode(bytes)}';
+                  String base64Str = 'data:image/png;base64,${base64Encode(bytes)}';
+                  if (removeWhiteBg) {
+                    base64Str = await removeWhiteFromBase64(base64Str);
+                  }
                   setDialogState(() {
                     selectedImageData = base64Str;
                   });
@@ -1121,10 +1167,16 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                         ),
                                         value: removeWhiteBg,
                                         activeColor: const Color(0xFF059669),
-                                        onChanged: (val) {
+                                        onChanged: (val) async {
                                           setDialogState(() {
                                             removeWhiteBg = val;
                                           });
+                                          if (val && selectedImageData.startsWith('data:image')) {
+                                            final cleaned = await removeWhiteFromBase64(selectedImageData);
+                                            setDialogState(() {
+                                              selectedImageData = cleaned;
+                                            });
+                                          }
                                         },
                                       ),
                                       const Divider(height: 1),
