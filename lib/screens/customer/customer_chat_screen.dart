@@ -181,6 +181,91 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
     return '📍 Delivery Address ($tag): ${parts.join(', ')}';
   }
 
+  Map<String, dynamic>? _parseSingleLineToItem(String line) {
+    final trimmed = line.trim();
+    if (trimmed.isEmpty ||
+        trimmed.contains('📍 Delivery Address') ||
+        trimmed.contains('📍') ||
+        trimmed.contains('📏 Distance') ||
+        trimmed.contains('📏')) {
+      return null;
+    }
+
+    String clean = trimmed.replaceAll(RegExp(r'^\d+[\.\)]\s*'), '').trim();
+
+    double amount = 0.0;
+    final amtMatch = RegExp(r'-\s*₹\s*([\d\.]+)').firstMatch(clean) ?? RegExp(r'₹\s*([\d\.]+)').firstMatch(clean);
+    if (amtMatch != null) {
+      amount = double.tryParse(amtMatch.group(1) ?? '') ?? 0.0;
+      clean = clean.substring(0, amtMatch.start).trim();
+      if (clean.endsWith('-')) clean = clean.substring(0, clean.length - 1).trim();
+    }
+
+    String name = clean;
+    String unit = 'Pcs';
+    String qtyStr = '1';
+
+    final unitMatch = RegExp(r'\((.*?)\)$').firstMatch(clean);
+    if (unitMatch != null) {
+      name = clean.substring(0, unitMatch.start).trim();
+      final inside = unitMatch.group(1) ?? '';
+      final parts = inside.trim().split(RegExp(r'\s+'));
+      if (parts.length >= 2) {
+        qtyStr = parts[0];
+        unit = parts.sublist(1).join(' ');
+      } else if (parts.length == 1) {
+        if (inside.startsWith('x')) {
+          qtyStr = inside.replaceAll('x', '');
+          unit = 'Pcs';
+        } else {
+          unit = inside;
+        }
+      }
+    }
+
+    final finalName = name.isEmpty ? clean : name;
+    final qtyNum = double.tryParse(qtyStr) ?? 1.0;
+    return {
+      'name': finalName,
+      'unit': unit,
+      'qty': qtyStr,
+      'amount': amount,
+      'itemData': {
+        'name': finalName,
+        'unit': unit,
+        'qty': qtyNum,
+        'rate': amount > 0 ? amount / qtyNum : 0.0,
+      },
+    };
+  }
+
+  List<Map<String, dynamic>> _parseItemsFromMsg(Map<String, dynamic> msg) {
+    List<Map<String, dynamic>> parsedItems = [];
+
+    final rawJson = msg['items_json'];
+    if (rawJson != null && rawJson.toString().isNotEmpty) {
+      try {
+        final List decoded = jsonDecode(rawJson.toString());
+        for (var it in decoded) {
+          final text = (it['text'] ?? '').toString();
+          final item = _parseSingleLineToItem(text);
+          if (item != null) parsedItems.add(item);
+        }
+      } catch (_) {}
+    }
+
+    if (parsedItems.isEmpty) {
+      final rawText = (msg['message'] ?? '').toString();
+      final lines = rawText.split('\n');
+      for (var line in lines) {
+        final item = _parseSingleLineToItem(line);
+        if (item != null) parsedItems.add(item);
+      }
+    }
+
+    return parsedItems;
+  }
+
   void _startEditingOrder(Map<String, dynamic> msg) {
     final orderStatus = (msg['order_status'] ?? '').toString().toLowerCase();
     final delStatus = (msg['delivery_status'] ?? '').toString().toLowerCase();
@@ -202,9 +287,17 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
       !l.contains('📏')
     ).toList();
 
+    final parsedItems = _parseItemsFromMsg(msg);
+
     setState(() {
       _editingMessage = msg;
-      _msgController.text = lines.join('\n');
+      if (parsedItems.isNotEmpty) {
+        _selectedOrderItems = parsedItems;
+        _isListMode = true;
+        _syncSelectedItemsToMsgController();
+      } else {
+        _msgController.text = lines.join('\n');
+      }
       _msgController.selection = TextSelection.fromPosition(TextPosition(offset: _msgController.text.length));
     });
 
@@ -230,18 +323,24 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
     if (_editingMessage != null) {
       final msgId = (_editingMessage!['id'] as num?)?.toInt() ?? 0;
       if (msgId != 0) {
+        if (_isListMode && _selectedOrderItems.isNotEmpty) {
+          _syncSelectedItemsToMsgController();
+        }
+
+        final updatedText = _msgController.text.trim();
         final success = await AuthService.updateCustomerOrderMessage(
           messageId: msgId,
           sellerUsername: widget.sellerUsername,
           customerMobile: widget.customer.mobile ?? '',
-          newText: text,
+          newText: updatedText,
         );
 
         if (success) {
           setState(() {
             _editingMessage = null;
-            _msgController.clear();
             _selectedOrderItems.clear();
+            _msgController.clear();
+            _isListMode = false;
           });
           _loadMessages();
           if (mounted) {
@@ -1453,7 +1552,9 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                               onTap: () {
                                 setState(() {
                                   _editingMessage = null;
+                                  _selectedOrderItems.clear();
                                   _msgController.clear();
+                                  _isListMode = false;
                                 });
                               },
                               child: Container(
