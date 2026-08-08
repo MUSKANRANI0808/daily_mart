@@ -231,7 +231,7 @@ class _SellerDashboardState extends State<SellerDashboard> {
     return Column(
       children: [
         SizedBox(
-          height: 145,
+          height: 125,
           child: PageView.builder(
             controller: _sliderPageController,
             onPageChanged: (idx) {
@@ -280,8 +280,8 @@ class _SellerDashboardState extends State<SellerDashboard> {
                     imgFit: imgFit,
                     child: Container(
                       width: double.infinity,
-                      constraints: const BoxConstraints(minHeight: 140),
-                      padding: const EdgeInsets.all(16.0),
+                      constraints: const BoxConstraints(minHeight: 115),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.center,

@@ -429,7 +429,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
     return Column(
       children: [
         SizedBox(
-          height: 160,
+          height: 125,
           child: PageView.builder(
             controller: _sliderController,
             onPageChanged: (idx) {
@@ -472,8 +472,8 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                     imgFit: imgFit,
                     child: Container(
                       width: double.infinity,
-                      constraints: const BoxConstraints(minHeight: 140),
-                      padding: const EdgeInsets.all(18),
+                      constraints: const BoxConstraints(minHeight: 115),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.center,
