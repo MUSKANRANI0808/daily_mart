@@ -1489,32 +1489,51 @@ class AuthService {
     return true;
   }
 
-  /// Get seller sliders (Local-First Sync with Remote VPS)
+  /// Get seller sliders (Local-First + Remote VPS + Global Persistent Map)
   static Future<List<Map<String, dynamic>>> getSellerSliders(String sellerUsername) async {
-    final cleanUsername = sellerUsername.trim();
+    final cleanUsername = sellerUsername.trim().toLowerCase();
     if (cleanUsername.isEmpty) return [];
 
     final prefs = await SharedPreferences.getInstance();
     final localKey = 'sliders_$cleanUsername';
 
-    // 1. Get local cached sliders first
+    // Load persistent global seller sliders map
+    Map<String, dynamic> savedGlobalSliders = {};
+    try {
+      final str = prefs.getString('saved_global_seller_sliders');
+      if (str != null && str.isNotEmpty) {
+        savedGlobalSliders = Map<String, dynamic>.from(jsonDecode(str));
+      }
+    } catch (_) {}
+
     List<Map<String, dynamic>> localList = [];
-    final str = prefs.getString(localKey);
-    if (str != null && str.isNotEmpty) {
+
+    // 1. Check saved_global_seller_sliders map
+    if (savedGlobalSliders.containsKey(cleanUsername)) {
       try {
-        final List decoded = jsonDecode(str);
-        localList = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+        final List list = savedGlobalSliders[cleanUsername];
+        localList = list.map((e) => Map<String, dynamic>.from(e)).toList();
       } catch (_) {}
     }
 
-    // 2. Try Remote VPS API and merge
+    // 2. Check local key fallback
+    if (localList.isEmpty) {
+      final str = prefs.getString(localKey);
+      if (str != null && str.isNotEmpty) {
+        try {
+          final List decoded = jsonDecode(str);
+          localList = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+        } catch (_) {}
+      }
+    }
+
+    // 3. Try Remote VPS API and merge
     try {
       final res = await VpsApiService.get('get-seller-sliders&seller_username=${Uri.encodeComponent(cleanUsername)}');
       if (res != null && res['success'] == true && res['sliders'] != null) {
         final List list = res['sliders'];
         final remoteList = list.map((e) => Map<String, dynamic>.from(e)).toList();
 
-        // Merge maps using 'id' to prevent wiping out locally created sliders
         final Map<String, Map<String, dynamic>> mergedMap = {};
         for (var item in remoteList) {
           final idStr = item['id']?.toString() ?? '';
@@ -1528,6 +1547,8 @@ class AuthService {
         }
 
         final combinedList = mergedMap.values.toList();
+        savedGlobalSliders[cleanUsername] = combinedList;
+        await prefs.setString('saved_global_seller_sliders', jsonEncode(savedGlobalSliders));
         await prefs.setString(localKey, jsonEncode(combinedList));
         return combinedList;
       }
@@ -1538,7 +1559,7 @@ class AuthService {
     return localList;
   }
 
-  /// Add seller slider (Local-First Guaranteed)
+  /// Add seller slider (Local-First & Global Persistent Sync)
   static Future<bool> addSellerSlider({
     required String sellerUsername,
     required String tag,
@@ -1553,21 +1574,13 @@ class AuthService {
     bool removeWhiteBg = false,
     String imgFit = 'cover',
   }) async {
+    final cleanUsername = sellerUsername.trim().toLowerCase();
     final prefs = await SharedPreferences.getInstance();
-    final localKey = 'sliders_$sellerUsername';
-
-    final str = prefs.getString(localKey);
-    List<Map<String, dynamic>> sliders = [];
-    if (str != null) {
-      try {
-        final List decoded = jsonDecode(str);
-        sliders = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
-      } catch (_) {}
-    }
+    final localKey = 'sliders_$cleanUsername';
 
     final newSlider = {
       'id': DateTime.now().millisecondsSinceEpoch,
-      'seller_username': sellerUsername,
+      'seller_username': cleanUsername,
       'tag': tag,
       'title': title,
       'description': description,
@@ -1582,12 +1595,40 @@ class AuthService {
       'created_at': DateTime.now().toString().substring(0, 16),
     };
 
+    Map<String, dynamic> savedGlobalSliders = {};
+    try {
+      final str = prefs.getString('saved_global_seller_sliders');
+      if (str != null && str.isNotEmpty) {
+        savedGlobalSliders = Map<String, dynamic>.from(jsonDecode(str));
+      }
+    } catch (_) {}
+
+    List<Map<String, dynamic>> sliders = [];
+    if (savedGlobalSliders.containsKey(cleanUsername)) {
+      try {
+        final List l = savedGlobalSliders[cleanUsername];
+        sliders = l.map((e) => Map<String, dynamic>.from(e)).toList();
+      } catch (_) {}
+    }
+
+    if (sliders.isEmpty) {
+      final str = prefs.getString(localKey);
+      if (str != null) {
+        try {
+          final List decoded = jsonDecode(str);
+          sliders = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+        } catch (_) {}
+      }
+    }
+
     sliders.insert(0, newSlider);
+    savedGlobalSliders[cleanUsername] = sliders;
+    await prefs.setString('saved_global_seller_sliders', jsonEncode(savedGlobalSliders));
     await prefs.setString(localKey, jsonEncode(sliders));
 
     try {
       await VpsApiService.post('add-seller-slider', {
-        'seller_username': sellerUsername,
+        'seller_username': cleanUsername,
         'tag': tag,
         'title': title,
         'description': description,
@@ -1621,28 +1662,45 @@ class AuthService {
     bool removeWhiteBg = false,
     String imgFit = 'cover',
   }) async {
+    final cleanUsername = sellerUsername.trim().toLowerCase();
     final prefs = await SharedPreferences.getInstance();
-    final localKey = 'sliders_$sellerUsername';
+    final localKey = 'sliders_$cleanUsername';
 
-    final str = prefs.getString(localKey);
+    String finalBg = bgImageUrl;
+
+    Map<String, dynamic> savedGlobalSliders = {};
+    try {
+      final str = prefs.getString('saved_global_seller_sliders');
+      if (str != null && str.isNotEmpty) {
+        savedGlobalSliders = Map<String, dynamic>.from(jsonDecode(str));
+      }
+    } catch (_) {}
+
     List<Map<String, dynamic>> sliders = [];
-    if (str != null) {
+    if (savedGlobalSliders.containsKey(cleanUsername)) {
       try {
-        final List decoded = jsonDecode(str);
-        sliders = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+        final List l = savedGlobalSliders[cleanUsername];
+        sliders = l.map((e) => Map<String, dynamic>.from(e)).toList();
       } catch (_) {}
     }
 
+    if (sliders.isEmpty) {
+      final str = prefs.getString(localKey);
+      if (str != null) {
+        try {
+          final List decoded = jsonDecode(str);
+          sliders = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+        } catch (_) {}
+      }
+    }
+
     final index = sliders.indexWhere((s) => s['id'] == sliderId || s['id'].toString() == sliderId.toString());
-    String finalBg = bgImageUrl;
     if (index != -1) {
       sliders[index]['tag'] = tag;
       sliders[index]['title'] = title;
       sliders[index]['description'] = description;
-      if (bgImageUrl.isNotEmpty) {
-        sliders[index]['bg_image_url'] = bgImageUrl;
-      } else {
-        finalBg = sliders[index]['bg_image_url'] ?? '';
+      if (finalBg.isNotEmpty) {
+        sliders[index]['bg_image_url'] = finalBg;
       }
       sliders[index]['tag_bg_color'] = tagBgColor;
       sliders[index]['tag_shape'] = tagShape;
@@ -1651,12 +1709,16 @@ class AuthService {
       sliders[index]['overlay_dim'] = overlayDim;
       sliders[index]['remove_white_bg'] = removeWhiteBg;
       sliders[index]['img_fit'] = imgFit;
+
+      savedGlobalSliders[cleanUsername] = sliders;
+      await prefs.setString('saved_global_seller_sliders', jsonEncode(savedGlobalSliders));
       await prefs.setString(localKey, jsonEncode(sliders));
     }
 
     try {
       await VpsApiService.post('update-seller-slider', {
         'slider_id': sliderId,
+        'seller_username': cleanUsername,
         'tag': tag,
         'title': title,
         'description': description,
@@ -1676,23 +1738,43 @@ class AuthService {
 
   /// Delete seller slider
   static Future<bool> deleteSellerSlider(dynamic sliderId, String sellerUsername) async {
+    final cleanUsername = sellerUsername.trim().toLowerCase();
     final prefs = await SharedPreferences.getInstance();
-    final localKey = 'sliders_$sellerUsername';
+    final localKey = 'sliders_$cleanUsername';
 
-    final str = prefs.getString(localKey);
+    Map<String, dynamic> savedGlobalSliders = {};
+    try {
+      final str = prefs.getString('saved_global_seller_sliders');
+      if (str != null && str.isNotEmpty) {
+        savedGlobalSliders = Map<String, dynamic>.from(jsonDecode(str));
+      }
+    } catch (_) {}
+
     List<Map<String, dynamic>> sliders = [];
-    if (str != null) {
+    if (savedGlobalSliders.containsKey(cleanUsername)) {
       try {
-        final List decoded = jsonDecode(str);
-        sliders = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+        final List l = savedGlobalSliders[cleanUsername];
+        sliders = l.map((e) => Map<String, dynamic>.from(e)).toList();
       } catch (_) {}
     }
 
+    if (sliders.isEmpty) {
+      final str = prefs.getString(localKey);
+      if (str != null) {
+        try {
+          final List decoded = jsonDecode(str);
+          sliders = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+        } catch (_) {}
+      }
+    }
+
     sliders.removeWhere((s) => s['id'] == sliderId || s['id'].toString() == sliderId.toString());
+    savedGlobalSliders[cleanUsername] = sliders;
+    await prefs.setString('saved_global_seller_sliders', jsonEncode(savedGlobalSliders));
     await prefs.setString(localKey, jsonEncode(sliders));
 
     try {
-      await VpsApiService.post('delete-seller-slider', {'slider_id': sliderId});
+      await VpsApiService.post('delete-seller-slider', {'slider_id': sliderId, 'seller_username': cleanUsername});
     } catch (_) {}
 
     return true;
