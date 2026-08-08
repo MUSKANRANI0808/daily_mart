@@ -90,7 +90,7 @@ class SellerSlidersScreen extends StatefulWidget {
   static List<Map<String, dynamic>> get presetThemes => _SellerSlidersScreenState.presetThemes;
   static Color hexToColor(String code, {Color defaultColor = Colors.white}) => _SellerSlidersScreenState.hexToColor(code, defaultColor: defaultColor);
   static BoxDecoration buildTagDecoration(String shape, Color tagBg) => _SellerSlidersScreenState.buildTagDecoration(shape, tagBg);
-  static Widget buildBannerBackground({required String bg, required Widget child, BorderRadius? borderRadius}) => _SellerSlidersScreenState.buildBannerBackground(bg: bg, child: child, borderRadius: borderRadius);
+  static Widget buildBannerBackground({required String bg, required Widget child, BorderRadius? borderRadius, double overlayDim = 0.0}) => _SellerSlidersScreenState.buildBannerBackground(bg: bg, child: child, borderRadius: borderRadius, overlayDim: overlayDim);
 
   @override
   State<SellerSlidersScreen> createState() => _SellerSlidersScreenState();
@@ -230,6 +230,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
     required String bg,
     required Widget child,
     BorderRadius? borderRadius,
+    double overlayDim = 0.0,
   }) {
     if (bg == 'none' || bg.isEmpty || bg == 'transparent' || bg == 'preset_transparent' || bg == 'preset_1') {
       return SizedBox(
@@ -270,20 +271,24 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
     }
 
     DecorationImage? decImg;
+    final ColorFilter? filter = overlayDim > 0.0
+        ? ColorFilter.mode(Colors.black.withValues(alpha: overlayDim.clamp(0.0, 1.0)), BlendMode.darken)
+        : null;
+
     if (bg.startsWith('data:image')) {
       try {
         final base64Str = bg.split(',').last;
         decImg = DecorationImage(
           image: MemoryImage(base64Decode(base64Str)),
           fit: BoxFit.cover,
-          colorFilter: ColorFilter.mode(Colors.black.withValues(alpha: 0.35), BlendMode.darken),
+          colorFilter: filter,
         );
       } catch (_) {}
     } else if (bg.startsWith('http')) {
       decImg = DecorationImage(
         image: NetworkImage(bg),
         fit: BoxFit.cover,
-        colorFilter: ColorFilter.mode(Colors.black.withValues(alpha: 0.35), BlendMode.darken),
+        colorFilter: filter,
       );
     } else if (bg.isNotEmpty && !bg.startsWith('preset_')) {
       try {
@@ -292,7 +297,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
           decImg = DecorationImage(
             image: FileImage(file),
             fit: BoxFit.cover,
-            colorFilter: ColorFilter.mode(Colors.black.withValues(alpha: 0.35), BlendMode.darken),
+            colorFilter: filter,
           );
         }
       } catch (_) {}
@@ -342,6 +347,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
     final titleCtrl = TextEditingController(text: existingSlider?['title'] ?? '');
     final descCtrl = TextEditingController(text: existingSlider?['description'] ?? '');
     String selectedImageData = existingSlider?['bg_image_url'] ?? 'none';
+    double overlayDim = (existingSlider?['overlay_dim'] as num?)?.toDouble() ?? 0.0;
     bool isPickingImage = false;
     int selectedTab = 0; // 0: Text Content, 1: Style & Colors, 2: Background Image
 
@@ -493,6 +499,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                           ),
                           buildBannerBackground(
                             bg: selectedImageData,
+                            overlayDim: overlayDim,
                             borderRadius: const BorderRadius.vertical(bottom: Radius.circular(13)),
                             child: Padding(
                               padding: const EdgeInsets.all(14.0),
@@ -985,6 +992,75 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                           ),
                                         ),
                                       ),
+                                const SizedBox(height: 16),
+
+                                // IMAGE DIMNESS / OVERLAY FILTER SCALE SLIDER
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF8FAFC),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Row(
+                                            children: const [
+                                              Icon(Icons.opacity_rounded, size: 18, color: Color(0xFF059669)),
+                                              SizedBox(width: 6),
+                                              Text(
+                                                'Image Darken / Dimness Scale',
+                                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A)),
+                                              ),
+                                            ],
+                                          ),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: overlayDim == 0.0 ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(color: overlayDim == 0.0 ? const Color(0xFF86EFAC) : const Color(0xFFFDE047)),
+                                            ),
+                                            child: Text(
+                                              overlayDim == 0.0 ? '✨ 0% (No Dim / Pure Crisp)' : '${(overlayDim * 100).toInt()}% Dim',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 10.5,
+                                                color: overlayDim == 0.0 ? const Color(0xFF15803D) : const Color(0xFFB45309),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      SliderTheme(
+                                        data: SliderThemeData(
+                                          activeTrackColor: const Color(0xFF059669),
+                                          inactiveTrackColor: const Color(0xFFCBD5E1),
+                                          thumbColor: const Color(0xFF059669),
+                                          overlayColor: const Color(0xFF059669).withValues(alpha: 0.2),
+                                          valueIndicatorTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                        ),
+                                        child: Slider(
+                                          value: overlayDim,
+                                          min: 0.0,
+                                          max: 1.0,
+                                          divisions: 20,
+                                          label: '${(overlayDim * 100).toInt()}%',
+                                          onChanged: (val) {
+                                            setDialogState(() {
+                                              overlayDim = val;
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ],
                             ),
                           ],
@@ -1040,6 +1116,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                 tagShape: selectedTagShape,
                                 titleColor: selectedTitleColor,
                                 descColor: selectedDescColor,
+                                overlayDim: overlayDim,
                               );
                             } else {
                               success = await AuthService.addSellerSlider(
@@ -1052,6 +1129,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                 tagShape: selectedTagShape,
                                 titleColor: selectedTitleColor,
                                 descColor: selectedDescColor,
+                                overlayDim: overlayDim,
                               );
                             }
 
@@ -1234,10 +1312,13 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                             final titleCol = hexToColor(slider['title_color'] ?? '#FFFFFF');
                             final descCol = hexToColor(slider['desc_color'] ?? '#E2E8F0');
 
+                            final overlayDim = (slider['overlay_dim'] as num?)?.toDouble() ?? 0.0;
+
                             return Stack(
                               children: [
                                 buildBannerBackground(
                                   bg: bg,
+                                  overlayDim: overlayDim,
                                   child: Container(
                                     width: double.infinity,
                                     constraints: const BoxConstraints(minHeight: 140),

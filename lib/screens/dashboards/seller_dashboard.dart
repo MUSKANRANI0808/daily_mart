@@ -239,6 +239,7 @@ class _SellerDashboardState extends State<SellerDashboard> {
               final titleColor = SellerSlidersScreen.hexToColor(titleHex, defaultColor: Colors.white);
               final descColor = SellerSlidersScreen.hexToColor(descHex, defaultColor: const Color(0xFFE2E8F0));
               final tagDecor = SellerSlidersScreen.buildTagDecoration(tagShape, tagBg);
+              final overlayDim = (slider['overlay_dim'] as num?)?.toDouble() ?? 0.0;
 
               final isSelected = _activeSliderPage == idx;
 
@@ -262,6 +263,7 @@ class _SellerDashboardState extends State<SellerDashboard> {
                   clipBehavior: Clip.antiAlias,
                   child: SellerSlidersScreen.buildBannerBackground(
                     bg: bg,
+                    overlayDim: overlayDim,
                     child: Container(
                       width: double.infinity,
                       constraints: const BoxConstraints(minHeight: 140),

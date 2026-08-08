@@ -246,11 +246,13 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
     required String bg,
     required Widget child,
     BorderRadius? borderRadius,
+    double overlayDim = 0.0,
   }) {
     return SellerSlidersScreen.buildBannerBackground(
       bg: bg,
       child: child,
       borderRadius: borderRadius,
+      overlayDim: overlayDim,
     );
   }
 
@@ -405,6 +407,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
               final tagShape = item['tag_shape']?.toString() ?? 'pill';
               final titleCol = hexToColor(item['title_color']?.toString() ?? '#FFFFFF');
               final descCol = hexToColor(item['desc_color']?.toString() ?? '#E2E8F0');
+              final overlayDim = (item['overlay_dim'] as num?)?.toDouble() ?? 0.0;
 
               final isSelected = _currentSliderPage == idx;
 
@@ -428,6 +431,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                   clipBehavior: Clip.antiAlias,
                   child: buildBannerBackground(
                     bg: bg,
+                    overlayDim: overlayDim,
                     child: Container(
                       width: double.infinity,
                       constraints: const BoxConstraints(minHeight: 140),

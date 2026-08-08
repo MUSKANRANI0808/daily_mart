@@ -1379,6 +1379,7 @@ class AuthService {
     String tagShape = 'pill',
     String titleColor = '#FFFFFF',
     String descColor = '#E2E8F0',
+    double overlayDim = 0.0,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final localKey = 'sliders_$sellerUsername';
@@ -1403,6 +1404,7 @@ class AuthService {
       'tag_shape': tagShape,
       'title_color': titleColor,
       'desc_color': descColor,
+      'overlay_dim': overlayDim,
       'created_at': DateTime.now().toString().substring(0, 16),
     };
 
@@ -1420,6 +1422,7 @@ class AuthService {
         'tag_shape': tagShape,
         'title_color': titleColor,
         'desc_color': descColor,
+        'overlay_dim': overlayDim,
       });
     } catch (_) {}
 
@@ -1438,6 +1441,7 @@ class AuthService {
     required String tagShape,
     required String titleColor,
     required String descColor,
+    double overlayDim = 0.0,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final localKey = 'sliders_$sellerUsername';
@@ -1466,6 +1470,7 @@ class AuthService {
       sliders[index]['tag_shape'] = tagShape;
       sliders[index]['title_color'] = titleColor;
       sliders[index]['desc_color'] = descColor;
+      sliders[index]['overlay_dim'] = overlayDim;
       await prefs.setString(localKey, jsonEncode(sliders));
     }
 
@@ -1480,6 +1485,7 @@ class AuthService {
         'tag_shape': tagShape,
         'title_color': titleColor,
         'desc_color': descColor,
+        'overlay_dim': overlayDim,
       });
     } catch (_) {}
 
