@@ -851,8 +851,8 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
     }
 
     return ListView.separated(
-      reverse: false,
-      physics: const BouncingScrollPhysics(),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 6, 16, 80),
       itemCount: displayMsgs.length,
       separatorBuilder: (ctx, idx) => const SizedBox(height: 18),
@@ -1039,11 +1039,13 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                 ),
               ),
 
-              // Main Content Layout
+              // Main Content Layout - Entire Page Scrollable
               Positioned.fill(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                     // Pro-Level Animated Organic Wave Header Container
                     ClipPath(
                       clipper: HeaderArcWaveClipper(),
@@ -1251,18 +1253,17 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                     // Premium Segmented Filter Bar Track
                     _buildSegmentedFilterBar(),
 
-                    // Orders List inside Expanded for scrollability over delivery boy image
-                    Expanded(
-                      child: _isLoading
-                          ? const Center(child: Padding(padding: EdgeInsets.all(30), child: CircularProgressIndicator(color: Color(0xFF8B5CF6))))
-                          : _buildRecentOrdersList(),
-                    ),
+                    // Orders List
+                    _isLoading
+                        ? const Center(child: Padding(padding: EdgeInsets.all(30), child: CircularProgressIndicator(color: Color(0xFF8B5CF6))))
+                        : _buildRecentOrdersList(),
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
+      ),
 
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
