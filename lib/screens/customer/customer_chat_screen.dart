@@ -438,7 +438,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Confirm Delivery Address 📍',
+                              'Confirm Delivery Address',
                               style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                             ),
                             SizedBox(height: 2),
@@ -457,7 +457,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // 📌 Polite Minimum Order Policy Banner Card (₹100 Minimum)
+                  // Polite Minimum Order Policy Banner Card (₹100 Minimum)
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -489,7 +489,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '📌 Minimum Order Policy (₹100):',
+                                'Minimum Order Policy (₹100):',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 12.5,
