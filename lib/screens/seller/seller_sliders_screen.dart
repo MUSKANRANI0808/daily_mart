@@ -108,6 +108,11 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
 
   static List<Map<String, dynamic>> get presetThemes => [
     {
+      'id': 'preset_transparent',
+      'name': '✨ 100% Transparent (No Background)',
+      'colors': [Colors.transparent, Colors.transparent],
+    },
+    {
       'id': 'preset_1',
       'name': 'Purple Bokeh',
       'colors': [const Color(0xFFEC4899), const Color(0xFF8B5CF6)],
@@ -226,21 +231,9 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
     required Widget child,
     BorderRadius? borderRadius,
   }) {
-    if (bg == 'none' || bg.isEmpty || bg == 'transparent' || bg == 'preset_transparent') {
-      return Container(
+    if (bg == 'none' || bg.isEmpty || bg == 'transparent' || bg == 'preset_transparent' || bg == 'preset_1') {
+      return SizedBox(
         width: double.infinity,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          borderRadius: borderRadius ?? BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.35), width: 1.2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
         child: child,
       );
     }
@@ -251,21 +244,6 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
     );
 
     if (preset.isNotEmpty) {
-      if (bg == 'preset_transparent' || bg == 'preset_1') {
-        return Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.22),
-            borderRadius: borderRadius ?? BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1.2),
-          ),
-          child: CustomPaint(
-            painter: AbstractPatternPainter(bg),
-            child: child,
-          ),
-        );
-      }
-
       final List<Color> colors = List<Color>.from(preset['colors']);
       return Container(
         width: double.infinity,
