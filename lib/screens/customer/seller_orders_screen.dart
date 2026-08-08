@@ -430,6 +430,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                     bg: bg,
                     child: Container(
                       width: double.infinity,
+                      constraints: const BoxConstraints(minHeight: 140),
                       padding: const EdgeInsets.all(18),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

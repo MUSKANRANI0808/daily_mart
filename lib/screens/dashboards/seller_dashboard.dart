@@ -256,7 +256,9 @@ class _SellerDashboardState extends State<SellerDashboard> {
                   clipBehavior: Clip.antiAlias,
                   child: SellerSlidersScreen.buildBannerBackground(
                     bg: bg,
-                    child: Padding(
+                    child: Container(
+                      width: double.infinity,
+                      constraints: const BoxConstraints(minHeight: 140),
                       padding: const EdgeInsets.all(16.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

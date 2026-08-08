@@ -1008,11 +1008,12 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                             final tag = tagCtrl.text.trim();
                             final title = titleCtrl.text.trim();
                             final desc = descCtrl.text.trim();
+                            final hasImage = selectedImageData.isNotEmpty && selectedImageData != 'none';
 
-                            if (tag.isEmpty && title.isEmpty && desc.isEmpty && selectedImageData.isEmpty) {
+                            if (tag.isEmpty && title.isEmpty && desc.isEmpty && !hasImage) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Kripya kam se kam ek cheez (Heading, Offer Tag, Paragraph ya Image) zaroor bharein!'),
+                                  content: Text('Kripya Image upload karein ya Heading/Offer Tag bharein!'),
                                   backgroundColor: Color(0xFFEF4444),
                                 ),
                               );
@@ -1233,6 +1234,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                   bg: bg,
                                   child: Container(
                                     width: double.infinity,
+                                    constraints: const BoxConstraints(minHeight: 140),
                                     padding: const EdgeInsets.all(18),
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
