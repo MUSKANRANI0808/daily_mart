@@ -305,9 +305,12 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Top Row: Items Checklist (With right padding so items don't overlap 3D Ribbon)
+                // Top Row: Items Checklist (Pushed down when Edit ribbon is present so items don't overlap)
                 Padding(
-                  padding: const EdgeInsets.only(right: 85.0),
+                  padding: EdgeInsets.only(
+                    right: 85.0,
+                    top: (!widget.isSeller && widget.onEditTap != null && !isReady && !isPaid && !isCancelled && !isDelivered) ? 24.0 : 0.0,
+                  ),
                   child: ListView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
