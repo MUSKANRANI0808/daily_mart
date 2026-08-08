@@ -1047,7 +1047,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                                 children: [
                                   // Top App Header Bar
                                   Padding(
-                                    padding: const EdgeInsets.fromLTRB(16, 10, 8, 8),
+                                    padding: const EdgeInsets.fromLTRB(12, 10, 4, 8),
                                     child: Row(
                                       children: [
                                         Expanded(
@@ -1068,10 +1068,15 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                                                 Text(
                                                   'Mobile: +91 ${widget.sellerMobile}',
                                                   style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                                  overflow: TextOverflow.ellipsis,
                                                 ),
                                               ],
                                               const SizedBox(height: 4),
-                                              const PulsingStoreBadge(),
+                                              const FittedBox(
+                                                fit: BoxFit.scaleDown,
+                                                alignment: Alignment.centerLeft,
+                                                child: PulsingStoreBadge(),
+                                              ),
                                             ],
                                           ),
                                         ),
@@ -1403,16 +1408,20 @@ class _PulsingStoreBadgeState extends State<PulsingStoreBadge> with SingleTicker
             ),
           ),
           const SizedBox(width: 6),
-          const Text(
-            'Express 30-Min Delivery',
-            style: TextStyle(
-              color: Color(0xFFECFDF5),
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 0.2,
-              shadows: [
-                Shadow(color: Colors.black87, blurRadius: 4, offset: Offset(0, 1)),
-              ],
+          const Flexible(
+            child: Text(
+              'Express 30-Min Delivery',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Color(0xFFECFDF5),
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.2,
+                shadows: [
+                  Shadow(color: Colors.black87, blurRadius: 4, offset: Offset(0, 1)),
+                ],
+              ),
             ),
           ),
         ],
