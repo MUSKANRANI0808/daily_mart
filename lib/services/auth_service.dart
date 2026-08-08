@@ -666,9 +666,61 @@ class AuthService {
     final cleanCust = customerMobile.trim();
     final msgIdStr = messageId.toString();
 
+    // Re-parse text lines to update items_json & recalculate order_amount
+    final lines = newText.split('\n');
+    final itemsList = <Map<String, dynamic>>[];
+    double newTotalAmount = 0.0;
+    for (var line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.isNotEmpty &&
+          !trimmed.contains('📍 Delivery Address') &&
+          !trimmed.contains('📍') &&
+          !trimmed.contains('📏 Distance') &&
+          !trimmed.contains('📏')) {
+        itemsList.add({'text': trimmed, 'status': 0});
+        final amtMatch = RegExp(r'-\s*₹\s*([\d\.]+)').firstMatch(trimmed) ?? RegExp(r'₹\s*([\d\.]+)').firstMatch(trimmed);
+        if (amtMatch != null) {
+          final a = double.tryParse(amtMatch.group(1) ?? '');
+          if (a != null && a > 0) newTotalAmount += a;
+        }
+      }
+    }
+    final itemsJsonStr = jsonEncode(itemsList);
+
     try {
-      // 1. Update SharedPreferences local cache immediately
       final prefs = await SharedPreferences.getInstance();
+
+      // 1. Save to persistent saved_edited_messages map
+      Map<String, dynamic> savedEdited = {};
+      try {
+        final str = prefs.getString('saved_edited_messages');
+        if (str != null && str.isNotEmpty) {
+          savedEdited = Map<String, dynamic>.from(jsonDecode(str));
+        }
+      } catch (_) {}
+
+      final editData = {
+        'message': newText,
+        'items_json': itemsJsonStr,
+        if (newTotalAmount > 0) 'order_amount': newTotalAmount,
+      };
+      savedEdited[msgIdStr] = editData;
+      await prefs.setString('saved_edited_messages', jsonEncode(savedEdited));
+
+      // 2. Also update saved_order_amounts if amount was recalculated
+      if (newTotalAmount > 0) {
+        Map<String, dynamic> savedAmounts = {};
+        try {
+          final str = prefs.getString('saved_order_amounts');
+          if (str != null && str.isNotEmpty) {
+            savedAmounts = Map<String, dynamic>.from(jsonDecode(str));
+          }
+        } catch (_) {}
+        savedAmounts[msgIdStr] = newTotalAmount;
+        await prefs.setString('saved_order_amounts', jsonEncode(savedAmounts));
+      }
+
+      // 3. Update local msgs_ and messages_ keys immediately
       final keys = prefs.getKeys().where((k) => k.startsWith('msgs_') || k.startsWith('messages_')).toList();
       for (var key in keys) {
         final str = prefs.getString(key);
@@ -680,20 +732,11 @@ class AuthService {
             for (var item in list) {
               if (item['id'] == messageId || item['id'].toString() == msgIdStr) {
                 item['message'] = newText;
-                // Re-parse text lines to update items_json
-                final lines = newText.split('\n');
-                final itemsList = <Map<String, dynamic>>[];
-                for (var line in lines) {
-                  final trimmed = line.trim();
-                  if (trimmed.isNotEmpty &&
-                      !trimmed.contains('📍 Delivery Address') &&
-                      !trimmed.contains('📍') &&
-                      !trimmed.contains('📏 Distance') &&
-                      !trimmed.contains('📏')) {
-                    itemsList.add({'text': trimmed, 'status': 0});
-                  }
+                item['items_json'] = itemsJsonStr;
+                if (newTotalAmount > 0) {
+                  item['order_amount'] = newTotalAmount;
+                  item['amount'] = newTotalAmount;
                 }
-                item['items_json'] = jsonEncode(itemsList);
                 modified = true;
               }
             }
@@ -706,13 +749,19 @@ class AuthService {
     } catch (_) {}
 
     try {
-      // 2. Post to VPS API
-      final res = await VpsApiService.post('update-order-message', {
+      // 4. Post to VPS API with message, items_json & order_amount
+      final payload = <String, dynamic>{
         'message_id': messageId,
         'seller_username': cleanSeller,
         'customer_mobile': cleanCust,
         'message': newText,
-      });
+        'items_json': itemsJsonStr,
+      };
+      if (newTotalAmount > 0) {
+        payload['order_amount'] = newTotalAmount;
+        payload['amount'] = newTotalAmount;
+      }
+      final res = await VpsApiService.post('update-order-message', payload);
       return res != null && res['success'] == true;
     } catch (_) {}
     return true;
@@ -1043,6 +1092,7 @@ class AuthService {
     Map<String, dynamic> savedDeliveryStatuses = {};
     Map<String, dynamic> savedOrderStatuses = {};
     Map<String, dynamic> savedBills = {};
+    Map<String, dynamic> savedEditedMessages = {};
     try {
       final amountsStr = prefs.getString('saved_order_amounts');
       if (amountsStr != null && amountsStr.isNotEmpty) {
@@ -1064,6 +1114,10 @@ class AuthService {
       if (billsStr != null && billsStr.isNotEmpty) {
         savedBills = Map<String, dynamic>.from(jsonDecode(billsStr));
       }
+      final editedStr = prefs.getString('saved_edited_messages');
+      if (editedStr != null && editedStr.isNotEmpty) {
+        savedEditedMessages = Map<String, dynamic>.from(jsonDecode(editedStr));
+      }
     } catch (_) {}
 
     final localStr = prefs.getString(localKey);
@@ -1077,6 +1131,15 @@ class AuthService {
 
     for (var m in msgs) {
       final idStr = m['id']?.toString() ?? '';
+      if (savedEditedMessages.containsKey(idStr)) {
+        final eData = Map<String, dynamic>.from(savedEditedMessages[idStr]);
+        if (eData['message'] != null) m['message'] = eData['message'];
+        if (eData['items_json'] != null) m['items_json'] = eData['items_json'];
+        if (eData['order_amount'] != null) {
+          m['order_amount'] = eData['order_amount'];
+          m['amount'] = eData['order_amount'];
+        }
+      }
       if (savedAmounts.containsKey(idStr)) {
         m['order_amount'] = savedAmounts[idStr];
       }
@@ -1121,6 +1184,7 @@ class AuthService {
     Map<String, dynamic> savedDeliveryStatuses = {};
     Map<String, dynamic> savedOrderStatuses = {};
     Map<String, dynamic> savedBills = {};
+    Map<String, dynamic> savedEditedMessages = {};
     try {
       final amountsStr = prefs.getString('saved_order_amounts');
       if (amountsStr != null && amountsStr.isNotEmpty) {
@@ -1141,6 +1205,10 @@ class AuthService {
       final billsStr = prefs.getString('saved_order_bills');
       if (billsStr != null && billsStr.isNotEmpty) {
         savedBills = Map<String, dynamic>.from(jsonDecode(billsStr));
+      }
+      final editedStr = prefs.getString('saved_edited_messages');
+      if (editedStr != null && editedStr.isNotEmpty) {
+        savedEditedMessages = Map<String, dynamic>.from(jsonDecode(editedStr));
       }
     } catch (_) {}
 
@@ -1166,9 +1234,18 @@ class AuthService {
       }
     }
 
-    // Merge saved order amounts, payments, delivery statuses, order statuses & bill images onto message objects
+    // Merge saved order amounts, payments, delivery statuses, order statuses, bill images & edited messages onto message objects
     for (var m in msgs) {
       final idStr = m['id']?.toString() ?? '';
+      if (savedEditedMessages.containsKey(idStr)) {
+        final eData = Map<String, dynamic>.from(savedEditedMessages[idStr]);
+        if (eData['message'] != null) m['message'] = eData['message'];
+        if (eData['items_json'] != null) m['items_json'] = eData['items_json'];
+        if (eData['order_amount'] != null) {
+          m['order_amount'] = eData['order_amount'];
+          m['amount'] = eData['order_amount'];
+        }
+      }
       if (savedAmounts.containsKey(idStr)) {
         m['order_amount'] = savedAmounts[idStr];
       }
