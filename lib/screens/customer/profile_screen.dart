@@ -125,7 +125,6 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
               _addressSubtitle = '$tag: $house, $city (${list.length} Saved)';
             });
           }
-          return;
         }
       } catch (e) {
         debugPrint('Error parsing profile address subtitle: $e');
@@ -144,8 +143,23 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
 
     try {
       final prefs = await SharedPreferences.getInstance();
+
+      // Load persistent saved delivery and order statuses
+      Map<String, dynamic> savedDeliveryStatuses = {};
+      Map<String, dynamic> savedOrderStatuses = {};
+      try {
+        final dStr = prefs.getString('saved_delivery_statuses');
+        if (dStr != null && dStr.isNotEmpty) {
+          savedDeliveryStatuses = Map<String, dynamic>.from(jsonDecode(dStr));
+        }
+        final oStr = prefs.getString('saved_order_statuses');
+        if (oStr != null && oStr.isNotEmpty) {
+          savedOrderStatuses = Map<String, dynamic>.from(jsonDecode(oStr));
+        }
+      } catch (_) {}
+
       final allKeys = prefs.getKeys().toList();
-      final msgKeys = allKeys.where((k) => (k.startsWith('msgs_') || k.startsWith('messages_')) && k.contains(mobile)).toList();
+      final msgKeys = allKeys.where((k) => (k.startsWith('msgs_') || k.startsWith('messages_')) && k.endsWith('_$mobile')).toList();
 
       int prevMonthDeliveredCount = 0;
       int currMonthDeliveredCount = 0;
@@ -158,28 +172,56 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
       final prevYear = prevMonthDate.year;
       final prevMonth = prevMonthDate.month;
 
+      final Set<String> processedMsgIds = {};
+
       for (var key in msgKeys) {
         final str = prefs.getString(key);
         if (str != null && str.isNotEmpty) {
           try {
             final List decoded = jsonDecode(str);
             for (var m in decoded) {
-              final delStat = (m['delivery_status'] ?? '').toString().toLowerCase();
-              final ordStat = (m['order_status'] ?? '').toString().toLowerCase();
+              if (m is! Map) continue;
+              final msgIdStr = (m['id'] ?? m['order_id'] ?? m['_calculated_order_id'] ?? '').toString();
+              if (msgIdStr.isEmpty || processedMsgIds.contains(msgIdStr)) continue;
+
+              String delStat = (m['delivery_status'] ?? '').toString().toLowerCase();
+              String ordStat = (m['order_status'] ?? '').toString().toLowerCase();
+
+              if (savedDeliveryStatuses.containsKey(msgIdStr)) {
+                final val = savedDeliveryStatuses[msgIdStr];
+                if (val is Map) {
+                  delStat = (val['delivery_status'] ?? delStat).toString().toLowerCase();
+                } else if (val != null) {
+                  delStat = val.toString().toLowerCase();
+                }
+              }
+
+              if (savedOrderStatuses.containsKey(msgIdStr)) {
+                ordStat = (savedOrderStatuses[msgIdStr] ?? ordStat).toString().toLowerCase();
+              }
+
               final isDelivered = delStat == 'delivered' || ordStat == 'delivered';
 
               if (isDelivered) {
-                final dtStr = m['created_at']?.toString();
-                if (dtStr != null && dtStr.isNotEmpty) {
-                  final dt = DateTime.tryParse(dtStr);
-                  if (dt != null) {
-                    if (dt.year == currYear && dt.month == currMonth) {
-                      currMonthDeliveredCount++;
-                    } else if (dt.year == prevYear && dt.month == prevMonth) {
-                      prevMonthDeliveredCount++;
-                    }
-                  } else {
+                processedMsgIds.add(msgIdStr);
+
+                String dtStr = (m['delivered_at'] ?? m['created_at'] ?? m['status_time'] ?? '').toString();
+                if (savedDeliveryStatuses.containsKey(msgIdStr) && savedDeliveryStatuses[msgIdStr] is Map) {
+                  final val = savedDeliveryStatuses[msgIdStr];
+                  final dAt = (val['delivered_at'] ?? val['updated_at'] ?? '').toString();
+                  if (dAt.isNotEmpty) dtStr = dAt;
+                }
+
+                DateTime? dt;
+                if (dtStr.isNotEmpty) {
+                  dt = DateTime.tryParse(dtStr.replaceAll(' ', 'T'));
+                }
+
+                if (dt != null) {
+                  if (dt.year == currYear && dt.month == currMonth) {
                     currMonthDeliveredCount++;
+                  } else if (dt.year == prevYear && dt.month == prevMonth) {
+                    prevMonthDeliveredCount++;
                   }
                 } else {
                   currMonthDeliveredCount++;
@@ -191,12 +233,11 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
       }
 
       final isActive = prevMonthDeliveredCount >= 3 || currMonthDeliveredCount >= 3;
-      final count = currMonthDeliveredCount > prevMonthDeliveredCount ? currMonthDeliveredCount : prevMonthDeliveredCount;
 
       if (mounted) {
         setState(() {
           _isVipActive = isActive;
-          _deliveredCountInMonth = count;
+          _deliveredCountInMonth = currMonthDeliveredCount;
         });
       }
     } catch (_) {}
@@ -660,12 +701,14 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                             const SizedBox(height: 4),
                             Text(
                               _isVipActive
-                                  ? 'Priority Express Support'
-                                  : 'Need 3 delivered orders/mo ($_deliveredCountInMonth/3 delivered)',
+                                  ? (_deliveredCountInMonth == 3
+                                      ? 'Monthly Target Met (3/3 delivered) 🎉'
+                                      : 'Priority Express Support')
+                                  : 'Need 3 delivered orders/mo (${_deliveredCountInMonth > 3 ? 3 : _deliveredCountInMonth}/3 delivered)',
                               style: TextStyle(
-                                color: _isVipActive ? Colors.white60 : const Color(0xFFF87171),
+                                color: _isVipActive ? const Color(0xFF34D399) : const Color(0xFFF87171),
                                 fontSize: 11,
-                                fontWeight: _isVipActive ? FontWeight.normal : FontWeight.w600,
+                                fontWeight: _isVipActive ? FontWeight.bold : FontWeight.w600,
                               ),
                             ),
                           ],
