@@ -115,6 +115,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
   bool _isLoading = true;
   int _currentSliderPage = 0;
   String _selectedOrderFilter = 'All'; // 'All', 'Pending', 'Delivered', 'Cancelled'
+  String _sellerLocation = '';
   final PageController _sliderController = PageController();
 
   @override
@@ -309,7 +310,39 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
   Future<void> _loadData() async {
     _checkBlockedBySeller();
 
-    // 1. Instant Cache Load (0 ms perceived latency)
+    // 1. Instant Cache Load for Location
+    final prefs = await SharedPreferences.getInstance();
+    final cachedLoc = prefs.getString('cached_seller_loc_${widget.sellerUsername}');
+    if (cachedLoc != null && cachedLoc.isNotEmpty && mounted) {
+      setState(() {
+        _sellerLocation = cachedLoc;
+      });
+    }
+
+    // 2. Fetch Sellers List & Location
+    try {
+      final sellers = await AuthService.getSellersList();
+      for (var s in sellers) {
+        final u = (s['username'] ?? '').toString().trim().toLowerCase();
+        final m = (s['mobile'] ?? '').toString().trim();
+        final targetU = widget.sellerUsername.trim().toLowerCase();
+        final targetM = widget.sellerMobile.trim();
+        if ((u.isNotEmpty && u == targetU) || (m.isNotEmpty && m == targetM)) {
+          final loc = (s['location'] ?? s['store_location'] ?? s['address'] ?? '').toString().trim();
+          if (loc.isNotEmpty) {
+            await prefs.setString('cached_seller_loc_${widget.sellerUsername}', loc);
+            if (mounted) {
+              setState(() {
+                _sellerLocation = loc;
+              });
+            }
+          }
+          break;
+        }
+      }
+    } catch (_) {}
+
+    // 3. Instant Cache Load (0 ms perceived latency)
     final cached = await AuthService.getCachedMessages(
       sellerUsername: widget.sellerUsername,
       customerMobile: widget.customer.mobile ?? '',
@@ -346,7 +379,6 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
       messages: msgs,
     );
     final sliders = await AuthService.getSellerSliders(widget.sellerUsername);
-    final prefs = await SharedPreferences.getInstance();
     final cleanCust = (widget.customer.mobile ?? '').trim();
     final cleanSeller = widget.sellerUsername.trim();
     final draftKey = 'draft_order_${cleanCust}_$cleanSeller';
@@ -1092,14 +1124,21 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                                                 ),
                                                 overflow: TextOverflow.ellipsis,
                                               ),
-                                              if (widget.sellerMobile.isNotEmpty) ...[
-                                                const SizedBox(height: 2),
-                                                Text(
-                                                  'Mobile: +91 ${widget.sellerMobile}',
-                                                  style: const TextStyle(color: Colors.white70, fontSize: 11),
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ],
+                                              if (_sellerLocation.isNotEmpty) ...[
+                                                 const SizedBox(height: 2),
+                                                 Text(
+                                                   '📍 $_sellerLocation',
+                                                   style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                                                   overflow: TextOverflow.ellipsis,
+                                                 ),
+                                               ] else if (widget.sellerMobile.isNotEmpty) ...[
+                                                 const SizedBox(height: 2),
+                                                 Text(
+                                                   '📱 +91 ${widget.sellerMobile}',
+                                                   style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                                   overflow: TextOverflow.ellipsis,
+                                                 ),
+                                               ],
                                               const SizedBox(height: 4),
                                               const FittedBox(
                                                 fit: BoxFit.scaleDown,
