@@ -54,6 +54,77 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
     _checkBlockedStatus();
     _loadMessages();
     _loadSellerProducts();
+    _loadDraft();
+    _msgController.addListener(_onDraftTextChanged);
+  }
+
+  void _onDraftTextChanged() {
+    _saveDraft();
+  }
+
+  Future<void> _saveDraft() async {
+    final cleanCust = (widget.customer.mobile ?? '').trim();
+    final cleanSeller = widget.sellerUsername.trim();
+    if (cleanCust.isEmpty || cleanSeller.isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'draft_order_${cleanCust}_$cleanSeller';
+    final text = _msgController.text;
+
+    if (text.trim().isEmpty && _selectedOrderItems.isEmpty) {
+      await prefs.remove(key);
+    } else {
+      final draftData = {
+        'text': text,
+        'items': _selectedOrderItems,
+        'sellerUsername': cleanSeller,
+        'sellerName': widget.sellerName,
+        'updatedAt': DateTime.now().toIso8601String(),
+      };
+      await prefs.setString(key, jsonEncode(draftData));
+    }
+  }
+
+  Future<void> _loadDraft() async {
+    final cleanCust = (widget.customer.mobile ?? '').trim();
+    final cleanSeller = widget.sellerUsername.trim();
+    if (cleanCust.isEmpty || cleanSeller.isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'draft_order_${cleanCust}_$cleanSeller';
+    final str = prefs.getString(key);
+    if (str != null && str.isNotEmpty) {
+      try {
+        final Map<String, dynamic> data = jsonDecode(str);
+        final text = (data['text'] ?? '').toString();
+        final List rawItems = data['items'] ?? [];
+        final items = rawItems.map((e) => Map<String, dynamic>.from(e)).toList();
+
+        if (mounted) {
+          setState(() {
+            if (text.isNotEmpty) {
+              _msgController.text = text;
+              _msgController.selection = TextSelection.fromPosition(TextPosition(offset: text.length));
+            }
+            if (items.isNotEmpty) {
+              _selectedOrderItems = items;
+            }
+          });
+        }
+      } catch (e) {
+        debugPrint('Error loading draft: $e');
+      }
+    }
+  }
+
+  Future<void> _clearDraft() async {
+    final cleanCust = (widget.customer.mobile ?? '').trim();
+    final cleanSeller = widget.sellerUsername.trim();
+    if (cleanCust.isEmpty || cleanSeller.isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'draft_order_${cleanCust}_$cleanSeller';
+    await prefs.remove(key);
   }
 
   Future<void> _loadSellerProducts() async {
@@ -67,6 +138,8 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
 
   @override
   void dispose() {
+    _saveDraft();
+    _msgController.removeListener(_onDraftTextChanged);
     _msgController.dispose();
     _chatScrollController.dispose();
     _chatSearchController.dispose();
@@ -701,6 +774,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                             );
 
                           if (success) {
+                            await _clearDraft();
                             setState(() {
                               _selectedOrderItems.clear();
                               _msgController.clear();

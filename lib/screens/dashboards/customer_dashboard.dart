@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../utils/header_theme_helper.dart';
@@ -220,6 +222,28 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
 
   Future<void> _loadCustomerChats() async {
     final chats = await AuthService.getCustomerConversations(widget.customer.mobile ?? '');
+    final prefs = await SharedPreferences.getInstance();
+    final cleanCust = (widget.customer.mobile ?? '').trim();
+
+    for (var chat in chats) {
+      final sUsername = (chat['seller_username'] ?? '').toString().trim();
+      final draftKey = 'draft_order_${cleanCust}_$sUsername';
+      final draftStr = prefs.getString(draftKey);
+      if (draftStr != null && draftStr.isNotEmpty) {
+        try {
+          final Map<String, dynamic> data = jsonDecode(draftStr);
+          final text = (data['text'] ?? '').toString().trim();
+          final List rawItems = data['items'] ?? [];
+          if (text.isNotEmpty) {
+            final lines = text.split('\n').where((l) => l.trim().isNotEmpty).toList();
+            chat['draft_text'] = lines.isNotEmpty ? lines.first : text;
+          } else if (rawItems.isNotEmpty) {
+            chat['draft_text'] = '${rawItems.length} items added';
+          }
+        } catch (_) {}
+      }
+    }
+
     if (mounted) {
       setState(() {
         _myChats = chats;
@@ -736,7 +760,41 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                               ),
                                             ],
                                           ),
-                                        if (lastMsg.isNotEmpty) ...[
+                                        if (chat['draft_text'] != null && (chat['draft_text'] as String).isNotEmpty) ...[
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              const Icon(Icons.edit_rounded, size: 13, color: Color(0xFFD97706)),
+                                              const SizedBox(width: 4),
+                                              Expanded(
+                                                child: RichText(
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  text: TextSpan(
+                                                    children: [
+                                                      const TextSpan(
+                                                        text: 'Draft: ',
+                                                        style: TextStyle(
+                                                          color: Color(0xFFD97706),
+                                                          fontWeight: FontWeight.bold,
+                                                          fontSize: 12.5,
+                                                        ),
+                                                      ),
+                                                      TextSpan(
+                                                        text: chat['draft_text'],
+                                                        style: const TextStyle(
+                                                          color: Color(0xFF334155),
+                                                          fontSize: 12.5,
+                                                          fontWeight: FontWeight.w500,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ] else if (lastMsg.isNotEmpty) ...[
                                           const SizedBox(height: 4),
                                           Text(
                                             lastMsg,

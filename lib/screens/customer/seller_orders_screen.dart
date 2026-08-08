@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../utils/header_theme_helper.dart';
@@ -290,6 +291,8 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
   }
 
   bool _isBlockedBySeller = false;
+  bool _hasDraft = false;
+  String _draftSnippet = '';
 
   Future<void> _checkBlockedBySeller() async {
     final blocked = await AuthService.isCustomerBlocked(
@@ -343,11 +346,37 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
       messages: msgs,
     );
     final sliders = await AuthService.getSellerSliders(widget.sellerUsername);
+    final prefs = await SharedPreferences.getInstance();
+    final cleanCust = (widget.customer.mobile ?? '').trim();
+    final cleanSeller = widget.sellerUsername.trim();
+    final draftKey = 'draft_order_${cleanCust}_$cleanSeller';
+    final draftStr = prefs.getString(draftKey);
+    bool hasDraft = false;
+    String draftSnippet = '';
+    if (draftStr != null && draftStr.isNotEmpty) {
+      try {
+        final Map<String, dynamic> data = jsonDecode(draftStr);
+        final text = (data['text'] ?? '').toString().trim();
+        final List rawItems = data['items'] ?? [];
+        if (text.isNotEmpty || rawItems.isNotEmpty) {
+          hasDraft = true;
+          if (text.isNotEmpty) {
+            final lines = text.split('\n').where((l) => l.trim().isNotEmpty).toList();
+            draftSnippet = lines.isNotEmpty ? lines.first : text;
+          } else {
+            draftSnippet = '${rawItems.length} items added in list';
+          }
+        }
+      } catch (_) {}
+    }
+
     if (mounted) {
       setState(() {
         _messages = msgs;
         _sliders = sliders;
         _isLoading = false;
+        _hasDraft = hasDraft;
+        _draftSnippet = draftSnippet;
       });
       _startAutoSlider();
     }
@@ -1217,6 +1246,82 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                       ),
                     ),
 
+                    // Draft Order Notification Banner Card (if customer has an unsent draft order)
+                    if (_hasDraft) ...[
+                      Container(
+                        margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFFBEB), // Soft Warm Amber Tint
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFFCD34D), width: 1.2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFFEF3C7),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.edit_rounded, color: Color(0xFFD97706), size: 18),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Draft Order Pending ✏️',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFFB45309)),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _draftSnippet.isNotEmpty ? _draftSnippet : 'Unsent draft order found. Tap to resume.',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 11.5, color: Color(0xFF78350F), fontWeight: FontWeight.w500),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            ElevatedButton(
+                              onPressed: () async {
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => CustomerChatScreen(
+                                      customer: widget.customer,
+                                      sellerUsername: widget.sellerUsername,
+                                      sellerName: widget.sellerName,
+                                      sellerMobile: widget.sellerMobile,
+                                    ),
+                                  ),
+                                );
+                                _loadData();
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFD97706),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                elevation: 0,
+                              ),
+                              child: const Text('Resume', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
                     // Premium Segmented Filter Bar Track
                     _buildSegmentedFilterBar(),
 
@@ -1257,9 +1362,21 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
           );
           _loadData();
         },
-        backgroundColor: _isBlockedBySeller ? const Color(0xFFEF4444) : const Color(0xFF10B981),
-        icon: Icon(_isBlockedBySeller ? Icons.block_rounded : Icons.chat_bubble_rounded, color: Colors.white),
-        label: Text(_isBlockedBySeller ? 'Seller Blocked' : 'Chat & Order', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: _isBlockedBySeller
+            ? const Color(0xFFEF4444)
+            : (_hasDraft ? const Color(0xFFD97706) : const Color(0xFF10B981)),
+        icon: Icon(
+          _isBlockedBySeller
+              ? Icons.block_rounded
+              : (_hasDraft ? Icons.edit_note_rounded : Icons.chat_bubble_rounded),
+          color: Colors.white,
+        ),
+        label: Text(
+          _isBlockedBySeller
+              ? 'Seller Blocked'
+              : (_hasDraft ? 'Resume Draft Order ✏️' : 'Chat & Order'),
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
       ),
 
       bottomNavigationBar: widget.hideBottomNav ? null : Container(
