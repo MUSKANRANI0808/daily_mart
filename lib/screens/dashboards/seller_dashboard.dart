@@ -572,7 +572,7 @@ class _SellerDashboardState extends State<SellerDashboard> {
                         ),
                       ),
 
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 95),
                     ],
                   ),
                 ),
