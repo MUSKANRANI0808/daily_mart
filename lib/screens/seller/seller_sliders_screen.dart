@@ -318,9 +318,15 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
     );
   }
 
+  String get _sellerUsername {
+    final u = (widget.seller.username ?? '').trim();
+    if (u.isNotEmpty) return u;
+    return (widget.seller.mobile ?? '').trim();
+  }
+
   Future<void> _loadSliders() async {
     setState(() => _isLoading = true);
-    final list = await AuthService.getSellerSliders(widget.seller.username ?? '');
+    final list = await AuthService.getSellerSliders(_sellerUsername);
     if (mounted) {
       setState(() {
         _sliders = list;
@@ -1025,7 +1031,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                             if (isEditing) {
                               success = await AuthService.updateSellerSlider(
                                 sliderId: existingSlider['id'],
-                                sellerUsername: widget.seller.username ?? '',
+                                sellerUsername: _sellerUsername,
                                 tag: tag,
                                 title: title,
                                 description: desc,
@@ -1037,7 +1043,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                               );
                             } else {
                               success = await AuthService.addSellerSlider(
-                                sellerUsername: widget.seller.username ?? '',
+                                sellerUsername: _sellerUsername,
                                 tag: tag,
                                 title: title,
                                 description: desc,
@@ -1111,7 +1117,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
   }
 
   Future<void> _deleteSlider(dynamic sliderId) async {
-    final success = await AuthService.deleteSellerSlider(sliderId, widget.seller.username ?? '');
+    final success = await AuthService.deleteSellerSlider(sliderId, _sellerUsername);
     if (success) {
       await _loadSliders();
       if (mounted) {

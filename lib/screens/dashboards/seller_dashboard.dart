@@ -58,8 +58,14 @@ class _SellerDashboardState extends State<SellerDashboard> {
     super.dispose();
   }
 
+  String get _sellerUsername {
+    final u = (widget.seller.username ?? '').trim();
+    if (u.isNotEmpty) return u;
+    return (widget.seller.mobile ?? '').trim();
+  }
+
   Future<void> _loadSellerSliders() async {
-    final list = await AuthService.getSellerSliders(widget.seller.username ?? '');
+    final list = await AuthService.getSellerSliders(_sellerUsername);
 
     if (mounted) {
       setState(() {

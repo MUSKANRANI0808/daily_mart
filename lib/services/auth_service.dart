@@ -1319,7 +1319,7 @@ class AuthService {
     return true;
   }
 
-  /// Get seller sliders (VPS-Server-First, with Local Cache Sync)
+  /// Get seller sliders (Local-First Sync with Remote VPS)
   static Future<List<Map<String, dynamic>>> getSellerSliders(String sellerUsername) async {
     final cleanUsername = sellerUsername.trim();
     if (cleanUsername.isEmpty) return [];
@@ -1327,31 +1327,45 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     final localKey = 'sliders_$cleanUsername';
 
-    // 1. Try Remote VPS API First to guarantee fresh server sliders for new or cache-cleared customers
+    // 1. Get local cached sliders first
+    List<Map<String, dynamic>> localList = [];
+    final str = prefs.getString(localKey);
+    if (str != null && str.isNotEmpty) {
+      try {
+        final List decoded = jsonDecode(str);
+        localList = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+      } catch (_) {}
+    }
+
+    // 2. Try Remote VPS API and merge
     try {
       final res = await VpsApiService.get('get-seller-sliders&seller_username=${Uri.encodeComponent(cleanUsername)}');
       if (res != null && res['success'] == true && res['sliders'] != null) {
         final List list = res['sliders'];
         final remoteList = list.map((e) => Map<String, dynamic>.from(e)).toList();
 
-        // Always update local cache with fresh server sliders
-        await prefs.setString(localKey, jsonEncode(remoteList));
-        return remoteList;
+        // Merge maps using 'id' to prevent wiping out locally created sliders
+        final Map<String, Map<String, dynamic>> mergedMap = {};
+        for (var item in remoteList) {
+          final idStr = item['id']?.toString() ?? '';
+          if (idStr.isNotEmpty) mergedMap[idStr] = item;
+        }
+        for (var item in localList) {
+          final idStr = item['id']?.toString() ?? '';
+          if (idStr.isNotEmpty && !mergedMap.containsKey(idStr)) {
+            mergedMap[idStr] = item;
+          }
+        }
+
+        final combinedList = mergedMap.values.toList();
+        await prefs.setString(localKey, jsonEncode(combinedList));
+        return combinedList;
       }
     } catch (e) {
       debugPrint('Error fetching remote seller sliders for $cleanUsername: $e');
     }
 
-    // 2. Fallback to local cache if offline
-    final str = prefs.getString(localKey);
-    if (str != null && str.isNotEmpty) {
-      try {
-        final List decoded = jsonDecode(str);
-        return decoded.map((e) => Map<String, dynamic>.from(e)).toList();
-      } catch (_) {}
-    }
-
-    return [];
+    return localList;
   }
 
   /// Add seller slider (Local-First Guaranteed)
