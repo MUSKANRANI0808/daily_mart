@@ -397,10 +397,10 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
             itemCount: _sliders.length,
             itemBuilder: (ctx, idx) {
               final item = _sliders[idx];
-              final tag = item['tag'] ?? 'OFFER 🏷️';
-              final title = item['title'] ?? '';
-              final desc = item['description'] ?? '';
-              final bg = item['bg_image_url'] ?? 'transparent';
+              final tag = (item['tag'] ?? item['tagText'] ?? '').toString().trim();
+              final title = (item['title'] ?? item['titleText'] ?? '').toString().trim();
+              final desc = (item['description'] ?? item['subtitle'] ?? item['descText'] ?? '').toString().trim();
+              final bg = (item['bg'] ?? item['bg_image_url'] ?? item['bgImageUrl'] ?? item['image'] ?? item['imageUrl'] ?? 'transparent').toString();
               final tagBg = hexToColor(item['tag_bg_color']?.toString() ?? '#10B981');
               final tagShape = item['tag_shape']?.toString() ?? 'pill';
               final titleCol = hexToColor(item['title_color']?.toString() ?? '#FFFFFF');
@@ -433,35 +433,42 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                       padding: const EdgeInsets.all(18),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: buildTagDecoration(tagShape, tagBg),
-                            child: Text(
-                              tag,
-                              style: TextStyle(
-                                color: tagShape.toLowerCase() == 'outline'
-                                    ? tagBg
-                                    : (tagBg.computeLuminance() > 0.5 ? Colors.black : Colors.white),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 11,
+                          if (tag.isNotEmpty) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: buildTagDecoration(tagShape, tagBg),
+                              child: Text(
+                                tag,
+                                style: TextStyle(
+                                  color: tagShape.toLowerCase() == 'outline'
+                                      ? tagBg
+                                      : (tagBg.computeLuminance() > 0.5 ? Colors.black : Colors.white),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: titleCol, fontWeight: FontWeight.bold, fontSize: 16),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            desc,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: descCol, fontSize: 12),
-                          ),
+                            const SizedBox(height: 8),
+                          ],
+                          if (title.isNotEmpty) ...[
+                            Text(
+                              title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: titleCol, fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                            const SizedBox(height: 4),
+                          ],
+                          if (desc.isNotEmpty) ...[
+                            Text(
+                              desc,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: descCol, fontSize: 12),
+                            ),
+                          ],
                         ],
                       ),
                     ),
