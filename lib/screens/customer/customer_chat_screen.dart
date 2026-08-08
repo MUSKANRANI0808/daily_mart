@@ -995,24 +995,13 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
   void _addCustomItemToOrderText(String name, String unit, String qtyStr, double amount, [Map<String, dynamic>? rawItem]) {
     setState(() {
       _isListMode = true;
-      int existingIdx = _selectedOrderItems.indexWhere((i) => i['name'].toString().toLowerCase() == name.toLowerCase());
-      if (existingIdx >= 0) {
-        _selectedOrderItems[existingIdx] = {
-          'name': name,
-          'unit': unit,
-          'qty': qtyStr,
-          'amount': amount,
-          'itemData': rawItem ?? _selectedOrderItems[existingIdx]['itemData'] ?? {},
-        };
-      } else {
-        _selectedOrderItems.add({
-          'name': name,
-          'unit': unit,
-          'qty': qtyStr,
-          'amount': amount,
-          'itemData': rawItem ?? {},
-        });
-      }
+      _selectedOrderItems.add({
+        'name': name,
+        'unit': unit,
+        'qty': qtyStr,
+        'amount': amount,
+        'itemData': rawItem ?? {},
+      });
       _syncSelectedItemsToMsgController();
     });
   }
