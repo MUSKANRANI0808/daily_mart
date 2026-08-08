@@ -1039,13 +1039,11 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                 ),
               ),
 
-              // Main Content Layout - Entire Page Scrollable
+              // Main Content Layout - Fixed Top Header + Scrollable Slider & List
               Positioned.fill(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     // Pro-Level Animated Organic Wave Header Container
                     ClipPath(
                       clipper: HeaderArcWaveClipper(),
@@ -1221,7 +1219,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                                     ),
                                   ),
 
-                                  const SizedBox(height: 95),
+                                  const SizedBox(height: 20),
                                 ],
                               ),
                             ),
@@ -1230,40 +1228,50 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                       ),
                     ),
 
-                    // 3D Banner Carousel Slider placed OUTSIDE top wave header, right ABOVE Recent Orders
-                    if (_sliders.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      _buildSliderSection(),
-                      const SizedBox(height: 8),
-                    ],
+                    // Scrollable Area: Slider, Recent Orders, Filter Bar & Orders List
+                    Expanded(
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 3D Banner Carousel Slider
+                            if (_sliders.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              _buildSliderSection(),
+                              const SizedBox(height: 8),
+                            ],
 
-                    // Section Title Header
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 2.0),
-                      child: Text(
-                        'Recent Orders',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF0F172A),
+                            // Section Title Header
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 2.0),
+                              child: Text(
+                                'Recent Orders',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF0F172A),
+                                ),
+                              ),
+                            ),
+
+                            // Premium Segmented Filter Bar Track
+                            _buildSegmentedFilterBar(),
+
+                            // Orders List
+                            _isLoading
+                                ? const Center(child: Padding(padding: EdgeInsets.all(30), child: CircularProgressIndicator(color: Color(0xFF8B5CF6))))
+                                : _buildRecentOrdersList(),
+                          ],
                         ),
                       ),
                     ),
-
-                    // Premium Segmented Filter Bar Track
-                    _buildSegmentedFilterBar(),
-
-                    // Orders List
-                    _isLoading
-                        ? const Center(child: Padding(padding: EdgeInsets.all(30), child: CircularProgressIndicator(color: Color(0xFF8B5CF6))))
-                        : _buildRecentOrdersList(),
                   ],
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
 
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
