@@ -33,9 +33,22 @@ class _DeliveryBoyDashboardScreenState extends State<DeliveryBoyDashboardScreen>
   }
 
   Future<void> _loadDeliveryData() async {
-    setState(() => _isLoading = true);
-
     String currentBoyLoc = (widget.deliveryBoy['location'] ?? '').toString().trim();
+
+    // 1. Instant 0ms Local Cache Load
+    final cachedData = await AuthService.getCachedAllUndeliveredOrdersGroupedBySeller(
+      deliveryBoyLocation: currentBoyLoc,
+    );
+    if (cachedData.isNotEmpty && mounted) {
+      setState(() {
+        _groupedSellerOrders = cachedData;
+        _isLoading = false;
+      });
+    } else if (mounted && _groupedSellerOrders.isEmpty) {
+      setState(() => _isLoading = true);
+    }
+
+    // 2. Background Revalidation from VPS Database
     try {
       final allBoys = await AuthService.getDeliveryBoys();
       final myUser = (widget.deliveryBoy['username'] ?? '').toString().toLowerCase();

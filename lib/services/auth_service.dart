@@ -963,10 +963,25 @@ class AuthService {
     } catch (_) {}
   }
 
+  /// Get Cached Grouped Customer Conversations for Seller Dashboard (0ms Instant Load)
+  static Future<List<Map<String, dynamic>>> getCachedSellerConversations(String sellerUsername) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'seller_conversations_${sellerUsername.trim()}';
+      final str = prefs.getString(key);
+      if (str != null && str.isNotEmpty) {
+        final List decoded = jsonDecode(str);
+        return decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
   /// Get Grouped Customer Conversations for Seller Dashboard
   static Future<List<Map<String, dynamic>>> getSellerConversations(String sellerUsername) async {
+    final cleanSeller = sellerUsername.trim();
     try {
-      final encSeller = Uri.encodeComponent(sellerUsername.trim());
+      final encSeller = Uri.encodeComponent(cleanSeller);
       final res = await VpsApiService.get('get-seller-conversations&seller_username=$encSeller');
       if (res != null && res['conversations'] != null) {
         final List<dynamic> list = res['conversations'];
@@ -981,7 +996,23 @@ class AuthService {
             await prefs.setString('customer_profile_$mobile', jsonEncode(profileData));
           }
         }
+        await prefs.setString('seller_conversations_$cleanSeller', jsonEncode(items));
         return items;
+      }
+    } catch (_) {}
+    return getCachedSellerConversations(cleanSeller);
+  }
+
+  /// Get Cached Grouped Seller Conversations for Customer Dashboard (0ms Instant Load)
+  static Future<List<Map<String, dynamic>>> getCachedCustomerConversations(String customerMobile) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cleanCust = customerMobile.trim();
+      final key = 'customer_conversations_$cleanCust';
+      final str = prefs.getString(key);
+      if (str != null && str.isNotEmpty) {
+        final List decoded = jsonDecode(str);
+        return decoded.map((e) => Map<String, dynamic>.from(e)).toList();
       }
     } catch (_) {}
     return [];
@@ -1025,6 +1056,9 @@ class AuthService {
       }
     }
 
+    if (result.isNotEmpty) {
+      await prefs.setString('customer_conversations_$cleanCust', jsonEncode(result));
+    }
     return result;
   }
 
@@ -3032,7 +3066,29 @@ class AuthService {
       }
     }
 
+    if (groupedResult.isNotEmpty) {
+      try {
+        await prefs.setString('delivery_boy_grouped_orders_${cleanDbLoc}', jsonEncode(groupedResult));
+      } catch (_) {}
+    }
+
     return groupedResult;
+  }
+
+  /// Get Cached Undelivered Orders Grouped By Seller for Delivery Boy (0ms Instant Load)
+  static Future<List<Map<String, dynamic>>> getCachedAllUndeliveredOrdersGroupedBySeller({
+    String deliveryBoyLocation = '',
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'delivery_boy_grouped_orders_${deliveryBoyLocation.trim().toLowerCase()}';
+      final str = prefs.getString(key);
+      if (str != null && str.isNotEmpty) {
+        final List decoded = jsonDecode(str);
+        return decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+    } catch (_) {}
+    return [];
   }
 
   /// Get ALL orders grouped by Seller and Customer (For Admin Order Details Dashboard)

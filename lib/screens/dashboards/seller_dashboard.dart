@@ -94,7 +94,22 @@ class _SellerDashboardState extends State<SellerDashboard> {
   }
 
   Future<void> _loadConversations() async {
-    final convs = await AuthService.getSellerConversations(widget.seller.username ?? '');
+    final sellerUser = widget.seller.username ?? '';
+
+    // 1. Instant 0ms Local Cache Load
+    final cachedConvs = await AuthService.getCachedSellerConversations(sellerUser);
+    if (cachedConvs.isNotEmpty && mounted) {
+      await _processSellerConversationsAndSetState(cachedConvs);
+    }
+
+    // 2. Background Revalidation from VPS Database
+    final convs = await AuthService.getSellerConversations(sellerUser);
+    if (mounted) {
+      await _processSellerConversationsAndSetState(convs);
+    }
+  }
+
+  Future<void> _processSellerConversationsAndSetState(List<Map<String, dynamic>> convs) async {
     final prefs = await SharedPreferences.getInstance();
 
     for (var item in convs) {
@@ -145,7 +160,7 @@ class _SellerDashboardState extends State<SellerDashboard> {
 
         // Calculate pending orders count for this customer
         int pendingOrdersCount = 0;
-        final msgs = await AuthService.getMessages(
+        final msgs = await AuthService.getCachedMessages(
           sellerUsername: widget.seller.username ?? '',
           customerMobile: custMobile,
         );

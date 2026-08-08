@@ -221,7 +221,22 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   }
 
   Future<void> _loadCustomerChats() async {
-    final chats = await AuthService.getCustomerConversations(widget.customer.mobile ?? '');
+    final cleanCust = (widget.customer.mobile ?? '').trim();
+
+    // 1. Instant 0ms Local Cache Load
+    final cachedChats = await AuthService.getCachedCustomerConversations(cleanCust);
+    if (cachedChats.isNotEmpty && mounted) {
+      await _processDraftsAndSetState(cachedChats);
+    }
+
+    // 2. Background Revalidation from VPS Database
+    final chats = await AuthService.getCustomerConversations(cleanCust);
+    if (mounted) {
+      await _processDraftsAndSetState(chats);
+    }
+  }
+
+  Future<void> _processDraftsAndSetState(List<Map<String, dynamic>> chats) async {
     final prefs = await SharedPreferences.getInstance();
     final cleanCust = (widget.customer.mobile ?? '').trim();
 
