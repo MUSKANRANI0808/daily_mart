@@ -3395,6 +3395,7 @@ class AuthService {
         final prefs = await SharedPreferences.getInstance();
         final encData = jsonEncode(flatOrders.map((o) {
           final copy = Map<String, dynamic>.from(o);
+          copy['iso_date'] = (o['raw_date'] as DateTime?)?.toIso8601String() ?? (o['iso_date'] ?? '');
           copy.remove('raw_date');
           copy.remove('raw_pickup_time');
           copy.remove('raw_delivered_time');
@@ -3416,8 +3417,20 @@ class AuthService {
         final List decoded = jsonDecode(cachedStr);
         final list = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
         for (var ord in list) {
-          if (ord['date'] != null) {
-            ord['raw_date'] = DateTime.tryParse(ord['date'].toString());
+          final isoStr = (ord['iso_date'] ?? '').toString();
+          if (isoStr.isNotEmpty) {
+            ord['raw_date'] = DateTime.tryParse(isoStr);
+          }
+          if (ord['raw_date'] == null && ord['date'] != null) {
+            final parts = ord['date'].toString().split('/');
+            if (parts.length == 3) {
+              final d = int.tryParse(parts[0]);
+              final m = int.tryParse(parts[1]);
+              final y = int.tryParse(parts[2]);
+              if (d != null && m != null && y != null) {
+                ord['raw_date'] = DateTime(y, m, d);
+              }
+            }
           }
         }
         return list;
@@ -3634,6 +3647,7 @@ class AuthService {
 
     return {
       'date': '${parsedDt.day.toString().padLeft(2, '0')}/${parsedDt.month.toString().padLeft(2, '0')}/${parsedDt.year}',
+      'iso_date': parsedDt.toIso8601String(),
       'raw_date': parsedDt,
       'raw_pickup_time': rawPickupDt,
       'raw_delivered_time': rawDeliveredDt,

@@ -1958,7 +1958,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           _buildSidebarMenuItem(
             index: 2,
             title: 'Order Details',
-            subtitle: '${_flatOrdersList.length} Total Orders',
+            subtitle: '${_filteredOrders.length} Filtered (${_flatOrdersList.length} Total)',
             icon: Icons.inventory_2_rounded,
             activeColor: const Color(0xFF10B981),
           ),

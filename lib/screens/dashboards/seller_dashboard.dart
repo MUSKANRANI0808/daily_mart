@@ -357,7 +357,7 @@ class _SellerDashboardState extends State<SellerDashboard> {
               width: isSelected ? 18 : 6,
               height: 6,
               decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF8B5CF6) : Colors.white38,
+                color: isSelected ? const Color(0xFF8B5CF6) : const Color(0xFFCBD5E1),
                 borderRadius: BorderRadius.circular(3),
               ),
             );
@@ -572,12 +572,7 @@ class _SellerDashboardState extends State<SellerDashboard> {
                         ),
                       ),
 
-                      // Top Banner 3D Carousel Slider & Indicator Dots
-                      if (_sliders.isNotEmpty) ...[
-                        _buildSliderSection(),
-                        const SizedBox(height: 28),
-                      ] else
-                        const SizedBox(height: 90),
+                      const SizedBox(height: 16),
                     ],
                   ),
                 ),
@@ -585,6 +580,13 @@ class _SellerDashboardState extends State<SellerDashboard> {
             ),
           ),
         ),
+
+            // 3D Banner Carousel Slider placed OUTSIDE green header, right ABOVE Customer Conversations & Orders
+            if (_sliders.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _buildSliderSection(),
+              const SizedBox(height: 8),
+            ],
 
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
