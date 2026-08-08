@@ -356,16 +356,22 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
     if (draftStr != null && draftStr.isNotEmpty) {
       try {
         final Map<String, dynamic> data = jsonDecode(draftStr);
-        final text = (data['text'] ?? '').toString().trim();
+        final activeMode = (data['activeMode'] ?? 'chat').toString();
+        final chatText = (data['chatText'] ?? data['text'] ?? '').toString().trim();
         final List rawItems = data['items'] ?? [];
-        if (text.isNotEmpty || rawItems.isNotEmpty) {
+
+        if (activeMode == 'list' && rawItems.isNotEmpty) {
           hasDraft = true;
-          if (text.isNotEmpty) {
-            final lines = text.split('\n').where((l) => l.trim().isNotEmpty).toList();
-            draftSnippet = lines.isNotEmpty ? lines.first : text;
-          } else {
-            draftSnippet = '${rawItems.length} items added in list';
-          }
+          final firstItemName = rawItems.first['name'] ?? 'Item';
+          final count = rawItems.length;
+          draftSnippet = count > 1 ? '$firstItemName & ${count - 1} more items (List Mode)' : '$firstItemName (List Mode)';
+        } else if (chatText.isNotEmpty) {
+          hasDraft = true;
+          final lines = chatText.split('\n').where((l) => l.trim().isNotEmpty).toList();
+          draftSnippet = lines.isNotEmpty ? lines.first : chatText;
+        } else if (rawItems.isNotEmpty) {
+          hasDraft = true;
+          draftSnippet = '${rawItems.length} items (List Mode)';
         }
       } catch (_) {}
     }

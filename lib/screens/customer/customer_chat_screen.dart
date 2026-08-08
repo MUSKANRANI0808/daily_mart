@@ -69,13 +69,14 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
 
     final prefs = await SharedPreferences.getInstance();
     final key = 'draft_order_${cleanCust}_$cleanSeller';
-    final text = _msgController.text;
+    final chatText = _msgController.text.trim();
 
-    if (text.trim().isEmpty && _selectedOrderItems.isEmpty) {
+    if (chatText.isEmpty && _selectedOrderItems.isEmpty) {
       await prefs.remove(key);
     } else {
       final draftData = {
-        'text': text,
+        'activeMode': _isListMode ? 'list' : 'chat',
+        'chatText': chatText,
         'items': _selectedOrderItems,
         'sellerUsername': cleanSeller,
         'sellerName': widget.sellerName,
@@ -96,18 +97,27 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
     if (str != null && str.isNotEmpty) {
       try {
         final Map<String, dynamic> data = jsonDecode(str);
-        final text = (data['text'] ?? '').toString();
+        final activeMode = (data['activeMode'] ?? 'chat').toString();
+        final chatText = (data['chatText'] ?? '').toString();
         final List rawItems = data['items'] ?? [];
         final items = rawItems.map((e) => Map<String, dynamic>.from(e)).toList();
 
         if (mounted) {
           setState(() {
-            if (text.isNotEmpty) {
-              _msgController.text = text;
-              _msgController.selection = TextSelection.fromPosition(TextPosition(offset: text.length));
+            _msgController.text = chatText;
+            if (chatText.isNotEmpty) {
+              _msgController.selection = TextSelection.fromPosition(TextPosition(offset: chatText.length));
             }
-            if (items.isNotEmpty) {
-              _selectedOrderItems = items;
+            _selectedOrderItems = items;
+
+            if (activeMode == 'list' && items.isNotEmpty) {
+              _isListMode = true;
+            } else if (activeMode == 'chat' && chatText.isNotEmpty) {
+              _isListMode = false;
+            } else if (items.isNotEmpty) {
+              _isListMode = true;
+            } else if (chatText.isNotEmpty) {
+              _isListMode = false;
             }
           });
         }
@@ -390,25 +400,36 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
       );
       return;
     }
-    final text = _msgController.text.trim();
-    if (text.isEmpty) return;
+
+    String orderText = '';
+    if (_isListMode) {
+      if (_selectedOrderItems.isEmpty) return;
+      final lines = <String>[];
+      for (int i = 0; i < _selectedOrderItems.length; i++) {
+        final item = _selectedOrderItems[i];
+        final amt = (item['amount'] as num?)?.toDouble() ?? 0.0;
+        final amtStr = amt > 0 ? ' - ₹${amt.toStringAsFixed(amt.truncateToDouble() == amt ? 0 : 2)}' : '';
+        lines.add('${i + 1}. ${item['name']} (${item['qty']} ${item['unit']})$amtStr');
+      }
+      orderText = lines.join('\n').trim();
+    } else {
+      orderText = _msgController.text.trim();
+    }
+
+    if (orderText.isEmpty) return;
 
     if (_editingMessage != null) {
       final msgId = (_editingMessage!['id'] as num?)?.toInt() ?? 0;
       if (msgId != 0) {
-        if (_isListMode && _selectedOrderItems.isNotEmpty) {
-          _syncSelectedItemsToMsgController();
-        }
-
-        final updatedText = _msgController.text.trim();
         final success = await AuthService.updateCustomerOrderMessage(
           messageId: msgId,
           sellerUsername: widget.sellerUsername,
           customerMobile: widget.customer.mobile ?? '',
-          newText: updatedText,
+          newText: orderText,
         );
 
         if (success) {
+          await _clearDraft();
           setState(() {
             _editingMessage = null;
             _selectedOrderItems.clear();
@@ -442,7 +463,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
     }
 
     if (mounted) {
-      _showAddressSelectionSheet(text, savedAddresses);
+      _showAddressSelectionSheet(orderText, savedAddresses);
     }
   }
 
@@ -778,6 +799,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                             setState(() {
                               _selectedOrderItems.clear();
                               _msgController.clear();
+                              _isListMode = false;
                             });
                             _loadMessages();
                             NotificationService.notifySellerNewOrder(
@@ -1154,7 +1176,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
         'amount': amount,
         'itemData': rawItem ?? {},
       });
-      _syncSelectedItemsToMsgController();
+      _saveDraft();
     });
   }
 
@@ -1218,7 +1240,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                     'amount': newAmount,
                     'itemData': rawItem,
                   };
-                  _syncSelectedItemsToMsgController();
+                  _saveDraft();
                 });
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -1727,6 +1749,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                               onTap: () {
                                 setState(() {
                                   _isListMode = true;
+                                  _saveDraft();
                                 });
                                 if (_selectedOrderItems.isEmpty) {
                                   _showProductListPickerSheet();
@@ -1766,6 +1789,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                               onTap: () {
                                 setState(() {
                                   _isListMode = false;
+                                  _saveDraft();
                                 });
                               },
                               borderRadius: BorderRadius.circular(20),
@@ -1887,7 +1911,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                                           final removedName = it['name'];
                                           setState(() {
                                             _selectedOrderItems.removeAt(idx);
-                                            _syncSelectedItemsToMsgController();
+                                            _saveDraft();
                                           });
                                           ScaffoldMessenger.of(context).showSnackBar(
                                             SnackBar(

@@ -232,13 +232,19 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
       if (draftStr != null && draftStr.isNotEmpty) {
         try {
           final Map<String, dynamic> data = jsonDecode(draftStr);
-          final text = (data['text'] ?? '').toString().trim();
+          final activeMode = (data['activeMode'] ?? 'chat').toString();
+          final chatText = (data['chatText'] ?? data['text'] ?? '').toString().trim();
           final List rawItems = data['items'] ?? [];
-          if (text.isNotEmpty) {
-            final lines = text.split('\n').where((l) => l.trim().isNotEmpty).toList();
-            chat['draft_text'] = lines.isNotEmpty ? lines.first : text;
+
+          if (activeMode == 'list' && rawItems.isNotEmpty) {
+            final firstItemName = rawItems.first['name'] ?? 'Item';
+            final count = rawItems.length;
+            chat['draft_text'] = count > 1 ? '$firstItemName & ${count - 1} more items (List)' : '$firstItemName (List)';
+          } else if (chatText.isNotEmpty) {
+            final lines = chatText.split('\n').where((l) => l.trim().isNotEmpty).toList();
+            chat['draft_text'] = lines.isNotEmpty ? lines.first : chatText;
           } else if (rawItems.isNotEmpty) {
-            chat['draft_text'] = '${rawItems.length} items added';
+            chat['draft_text'] = '${rawItems.length} items (List)';
           }
         } catch (_) {}
       }
