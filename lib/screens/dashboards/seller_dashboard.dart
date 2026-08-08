@@ -29,7 +29,7 @@ class _SellerDashboardState extends State<SellerDashboard> {
   String _selectedFilter = 'all'; // 'all', 'pending', 'ready'
 
   int _activeSliderPage = 0;
-  final PageController _sliderPageController = PageController(viewportFraction: 0.92);
+  final PageController _sliderPageController = PageController();
   Timer? _sliderTimer;
   List<Map<String, dynamic>> _sliders = [];
   Map<String, dynamic> _headerThemeConfig = {};
@@ -258,25 +258,20 @@ class _SellerDashboardState extends State<SellerDashboard> {
               final removeWhiteBg = (slider['remove_white_bg'] == true || slider['remove_white_bg'] == 1);
               final imgFit = slider['img_fit']?.toString() ?? 'cover';
 
-              final isSelected = _activeSliderPage == idx;
-
-              return AnimatedScale(
-                scale: isSelected ? 1.0 : 0.93,
-                duration: const Duration(milliseconds: 350),
-                curve: Curves.easeOutCubic,
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: (bg == 'none' || bg == 'transparent' || bg.isEmpty || removeWhiteBg)
-                        ? []
-                        : [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.2),
-                              blurRadius: 14,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                  ),
+              return Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: (bg == 'none' || bg == 'transparent' || bg.isEmpty || removeWhiteBg)
+                      ? []
+                      : [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.15),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                ),
                   clipBehavior: Clip.antiAlias,
                   child: SellerSlidersScreen.buildBannerBackground(
                     bg: bg,
@@ -338,9 +333,8 @@ class _SellerDashboardState extends State<SellerDashboard> {
                       ),
                     ),
                   ),
-                ),
-              );
-            },
+                );
+              },
           ),
         ),
 
