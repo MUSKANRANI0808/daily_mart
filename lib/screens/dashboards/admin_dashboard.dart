@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/notification_service.dart';
@@ -873,161 +875,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
     required String initialColorHex,
     required Function(String hexCode) onColorSelected,
   }) {
-    final List<Map<String, dynamic>> colorPalette = [
-      {
-        'category': '🌙 Dark Obsidian & Deep Slate',
-        'colors': ['#0F172A', '#1E1B4B', '#1E293B', '#09090B', '#18181B', '#27272A', '#334155', '#475569'],
-      },
-      {
-        'category': '🟣 Royal Purple & Electric Violet',
-        'colors': ['#2E1065', '#3B0764', '#4C1D95', '#581C87', '#6D28D9', '#7E22CE', '#9333EA', '#A855F7'],
-      },
-      {
-        'category': '🔵 Ocean Blue & Neon Cyan',
-        'colors': ['#0C4A6E', '#075985', '#0369A1', '#0284C7', '#0EA5E9', '#38BDF8', '#1D4ED8', '#2563EB'],
-      },
-      {
-        'category': '🟢 Emerald Mint & Forest Green',
-        'colors': ['#022C22', '#064E3B', '#047857', '#059669', '#10B981', '#34D399', '#6EE7B7', '#A7F3D0'],
-      },
-      {
-        'category': '🌅 Crimson Rose & Ruby Red',
-        'colors': ['#4C0519', '#881337', '#9F1239', '#BE123C', '#E11D48', '#F43F5E', '#FB7185', '#FDA4AF'],
-      },
-      {
-        'category': '👑 Golden Luxe & Amber Gold',
-        'colors': ['#451A03', '#78350F', '#92400E', '#B45309', '#D97706', '#F59E0B', '#FBBF24', '#FCD34D'],
-      },
-    ];
-
-    String selectedHex = initialColorHex.trim();
-
     showDialog(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setPickerState) {
-          return AlertDialog(
-            backgroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: Row(
-              children: [
-                Container(
-                  width: 26,
-                  height: 26,
-                  decoration: BoxDecoration(
-                    color: HeaderThemeHelper.hexToColor(selectedHex),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.grey.shade400, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: HeaderThemeHelper.hexToColor(selectedHex).withValues(alpha: 0.4),
-                        blurRadius: 6,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Pick Color ($title)',
-                    style: const TextStyle(color: Color(0xFF0F172A), fontSize: 15, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: Text(
-                    selectedHex.toUpperCase(),
-                    style: const TextStyle(color: Color(0xFF8B5CF6), fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-            content: SizedBox(
-              width: 440,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Select any color circle from the scale below to set it instantly:',
-                      style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                    ),
-                    const SizedBox(height: 12),
-
-                    ...colorPalette.map((group) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(top: 10, bottom: 6),
-                            child: Text(
-                              group['category'] as String,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF334155),
-                              ),
-                            ),
-                          ),
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
-                            children: (group['colors'] as List<String>).map((hex) {
-                              final isCurrent = selectedHex.toLowerCase() == hex.toLowerCase();
-                              final color = HeaderThemeHelper.hexToColor(hex);
-
-                              return GestureDetector(
-                                onTap: () {
-                                  setPickerState(() => selectedHex = hex);
-                                  onColorSelected(hex);
-                                  Navigator.pop(ctx);
-                                },
-                                child: Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: color,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: isCurrent ? const Color(0xFF8B5CF6) : Colors.black12,
-                                      width: isCurrent ? 3.5 : 1.5,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: color.withValues(alpha: 0.35),
-                                        blurRadius: 6,
-                                        offset: const Offset(0, 3),
-                                      ),
-                                    ],
-                                  ),
-                                  child: isCurrent
-                                      ? const Icon(Icons.check_rounded, color: Colors.white, size: 20)
-                                      : null,
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ],
-                      );
-                    }).toList(),
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
-              ),
-            ],
-          );
-        },
+      builder: (ctx) => SpectrumColorPickerDialog(
+        title: title,
+        initialColorHex: initialColorHex,
+        onColorSelected: onColorSelected,
       ),
     );
   }
@@ -3234,6 +3087,467 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ),
                     ),
                   ),
+        ],
+      ),
+    );
+  }
+}
+
+class SpectrumCanvasPainter extends CustomPainter {
+  final double hue;
+
+  SpectrumCanvasPainter({required this.hue});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
+
+    // 1. Base Hue background
+    final baseColor = HSVColor.fromAHSV(1.0, hue, 1.0, 1.0).toColor();
+    final paintBase = Paint()..color = baseColor;
+    canvas.drawRect(rect, paintBase);
+
+    // 2. Horizontal Saturation gradient (White -> Transparent)
+    final whiteGradient = LinearGradient(
+      begin: Alignment.centerLeft,
+      end: Alignment.centerRight,
+      colors: [Colors.white, Colors.white.withOpacity(0.0)],
+    );
+    final paintWhite = Paint()..shader = whiteGradient.createShader(rect);
+    canvas.drawRect(rect, paintWhite);
+
+    // 3. Vertical Value gradient (Transparent -> Black)
+    final blackGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [Colors.black.withOpacity(0.0), Colors.black],
+    );
+    final paintBlack = Paint()..shader = blackGradient.createShader(rect);
+    canvas.drawRect(rect, paintBlack);
+  }
+
+  @override
+  bool shouldRepaint(covariant SpectrumCanvasPainter oldDelegate) {
+    return oldDelegate.hue != hue;
+  }
+}
+
+class SpectrumColorPickerDialog extends StatefulWidget {
+  final String title;
+  final String initialColorHex;
+  final Function(String hexCode) onColorSelected;
+
+  const SpectrumColorPickerDialog({
+    super.key,
+    required this.title,
+    required this.initialColorHex,
+    required this.onColorSelected,
+  });
+
+  @override
+  State<SpectrumColorPickerDialog> createState() => _SpectrumColorPickerDialogState();
+}
+
+class _SpectrumColorPickerDialogState extends State<SpectrumColorPickerDialog> {
+  late double _hue;
+  late double _saturation;
+  late double _value;
+  late TextEditingController _hexController;
+
+  @override
+  void initState() {
+    super.initState();
+    Color initColor = HeaderThemeHelper.hexToColor(widget.initialColorHex);
+    HSVColor hsv = HSVColor.fromColor(initColor);
+    _hue = hsv.hue;
+    _saturation = hsv.saturation;
+    _value = hsv.value;
+    _hexController = TextEditingController(text: _colorToHex(hsv.toColor()));
+  }
+
+  @override
+  void dispose() {
+    _hexController.dispose();
+    super.dispose();
+  }
+
+  String _colorToHex(Color color) {
+    final r = ((color.value >> 16) & 0xFF).toRadixString(16).padLeft(2, '0');
+    final g = ((color.value >> 8) & 0xFF).toRadixString(16).padLeft(2, '0');
+    final b = (color.value & 0xFF).toRadixString(16).padLeft(2, '0');
+    return '#${r}${g}${b}'.toUpperCase();
+  }
+
+  void _updateFromHSV(double h, double s, double v) {
+    setState(() {
+      _hue = h;
+      _saturation = s;
+      _value = v;
+      final currentColor = HSVColor.fromAHSV(1.0, _hue, _saturation, _value).toColor();
+      _hexController.text = _colorToHex(currentColor);
+    });
+  }
+
+  void _updateFromHex(String input) {
+    String clean = input.trim();
+    if (!clean.startsWith('#')) clean = '#$clean';
+    if (clean.length == 7) {
+      try {
+        Color c = HeaderThemeHelper.hexToColor(clean);
+        HSVColor hsv = HSVColor.fromColor(c);
+        setState(() {
+          _hue = hsv.hue;
+          _saturation = hsv.saturation;
+          _value = hsv.value;
+        });
+      } catch (_) {}
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentColor = HSVColor.fromAHSV(1.0, _hue, _saturation, _value).toColor();
+    final currentHex = _colorToHex(currentColor);
+
+    final r = (currentColor.value >> 16) & 0xFF;
+    final g = (currentColor.value >> 8) & 0xFF;
+    final b = currentColor.value & 0xFF;
+
+    // CMYK calculation
+    final dr = r / 255.0;
+    final dg = g / 255.0;
+    final db = b / 255.0;
+    final k = 1.0 - math.max(dr, math.max(dg, db));
+    final c = k == 1.0 ? 0 : (((1.0 - dr - k) / (1.0 - k)) * 100).round();
+    final m = k == 1.0 ? 0 : (((1.0 - dg - k) / (1.0 - k)) * 100).round();
+    final y = k == 1.0 ? 0 : (((1.0 - db - k) / (1.0 - k)) * 100).round();
+    final kPct = (k * 100).round();
+
+    // HSL calculation
+    final hsl = HSLColor.fromColor(currentColor);
+    final hslH = hsl.hue.round();
+    final hslS = (hsl.saturation * 100).round();
+    final hslL = (hsl.lightness * 100).round();
+
+    // HSV calculation
+    final hsvH = _hue.round();
+    final hsvS = (_saturation * 100).round();
+    final hsvV = (_value * 100).round();
+
+    return Dialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Container(
+        width: 460,
+        padding: const EdgeInsets.all(20),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: currentColor,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.grey.shade400, width: 2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: currentColor.withOpacity(0.4),
+                              blurRadius: 6,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Color Picker - ${widget.title}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A)),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // 1. 2D SATURATION / VALUE SPECTRUM CANVAS (MATCHING SCREENSHOT 2)
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final canvasWidth = constraints.maxWidth;
+                  const canvasHeight = 180.0;
+
+                  final cursorX = (_saturation * canvasWidth).clamp(0.0, canvasWidth);
+                  final cursorY = ((1.0 - _value) * canvasHeight).clamp(0.0, canvasHeight);
+
+                  void handleTouch(Offset localPos) {
+                    final newSat = (localPos.dx / canvasWidth).clamp(0.0, 1.0);
+                    final newVal = (1.0 - (localPos.dy / canvasHeight)).clamp(0.0, 1.0);
+                    _updateFromHSV(_hue, newSat, newVal);
+                  }
+
+                  return GestureDetector(
+                    onPanDown: (details) => handleTouch(details.localPosition),
+                    onPanUpdate: (details) => handleTouch(details.localPosition),
+                    child: Container(
+                      width: canvasWidth,
+                      height: canvasHeight,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: CustomPaint(
+                              painter: SpectrumCanvasPainter(hue: _hue),
+                            ),
+                          ),
+                          // Cursor Ring
+                          Positioned(
+                            left: cursorX - 10,
+                            top: cursorY - 10,
+                            child: Container(
+                              width: 20,
+                              height: 20,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: currentColor,
+                                border: Border.all(color: Colors.white, width: 2.5),
+                                boxShadow: const [
+                                  BoxShadow(color: Colors.black38, blurRadius: 4, offset: Offset(0, 2)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 14),
+
+              // 2. RAINBOW HUE SLIDER
+              const Text(
+                'Color Spectrum / Hue Bar:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: Color(0xFF475569)),
+              ),
+              const SizedBox(height: 6),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final sliderWidth = constraints.maxWidth;
+                  final thumbX = ((_hue / 360.0) * sliderWidth).clamp(0.0, sliderWidth);
+
+                  void handleHueTouch(Offset localPos) {
+                    final newHue = ((localPos.dx / sliderWidth) * 360.0).clamp(0.0, 360.0);
+                    _updateFromHSV(newHue, _saturation, _value);
+                  }
+
+                  return GestureDetector(
+                    onPanDown: (details) => handleHueTouch(details.localPosition),
+                    onPanUpdate: (details) => handleHueTouch(details.localPosition),
+                    child: Container(
+                      width: sliderWidth,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        gradient: const LinearGradient(
+                          colors: [
+                            Color(0xFFFF0000),
+                            Color(0xFFFFFF00),
+                            Color(0xFF00FF00),
+                            Color(0xFF00FFFF),
+                            Color(0xFF0000FF),
+                            Color(0xFFFF00FF),
+                            Color(0xFFFF0000),
+                          ],
+                        ),
+                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                      ),
+                      child: Stack(
+                        children: [
+                          Positioned(
+                            left: (thumbX - 10).clamp(0.0, sliderWidth - 20),
+                            top: 2,
+                            child: Container(
+                              width: 20,
+                              height: 20,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: HSVColor.fromAHSV(1.0, _hue, 1.0, 1.0).toColor(),
+                                border: Border.all(color: Colors.white, width: 2.5),
+                                boxShadow: const [
+                                  BoxShadow(color: Colors.black26, blurRadius: 3),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // 3. HEX INPUT FIELD WITH COPY BUTTON (MATCHING SCREENSHOT 2)
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _hexController,
+                      onChanged: _updateFromHex,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A), letterSpacing: 1.0),
+                      decoration: InputDecoration(
+                        labelText: 'HEX COLOR CODE',
+                        labelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 1.8),
+                        ),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.copy_rounded, color: Color(0xFF64748B), size: 18),
+                          tooltip: 'Copy HEX Code',
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(text: currentHex));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Copied $currentHex to clipboard!'),
+                                duration: const Duration(seconds: 1),
+                                backgroundColor: const Color(0xFF8B5CF6),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              // 4. COLOR SPEC BADGES (RGB, CMYK, HSV, HSL - MATCHING SCREENSHOT 2)
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildColorSpecBadge('RGB', '$r, $g, $b'),
+                  _buildColorSpecBadge('CMYK', '$c%, $m%, $y%, $kPct%'),
+                  _buildColorSpecBadge('HSV', '$hsvH°, $hsvS%, $hsvV%'),
+                  _buildColorSpecBadge('HSL', '$hslH°, $hslS%, $hslL%'),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // 5. QUICK PALETTE PRESET SWATCHES
+              const Text(
+                'Quick Preset Swatches:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: Color(0xFF475569)),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  '#0F172A', '#1E1B4B', '#2E1065', '#0C4A6E', '#064E3B', '#451A03', '#4C0519',
+                  '#10B981', '#0EA5E9', '#8B5CF6', '#F59E0B', '#EF4444', '#EC4899', '#6366F1',
+                  '#FBBF24', '#FCD34D', '#34D399', '#38BDF8', '#A855F7', '#FB7185', '#FFFFFF',
+                ].map((hex) {
+                  final c = HeaderThemeHelper.hexToColor(hex);
+                  final isSelected = currentHex.toLowerCase() == hex.toLowerCase();
+                  return GestureDetector(
+                    onTap: () {
+                      HSVColor hsv = HSVColor.fromColor(c);
+                      _updateFromHSV(hsv.hue, hsv.saturation, hsv.value);
+                    },
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: c,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isSelected ? const Color(0xFF8B5CF6) : Colors.black12,
+                          width: isSelected ? 3 : 1.2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(color: c.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 2)),
+                        ],
+                      ),
+                      child: isSelected ? const Icon(Icons.check_rounded, color: Colors.white, size: 16) : null,
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 20),
+
+              // 6. ACTION BUTTONS
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF8B5CF6),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () {
+                      widget.onColorSelected(currentHex);
+                      Navigator.pop(context);
+                    },
+                    child: const Text('Select Color 🎨', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildColorSpecBadge(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+          ),
         ],
       ),
     );
