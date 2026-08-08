@@ -1252,82 +1252,6 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                       ),
                     ),
 
-                    // Draft Order Notification Banner Card (if customer has an unsent draft order)
-                    if (_hasDraft) ...[
-                      Container(
-                        margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFFBEB), // Soft Warm Amber Tint
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFFFCD34D), width: 1.2),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFFEF3C7),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.edit_rounded, color: Color(0xFFD97706), size: 18),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Draft Order Pending ✏️',
-                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFFB45309)),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    _draftSnippet.isNotEmpty ? _draftSnippet : 'Unsent draft order found. Tap to resume.',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 11.5, color: Color(0xFF78350F), fontWeight: FontWeight.w500),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            ElevatedButton(
-                              onPressed: () async {
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => CustomerChatScreen(
-                                      customer: widget.customer,
-                                      sellerUsername: widget.sellerUsername,
-                                      sellerName: widget.sellerName,
-                                      sellerMobile: widget.sellerMobile,
-                                    ),
-                                  ),
-                                );
-                                _loadData();
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFD97706),
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                elevation: 0,
-                              ),
-                              child: const Text('Resume', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-
                     // Premium Segmented Filter Bar Track
                     _buildSegmentedFilterBar(),
 
@@ -1380,7 +1304,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
         label: Text(
           _isBlockedBySeller
               ? 'Seller Blocked'
-              : (_hasDraft ? 'Resume Draft Order ✏️' : 'Chat & Order'),
+              : (_hasDraft ? 'Resume Draft Order' : 'Chat & Order'),
           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
