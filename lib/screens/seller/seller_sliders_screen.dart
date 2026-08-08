@@ -1183,31 +1183,36 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                       ),
                                       const Divider(height: 1),
                                       const SizedBox(height: 8),
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           const Text(
-                                            'Image Fit Style',
+                                            'Image Display Fit:',
                                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A)),
                                           ),
+                                          const SizedBox(height: 6),
                                           Row(
                                             children: [
-                                              ChoiceChip(
-                                                label: const Text('Cover Banner', style: TextStyle(fontSize: 11)),
-                                                selected: imgFit == 'cover',
-                                                selectedColor: const Color(0xFFDCFCE7),
-                                                onSelected: (sel) {
-                                                  if (sel) setDialogState(() => imgFit = 'cover');
-                                                },
+                                              Expanded(
+                                                child: ChoiceChip(
+                                                  label: const Center(child: Text('Cover Banner', style: TextStyle(fontSize: 11))),
+                                                  selected: imgFit == 'cover',
+                                                  selectedColor: const Color(0xFFDCFCE7),
+                                                  onSelected: (sel) {
+                                                    if (sel) setDialogState(() => imgFit = 'cover');
+                                                  },
+                                                ),
                                               ),
-                                              const SizedBox(width: 6),
-                                              ChoiceChip(
-                                                label: const Text('Center Badge', style: TextStyle(fontSize: 11)),
-                                                selected: imgFit == 'contain',
-                                                selectedColor: const Color(0xFFDCFCE7),
-                                                onSelected: (sel) {
-                                                  if (sel) setDialogState(() => imgFit = 'contain');
-                                                },
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: ChoiceChip(
+                                                  label: const Center(child: Text('Center Badge', style: TextStyle(fontSize: 11))),
+                                                  selected: imgFit == 'contain',
+                                                  selectedColor: const Color(0xFFDCFCE7),
+                                                  onSelected: (sel) {
+                                                    if (sel) setDialogState(() => imgFit = 'contain');
+                                                  },
+                                                ),
                                               ),
                                             ],
                                           ),
