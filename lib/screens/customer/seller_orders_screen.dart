@@ -451,9 +451,9 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
               final imgFit = item['img_fit']?.toString() ?? 'cover';
 
               return Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
+                margin: EdgeInsets.zero,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.zero,
                   boxShadow: (bg == 'none' || bg == 'transparent' || bg.isEmpty || removeWhiteBg)
                       ? []
                       : [
