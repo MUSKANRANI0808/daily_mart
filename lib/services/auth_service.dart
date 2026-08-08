@@ -2828,8 +2828,15 @@ class AuthService {
 
                   final bool isCancelled = ordStatus.toLowerCase() == 'cancelled' || delStatus.toLowerCase() == 'cancelled';
                   final bool isDelivered = delStatus.toLowerCase() == 'delivered' || ordStatus.toLowerCase() == 'delivered';
+                  final bool isReadyForDelivery = (ordStatus.toLowerCase() == 'ready' ||
+                                                   ordStatus.toLowerCase() == 'approved' ||
+                                                   delStatus.toLowerCase() == 'out for delivery' ||
+                                                   delStatus.toLowerCase() == 'picked up' ||
+                                                   delStatus.toLowerCase() == 'pickup') &&
+                                                  !isCancelled &&
+                                                  !isDelivered;
 
-                  if (!isCancelled && !isDelivered) {
+                  if (isReadyForDelivery) {
                     if (savedPayments.containsKey(msgIdStr)) {
                       msgMap['payment_status'] = 'paid';
                       msgMap['payment_utr'] = savedPayments[msgIdStr]['payment_utr'] ?? (msgMap['payment_utr'] ?? '');
@@ -2902,8 +2909,15 @@ class AuthService {
 
                       final bool isCancelled = ordStatus.toLowerCase() == 'cancelled' || delStatus.toLowerCase() == 'cancelled';
                       final bool isDelivered = delStatus.toLowerCase() == 'delivered' || ordStatus.toLowerCase() == 'delivered';
+                      final bool isReadyForDelivery = (ordStatus.toLowerCase() == 'ready' ||
+                                                       ordStatus.toLowerCase() == 'approved' ||
+                                                       delStatus.toLowerCase() == 'out for delivery' ||
+                                                       delStatus.toLowerCase() == 'picked up' ||
+                                                       delStatus.toLowerCase() == 'pickup') &&
+                                                      !isCancelled &&
+                                                      !isDelivered;
 
-                      if (!isCancelled && !isDelivered) {
+                      if (isReadyForDelivery) {
                         if (savedPayments.containsKey(msgIdStr)) {
                           msgMap['payment_status'] = 'paid';
                           msgMap['payment_utr'] = savedPayments[msgIdStr]['payment_utr'] ?? (msgMap['payment_utr'] ?? '');
