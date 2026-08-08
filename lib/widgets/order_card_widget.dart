@@ -71,27 +71,60 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
   }
 
   List<Map<String, dynamic>> _parseItems() {
+    List<Map<String, dynamic>> items = [];
+
     final rawJson = widget.messageData['items_json'];
     if (rawJson != null && rawJson.toString().isNotEmpty) {
       try {
         final List<dynamic> decoded = jsonDecode(rawJson.toString());
-        return decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+        items = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
       } catch (_) {}
     }
 
-    final rawText = widget.messageData['message'] ?? '';
-    final lines = rawText.toString().split('\n');
-    final items = <Map<String, dynamic>>[];
-    for (var line in lines) {
-      final trimmed = line.trim();
-      if (trimmed.isNotEmpty &&
-          !trimmed.contains('📍 Delivery Address') &&
-          !trimmed.contains('📍') &&
-          !trimmed.contains('📏 Distance') &&
-          !trimmed.contains('📏')) {
-        items.add({'text': trimmed, 'status': 0});
+    if (items.isEmpty) {
+      final rawText = widget.messageData['message'] ?? '';
+      final lines = rawText.toString().split('\n');
+      for (var line in lines) {
+        final trimmed = line.trim();
+        if (trimmed.isNotEmpty &&
+            !trimmed.contains('📍 Delivery Address') &&
+            !trimmed.contains('📍') &&
+            !trimmed.contains('📏 Distance') &&
+            !trimmed.contains('📏')) {
+          items.add({'text': trimmed, 'status': 0});
+        }
       }
     }
+
+    // Reconcile status from action logs if status is 0
+    final logs = _parseLogs();
+    if (logs.isNotEmpty) {
+      for (int i = 0; i < items.length; i++) {
+        final itemNum = i + 1;
+        for (var log in logs.reversed) {
+          final logNum = (log['item_num'] as num?)?.toInt() ?? 0;
+          final logStatus = (log['status'] as num?)?.toInt() ?? 0;
+          final logText = (log['text'] ?? log['log'] ?? '').toString();
+
+          int foundStatus = 0;
+          if (logNum == itemNum && logStatus > 0) {
+            foundStatus = logStatus;
+          } else if (logText.startsWith('$itemNum.') || logText.contains('$itemNum.')) {
+            if (logText.contains('✓') || logText.contains('(yes)')) {
+              foundStatus = 1;
+            } else if (logText.contains('✕') || logText.contains('(no)')) {
+              foundStatus = 2;
+            }
+          }
+
+          if (foundStatus > 0) {
+            items[i]['status'] = foundStatus;
+            break;
+          }
+        }
+      }
+    }
+
     return items;
   }
 

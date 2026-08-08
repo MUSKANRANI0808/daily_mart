@@ -775,11 +775,25 @@ class AuthService {
     int itemNum = 1,
     int status = 1,
   }) async {
+    final msgIdStr = messageId.toString();
+    final itemsJsonStr = jsonEncode(items);
+
     try {
-      // Update SharedPreferences local cache immediately
       final prefs = await SharedPreferences.getInstance();
+
+      // 1. Save to persistent saved_item_jsons map
+      Map<String, dynamic> savedItemJsons = {};
+      try {
+        final str = prefs.getString('saved_item_jsons');
+        if (str != null && str.isNotEmpty) {
+          savedItemJsons = Map<String, dynamic>.from(jsonDecode(str));
+        }
+      } catch (_) {}
+      savedItemJsons[msgIdStr] = itemsJsonStr;
+      await prefs.setString('saved_item_jsons', jsonEncode(savedItemJsons));
+
+      // 2. Update SharedPreferences local cache immediately
       final keys = prefs.getKeys().where((k) => k.startsWith('msgs_') || k.startsWith('messages_')).toList();
-      final itemsJsonStr = jsonEncode(items);
       for (var key in keys) {
         final str = prefs.getString(key);
         if (str != null && str.isNotEmpty) {
@@ -788,7 +802,7 @@ class AuthService {
             final list = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
             bool modified = false;
             for (var item in list) {
-              if (item['id'] == messageId || item['id'].toString() == messageId.toString()) {
+              if (item['id'] == messageId || item['id'].toString() == msgIdStr) {
                 item['items_json'] = itemsJsonStr;
                 modified = true;
               }
@@ -1093,6 +1107,7 @@ class AuthService {
     Map<String, dynamic> savedOrderStatuses = {};
     Map<String, dynamic> savedBills = {};
     Map<String, dynamic> savedEditedMessages = {};
+    Map<String, dynamic> savedItemJsons = {};
     try {
       final amountsStr = prefs.getString('saved_order_amounts');
       if (amountsStr != null && amountsStr.isNotEmpty) {
@@ -1118,6 +1133,10 @@ class AuthService {
       if (editedStr != null && editedStr.isNotEmpty) {
         savedEditedMessages = Map<String, dynamic>.from(jsonDecode(editedStr));
       }
+      final itemJsonsStr = prefs.getString('saved_item_jsons');
+      if (itemJsonsStr != null && itemJsonsStr.isNotEmpty) {
+        savedItemJsons = Map<String, dynamic>.from(jsonDecode(itemJsonsStr));
+      }
     } catch (_) {}
 
     final localStr = prefs.getString(localKey);
@@ -1131,6 +1150,9 @@ class AuthService {
 
     for (var m in msgs) {
       final idStr = m['id']?.toString() ?? '';
+      if (savedItemJsons.containsKey(idStr)) {
+        m['items_json'] = savedItemJsons[idStr];
+      }
       if (savedEditedMessages.containsKey(idStr)) {
         final eData = Map<String, dynamic>.from(savedEditedMessages[idStr]);
         if (eData['message'] != null) m['message'] = eData['message'];
@@ -1185,6 +1207,7 @@ class AuthService {
     Map<String, dynamic> savedOrderStatuses = {};
     Map<String, dynamic> savedBills = {};
     Map<String, dynamic> savedEditedMessages = {};
+    Map<String, dynamic> savedItemJsons = {};
     try {
       final amountsStr = prefs.getString('saved_order_amounts');
       if (amountsStr != null && amountsStr.isNotEmpty) {
@@ -1210,6 +1233,10 @@ class AuthService {
       if (editedStr != null && editedStr.isNotEmpty) {
         savedEditedMessages = Map<String, dynamic>.from(jsonDecode(editedStr));
       }
+      final itemJsonsStr = prefs.getString('saved_item_jsons');
+      if (itemJsonsStr != null && itemJsonsStr.isNotEmpty) {
+        savedItemJsons = Map<String, dynamic>.from(jsonDecode(itemJsonsStr));
+      }
     } catch (_) {}
 
     List<Map<String, dynamic>> msgs = [];
@@ -1234,9 +1261,12 @@ class AuthService {
       }
     }
 
-    // Merge saved order amounts, payments, delivery statuses, order statuses, bill images & edited messages onto message objects
+    // Merge saved order amounts, payments, delivery statuses, order statuses, bill images, edited messages & item jsons onto message objects
     for (var m in msgs) {
       final idStr = m['id']?.toString() ?? '';
+      if (savedItemJsons.containsKey(idStr)) {
+        m['items_json'] = savedItemJsons[idStr];
+      }
       if (savedEditedMessages.containsKey(idStr)) {
         final eData = Map<String, dynamic>.from(savedEditedMessages[idStr]);
         if (eData['message'] != null) m['message'] = eData['message'];
