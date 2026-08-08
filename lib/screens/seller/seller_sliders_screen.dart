@@ -1008,16 +1008,22 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                       Row(
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
-                                          Row(
-                                            children: const [
-                                              Icon(Icons.opacity_rounded, size: 18, color: Color(0xFF059669)),
-                                              SizedBox(width: 6),
-                                              Text(
-                                                'Image Darken / Dimness Scale',
-                                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A)),
-                                              ),
-                                            ],
+                                          Expanded(
+                                            child: Row(
+                                              children: const [
+                                                Icon(Icons.opacity_rounded, size: 16, color: Color(0xFF059669)),
+                                                SizedBox(width: 4),
+                                                Flexible(
+                                                  child: Text(
+                                                    'Image Darken Filter',
+                                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A)),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
+                                          const SizedBox(width: 6),
                                           Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                             decoration: BoxDecoration(
@@ -1026,7 +1032,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                               border: Border.all(color: overlayDim == 0.0 ? const Color(0xFF86EFAC) : const Color(0xFFFDE047)),
                                             ),
                                             child: Text(
-                                              overlayDim == 0.0 ? '✨ 0% (No Dim / Pure Crisp)' : '${(overlayDim * 100).toInt()}% Dim',
+                                              overlayDim == 0.0 ? '✨ 0% (Crisp)' : '${(overlayDim * 100).toInt()}% Dim',
                                               style: TextStyle(
                                                 fontWeight: FontWeight.bold,
                                                 fontSize: 10.5,
