@@ -3555,6 +3555,8 @@ class AuthService {
       'picked_up_at': pickedUpAt,
       'delivered_at': deliveredAt,
       'updated_at': formattedTime,
+      'customer_mobile': cleanCust,
+      'seller_username': cleanSeller,
     };
     await prefs.setString('saved_delivery_statuses', jsonEncode(savedStatuses));
 

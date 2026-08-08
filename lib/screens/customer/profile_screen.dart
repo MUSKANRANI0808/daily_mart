@@ -158,9 +158,6 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
         }
       } catch (_) {}
 
-      final allKeys = prefs.getKeys().toList();
-      final msgKeys = allKeys.where((k) => (k.startsWith('msgs_') || k.startsWith('messages_')) && k.endsWith('_$mobile')).toList();
-
       int prevMonthDeliveredCount = 0;
       int currMonthDeliveredCount = 0;
 
@@ -174,6 +171,46 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
 
       final Set<String> processedMsgIds = {};
 
+      void processDeliveredRecord(String msgIdStr, String deliveryStatus, String orderStatus, String dateStr) {
+        if (msgIdStr.isEmpty || processedMsgIds.contains(msgIdStr)) return;
+
+        final isDelivered = deliveryStatus.toLowerCase() == 'delivered' || orderStatus.toLowerCase() == 'delivered';
+        if (!isDelivered) return;
+
+        processedMsgIds.add(msgIdStr);
+
+        DateTime? dt;
+        if (dateStr.isNotEmpty) {
+          dt = DateTime.tryParse(dateStr.replaceAll(' ', 'T'));
+        }
+
+        if (dt != null) {
+          if (dt.year == currYear && dt.month == currMonth) {
+            currMonthDeliveredCount++;
+          } else if (dt.year == prevYear && dt.month == prevMonth) {
+            prevMonthDeliveredCount++;
+          }
+        } else {
+          currMonthDeliveredCount++;
+        }
+      }
+
+      // 1. Scan persistent saved_delivery_statuses map directly first (survives chat/cache deletion)
+      savedDeliveryStatuses.forEach((msgId, data) {
+        if (data is Map) {
+          final custMob = (data['customer_mobile'] ?? '').toString().trim();
+          if (custMob.isEmpty || custMob == mobile) {
+            final delStat = (data['delivery_status'] ?? '').toString();
+            final dateStr = (data['delivered_at'] ?? data['updated_at'] ?? '').toString();
+            processDeliveredRecord(msgId, delStat, '', dateStr);
+          }
+        }
+      });
+
+      // 2. Scan local SharedPreferences chat keys (msgs_ & messages_)
+      final allKeys = prefs.getKeys().toList();
+      final msgKeys = allKeys.where((k) => (k.startsWith('msgs_') || k.startsWith('messages_')) && k.contains(mobile)).toList();
+
       for (var key in msgKeys) {
         final str = prefs.getString(key);
         if (str != null && str.isNotEmpty) {
@@ -182,54 +219,55 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
             for (var m in decoded) {
               if (m is! Map) continue;
               final msgIdStr = (m['id'] ?? m['order_id'] ?? m['_calculated_order_id'] ?? '').toString();
-              if (msgIdStr.isEmpty || processedMsgIds.contains(msgIdStr)) continue;
+              if (msgIdStr.isEmpty) continue;
 
-              String delStat = (m['delivery_status'] ?? '').toString().toLowerCase();
-              String ordStat = (m['order_status'] ?? '').toString().toLowerCase();
+              String delStat = (m['delivery_status'] ?? '').toString();
+              String ordStat = (m['order_status'] ?? '').toString();
 
               if (savedDeliveryStatuses.containsKey(msgIdStr)) {
                 final val = savedDeliveryStatuses[msgIdStr];
                 if (val is Map) {
-                  delStat = (val['delivery_status'] ?? delStat).toString().toLowerCase();
+                  delStat = (val['delivery_status'] ?? delStat).toString();
                 } else if (val != null) {
-                  delStat = val.toString().toLowerCase();
+                  delStat = val.toString();
                 }
               }
 
               if (savedOrderStatuses.containsKey(msgIdStr)) {
-                ordStat = (savedOrderStatuses[msgIdStr] ?? ordStat).toString().toLowerCase();
+                ordStat = (savedOrderStatuses[msgIdStr] ?? ordStat).toString();
               }
 
-              final isDelivered = delStat == 'delivered' || ordStat == 'delivered';
-
-              if (isDelivered) {
-                processedMsgIds.add(msgIdStr);
-
-                String dtStr = (m['delivered_at'] ?? m['created_at'] ?? m['status_time'] ?? '').toString();
-                if (savedDeliveryStatuses.containsKey(msgIdStr) && savedDeliveryStatuses[msgIdStr] is Map) {
-                  final val = savedDeliveryStatuses[msgIdStr];
-                  final dAt = (val['delivered_at'] ?? val['updated_at'] ?? '').toString();
-                  if (dAt.isNotEmpty) dtStr = dAt;
-                }
-
-                DateTime? dt;
-                if (dtStr.isNotEmpty) {
-                  dt = DateTime.tryParse(dtStr.replaceAll(' ', 'T'));
-                }
-
-                if (dt != null) {
-                  if (dt.year == currYear && dt.month == currMonth) {
-                    currMonthDeliveredCount++;
-                  } else if (dt.year == prevYear && dt.month == prevMonth) {
-                    prevMonthDeliveredCount++;
-                  }
-                } else {
-                  currMonthDeliveredCount++;
-                }
+              String dtStr = (m['delivered_at'] ?? m['created_at'] ?? m['status_time'] ?? '').toString();
+              if (savedDeliveryStatuses.containsKey(msgIdStr) && savedDeliveryStatuses[msgIdStr] is Map) {
+                final val = savedDeliveryStatuses[msgIdStr];
+                final dAt = (val['delivered_at'] ?? val['updated_at'] ?? '').toString();
+                if (dAt.isNotEmpty) dtStr = dAt;
               }
+
+              processDeliveredRecord(msgIdStr, delStat, ordStat, dtStr);
             }
           } catch (_) {}
         }
+      }
+
+      // 3. Fallback: If local storage has 0 processed records, query VPS Database for connected sellers
+      if (processedMsgIds.isEmpty) {
+        try {
+          final sellers = await AuthService.getCachedSellersList();
+          for (var s in sellers) {
+            final sellerUname = (s['username'] ?? '').toString().trim();
+            if (sellerUname.isNotEmpty) {
+              final msgs = await AuthService.getMessages(sellerUsername: sellerUname, customerMobile: mobile);
+              for (var m in msgs) {
+                final msgIdStr = (m['id'] ?? m['order_id'] ?? '').toString();
+                String delStat = (m['delivery_status'] ?? '').toString();
+                String ordStat = (m['order_status'] ?? '').toString();
+                String dtStr = (m['delivered_at'] ?? m['created_at'] ?? '').toString();
+                processDeliveredRecord(msgIdStr, delStat, ordStat, dtStr);
+              }
+            }
+          }
+        } catch (_) {}
       }
 
       final isActive = prevMonthDeliveredCount >= 3 || currMonthDeliveredCount >= 3;
