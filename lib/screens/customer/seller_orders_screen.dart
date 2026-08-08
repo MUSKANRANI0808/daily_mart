@@ -1127,14 +1127,14 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                                               if (_sellerLocation.isNotEmpty) ...[
                                                  const SizedBox(height: 2),
                                                  Text(
-                                                   '📍 $_sellerLocation',
+                                                   _sellerLocation,
                                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
                                                    overflow: TextOverflow.ellipsis,
                                                  ),
                                                ] else if (widget.sellerMobile.isNotEmpty) ...[
                                                  const SizedBox(height: 2),
                                                  Text(
-                                                   '📱 +91 ${widget.sellerMobile}',
+                                                   '+91 ${widget.sellerMobile}',
                                                    style: const TextStyle(color: Colors.white70, fontSize: 11),
                                                    overflow: TextOverflow.ellipsis,
                                                  ),
