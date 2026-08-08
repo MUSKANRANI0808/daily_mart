@@ -416,24 +416,35 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                   // Header Title
                   Row(
                     children: [
-                      const CircleAvatar(
-                        radius: 18,
-                        backgroundColor: Color(0xFFDCFCE7),
-                        child: Icon(Icons.location_on_rounded, size: 20, color: Color(0xFF10B981)),
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDCFCE7),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF10B981).withValues(alpha: 0.25),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(Icons.location_on_rounded, size: 20, color: Color(0xFF10B981)),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 12),
                       const Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Select Delivery Address',
-                              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                              'Confirm Delivery Address 📍',
+                              style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                             ),
                             SizedBox(height: 2),
                             Text(
-                              'Choose address to place your order',
-                              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                              'Choose your delivery location to place order',
+                              style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
                             ),
                           ],
                         ),
@@ -444,7 +455,64 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                       ),
                     ],
                   ),
-                  const Divider(height: 16),
+                  const SizedBox(height: 12),
+
+                  // 📌 Polite Minimum Order Policy Banner Card (₹100 Minimum)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFFBEB), // Soft Warm Amber Tint
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFFCD34D), width: 1.2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFEF3C7),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.info_outline_rounded, color: Color(0xFFD97706), size: 18),
+                        ),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '📌 Minimum Order Policy (₹100):',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12.5,
+                                  color: Color(0xFFB45309),
+                                ),
+                              ),
+                              SizedBox(height: 3),
+                              Text(
+                                'Sahi aur fast delivery seva ke liye, kripya dhyan de ki order ka total amount ₹100 ya usse jada hona aavashyak hai. ₹100 se kam ke order accept nahi honge aur cancel kar diye jayenge. Aapke sahayog ke liye dhanyawad! 🙏',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  color: Color(0xFF78350F),
+                                  height: 1.35,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
 
                   // Address List (or empty prompt)
                   if (addresses.isEmpty) ...[
@@ -474,7 +542,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                     ),
                   ] else ...[
                     ConstrainedBox(
-                      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.35),
+                      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.32),
                       child: ListView.builder(
                         shrinkWrap: true,
                         itemCount: addresses.length,
@@ -492,7 +560,8 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                             child: InkWell(
                               onTap: () => setModalState(() => selectedIdx = idx),
                               borderRadius: BorderRadius.circular(14),
-                              child: Container(
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
                                   color: isSelected ? const Color(0xFFF0FDF4) : Colors.white,
@@ -501,6 +570,15 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                                     color: isSelected ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
                                     width: isSelected ? 2 : 1,
                                   ),
+                                  boxShadow: isSelected
+                                      ? [
+                                          BoxShadow(
+                                            color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          )
+                                        ]
+                                      : [],
                                 ),
                                 child: Row(
                                   children: [
@@ -569,7 +647,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                     icon: const Icon(Icons.add_rounded, color: Color(0xFF10B981), size: 20),
                     label: const Text(
                       'Add New Delivery Address',
-                      style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 14),
+                      style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 13.5),
                     ),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
