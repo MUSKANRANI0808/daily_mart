@@ -90,7 +90,21 @@ class SellerSlidersScreen extends StatefulWidget {
   static List<Map<String, dynamic>> get presetThemes => _SellerSlidersScreenState.presetThemes;
   static Color hexToColor(String code, {Color defaultColor = Colors.white}) => _SellerSlidersScreenState.hexToColor(code, defaultColor: defaultColor);
   static BoxDecoration buildTagDecoration(String shape, Color tagBg) => _SellerSlidersScreenState.buildTagDecoration(shape, tagBg);
-  static Widget buildBannerBackground({required String bg, required Widget child, BorderRadius? borderRadius, double overlayDim = 0.0}) => _SellerSlidersScreenState.buildBannerBackground(bg: bg, child: child, borderRadius: borderRadius, overlayDim: overlayDim);
+  static Widget buildBannerBackground({
+    required String bg,
+    required Widget child,
+    BorderRadius? borderRadius,
+    double overlayDim = 0.0,
+    bool removeWhiteBg = false,
+    String imgFit = 'cover',
+  }) => _SellerSlidersScreenState.buildBannerBackground(
+        bg: bg,
+        child: child,
+        borderRadius: borderRadius,
+        overlayDim: overlayDim,
+        removeWhiteBg: removeWhiteBg,
+        imgFit: imgFit,
+      );
 
   @override
   State<SellerSlidersScreen> createState() => _SellerSlidersScreenState();
@@ -231,6 +245,8 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
     required Widget child,
     BorderRadius? borderRadius,
     double overlayDim = 0.0,
+    bool removeWhiteBg = false,
+    String imgFit = 'cover',
   }) {
     if (bg == 'none' || bg.isEmpty || bg == 'transparent' || bg == 'preset_transparent' || bg == 'preset_1') {
       return SizedBox(
@@ -271,23 +287,33 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
     }
 
     DecorationImage? decImg;
-    final ColorFilter? filter = overlayDim > 0.0
-        ? ColorFilter.mode(Colors.black.withValues(alpha: overlayDim.clamp(0.0, 1.0)), BlendMode.darken)
-        : null;
+    final BoxFit fit = (imgFit == 'contain') ? BoxFit.contain : BoxFit.cover;
+
+    ColorFilter? filter;
+    if (removeWhiteBg) {
+      filter = const ColorFilter.matrix(<double>[
+        1, 0, 0, 0, 0,
+        0, 1, 0, 0, 0,
+        0, 0, 1, 0, 0,
+        -0.8, -0.8, -0.8, 2.4, 0,
+      ]);
+    } else if (overlayDim > 0.0) {
+      filter = ColorFilter.mode(Colors.black.withValues(alpha: overlayDim.clamp(0.0, 1.0)), BlendMode.darken);
+    }
 
     if (bg.startsWith('data:image')) {
       try {
         final base64Str = bg.split(',').last;
         decImg = DecorationImage(
           image: MemoryImage(base64Decode(base64Str)),
-          fit: BoxFit.cover,
+          fit: fit,
           colorFilter: filter,
         );
       } catch (_) {}
     } else if (bg.startsWith('http')) {
       decImg = DecorationImage(
         image: NetworkImage(bg),
-        fit: BoxFit.cover,
+        fit: fit,
         colorFilter: filter,
       );
     } else if (bg.isNotEmpty && !bg.startsWith('preset_')) {
@@ -296,7 +322,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
         if (file.existsSync()) {
           decImg = DecorationImage(
             image: FileImage(file),
-            fit: BoxFit.cover,
+            fit: fit,
             colorFilter: filter,
           );
         }
@@ -348,6 +374,8 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
     final descCtrl = TextEditingController(text: existingSlider?['description'] ?? '');
     String selectedImageData = existingSlider?['bg_image_url'] ?? 'none';
     double overlayDim = (existingSlider?['overlay_dim'] as num?)?.toDouble() ?? 0.0;
+    bool removeWhiteBg = (existingSlider?['remove_white_bg'] == true || existingSlider?['remove_white_bg'] == 1);
+    String imgFit = existingSlider?['img_fit']?.toString() ?? 'cover';
     bool isPickingImage = false;
     int selectedTab = 0; // 0: Text Content, 1: Style & Colors, 2: Background Image
 
@@ -500,6 +528,8 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                           buildBannerBackground(
                             bg: selectedImageData,
                             overlayDim: overlayDim,
+                            removeWhiteBg: removeWhiteBg,
+                            imgFit: imgFit,
                             borderRadius: const BorderRadius.vertical(bottom: Radius.circular(13)),
                             child: Padding(
                               padding: const EdgeInsets.all(14.0),
@@ -1067,6 +1097,71 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                     ],
                                   ),
                                 ),
+                                const SizedBox(height: 12),
+
+                                // PNG TRANSPARENCY & FIT CONTROLS
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF8FAFC),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      SwitchListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        title: const Text(
+                                          'Remove White Canvas / PNG Filter ✨',
+                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A)),
+                                        ),
+                                        subtitle: const Text(
+                                          'Sticker / Logo ka White Background Hata kar Transparent Karein',
+                                          style: TextStyle(fontSize: 10.5, color: Color(0xFF64748B)),
+                                        ),
+                                        value: removeWhiteBg,
+                                        activeColor: const Color(0xFF059669),
+                                        onChanged: (val) {
+                                          setDialogState(() {
+                                            removeWhiteBg = val;
+                                          });
+                                        },
+                                      ),
+                                      const Divider(height: 1),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          const Text(
+                                            'Image Fit Style',
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A)),
+                                          ),
+                                          Row(
+                                            children: [
+                                              ChoiceChip(
+                                                label: const Text('Cover Banner', style: TextStyle(fontSize: 11)),
+                                                selected: imgFit == 'cover',
+                                                selectedColor: const Color(0xFFDCFCE7),
+                                                onSelected: (sel) {
+                                                  if (sel) setDialogState(() => imgFit = 'cover');
+                                                },
+                                              ),
+                                              const SizedBox(width: 6),
+                                              ChoiceChip(
+                                                label: const Text('Center Badge', style: TextStyle(fontSize: 11)),
+                                                selected: imgFit == 'contain',
+                                                selectedColor: const Color(0xFFDCFCE7),
+                                                onSelected: (sel) {
+                                                  if (sel) setDialogState(() => imgFit = 'contain');
+                                                },
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ],
                             ),
                           ],
@@ -1123,6 +1218,8 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                 titleColor: selectedTitleColor,
                                 descColor: selectedDescColor,
                                 overlayDim: overlayDim,
+                                removeWhiteBg: removeWhiteBg,
+                                imgFit: imgFit,
                               );
                             } else {
                               success = await AuthService.addSellerSlider(
@@ -1136,6 +1233,8 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                 titleColor: selectedTitleColor,
                                 descColor: selectedDescColor,
                                 overlayDim: overlayDim,
+                                removeWhiteBg: removeWhiteBg,
+                                imgFit: imgFit,
                               );
                             }
 
@@ -1319,12 +1418,16 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                             final descCol = hexToColor(slider['desc_color'] ?? '#E2E8F0');
 
                             final overlayDim = (slider['overlay_dim'] as num?)?.toDouble() ?? 0.0;
+                            final removeWhiteBg = (slider['remove_white_bg'] == true || slider['remove_white_bg'] == 1);
+                            final imgFit = slider['img_fit']?.toString() ?? 'cover';
 
                             return Stack(
                               children: [
                                 buildBannerBackground(
                                   bg: bg,
                                   overlayDim: overlayDim,
+                                  removeWhiteBg: removeWhiteBg,
+                                  imgFit: imgFit,
                                   child: Container(
                                     width: double.infinity,
                                     constraints: const BoxConstraints(minHeight: 140),

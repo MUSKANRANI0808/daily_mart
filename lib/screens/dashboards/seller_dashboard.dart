@@ -240,6 +240,8 @@ class _SellerDashboardState extends State<SellerDashboard> {
               final descColor = SellerSlidersScreen.hexToColor(descHex, defaultColor: const Color(0xFFE2E8F0));
               final tagDecor = SellerSlidersScreen.buildTagDecoration(tagShape, tagBg);
               final overlayDim = (slider['overlay_dim'] as num?)?.toDouble() ?? 0.0;
+              final removeWhiteBg = (slider['remove_white_bg'] == true || slider['remove_white_bg'] == 1);
+              final imgFit = slider['img_fit']?.toString() ?? 'cover';
 
               final isSelected = _activeSliderPage == idx;
 
@@ -264,6 +266,8 @@ class _SellerDashboardState extends State<SellerDashboard> {
                   child: SellerSlidersScreen.buildBannerBackground(
                     bg: bg,
                     overlayDim: overlayDim,
+                    removeWhiteBg: removeWhiteBg,
+                    imgFit: imgFit,
                     child: Container(
                       width: double.infinity,
                       constraints: const BoxConstraints(minHeight: 140),

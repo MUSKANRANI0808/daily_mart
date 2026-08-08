@@ -1380,6 +1380,8 @@ class AuthService {
     String titleColor = '#FFFFFF',
     String descColor = '#E2E8F0',
     double overlayDim = 0.0,
+    bool removeWhiteBg = false,
+    String imgFit = 'cover',
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final localKey = 'sliders_$sellerUsername';
@@ -1405,6 +1407,8 @@ class AuthService {
       'title_color': titleColor,
       'desc_color': descColor,
       'overlay_dim': overlayDim,
+      'remove_white_bg': removeWhiteBg,
+      'img_fit': imgFit,
       'created_at': DateTime.now().toString().substring(0, 16),
     };
 
@@ -1423,6 +1427,8 @@ class AuthService {
         'title_color': titleColor,
         'desc_color': descColor,
         'overlay_dim': overlayDim,
+        'remove_white_bg': removeWhiteBg ? 1 : 0,
+        'img_fit': imgFit,
       });
     } catch (_) {}
 
@@ -1442,6 +1448,8 @@ class AuthService {
     required String titleColor,
     required String descColor,
     double overlayDim = 0.0,
+    bool removeWhiteBg = false,
+    String imgFit = 'cover',
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final localKey = 'sliders_$sellerUsername';
@@ -1471,6 +1479,8 @@ class AuthService {
       sliders[index]['title_color'] = titleColor;
       sliders[index]['desc_color'] = descColor;
       sliders[index]['overlay_dim'] = overlayDim;
+      sliders[index]['remove_white_bg'] = removeWhiteBg;
+      sliders[index]['img_fit'] = imgFit;
       await prefs.setString(localKey, jsonEncode(sliders));
     }
 
@@ -1486,6 +1496,8 @@ class AuthService {
         'title_color': titleColor,
         'desc_color': descColor,
         'overlay_dim': overlayDim,
+        'remove_white_bg': removeWhiteBg ? 1 : 0,
+        'img_fit': imgFit,
       });
     } catch (_) {}
 

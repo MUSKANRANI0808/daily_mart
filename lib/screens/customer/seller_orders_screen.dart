@@ -247,12 +247,16 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
     required Widget child,
     BorderRadius? borderRadius,
     double overlayDim = 0.0,
+    bool removeWhiteBg = false,
+    String imgFit = 'cover',
   }) {
     return SellerSlidersScreen.buildBannerBackground(
       bg: bg,
       child: child,
       borderRadius: borderRadius,
       overlayDim: overlayDim,
+      removeWhiteBg: removeWhiteBg,
+      imgFit: imgFit,
     );
   }
 
@@ -408,6 +412,8 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
               final titleCol = hexToColor(item['title_color']?.toString() ?? '#FFFFFF');
               final descCol = hexToColor(item['desc_color']?.toString() ?? '#E2E8F0');
               final overlayDim = (item['overlay_dim'] as num?)?.toDouble() ?? 0.0;
+              final removeWhiteBg = (item['remove_white_bg'] == true || item['remove_white_bg'] == 1);
+              final imgFit = item['img_fit']?.toString() ?? 'cover';
 
               final isSelected = _currentSliderPage == idx;
 
@@ -432,6 +438,8 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                   child: buildBannerBackground(
                     bg: bg,
                     overlayDim: overlayDim,
+                    removeWhiteBg: removeWhiteBg,
+                    imgFit: imgFit,
                     child: Container(
                       width: double.infinity,
                       constraints: const BoxConstraints(minHeight: 140),
