@@ -331,13 +331,15 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
             : null,
         borderRadius: borderRadius ?? BorderRadius.circular(16),
         image: decImg,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: (bg == 'none' || bg == 'transparent' || bg.isEmpty || removeWhiteBg)
+            ? []
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
       ),
       child: child,
     );

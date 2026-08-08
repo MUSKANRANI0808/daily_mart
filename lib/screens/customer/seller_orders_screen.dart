@@ -424,7 +424,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(18),
-                    boxShadow: (bg == 'none' || bg == 'transparent' || bg.isEmpty)
+                    boxShadow: (bg == 'none' || bg == 'transparent' || bg.isEmpty || removeWhiteBg)
                         ? []
                         : [
                             BoxShadow(
