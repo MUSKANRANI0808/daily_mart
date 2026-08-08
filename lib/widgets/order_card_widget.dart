@@ -13,6 +13,7 @@ class OrderCardWidget extends StatefulWidget {
   final VoidCallback? onDeleteTap;
   final VoidCallback? onAmountTap;
   final VoidCallback? onPayNowTap;
+  final VoidCallback? onEditTap;
 
   const OrderCardWidget({
     super.key,
@@ -24,6 +25,7 @@ class OrderCardWidget extends StatefulWidget {
     this.onDeleteTap,
     this.onAmountTap,
     this.onPayNowTap,
+    this.onEditTap,
   });
 
   @override
@@ -724,6 +726,71 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
       ),
     ),
 
+        // Left 3D Illusion Ribbon Tag for EDIT (Emerging out from behind top-left card edge)
+        if (!widget.isSeller && widget.onEditTap != null && !isReady && !isPaid && !isCancelled && !isDelivered)
+          Positioned(
+            top: 10,
+            left: -8,
+            child: InkWell(
+              onTap: widget.onEditTap,
+              borderRadius: BorderRadius.circular(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 10, 4),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFF0F172A), // Midnight Slate Navy
+                          Color(0xFF1E293B), // Dark Royal Slate
+                        ],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                      borderRadius: const BorderRadius.only(
+                        topRight: Radius.circular(10),
+                        bottomRight: Radius.circular(10),
+                        topLeft: Radius.circular(3),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.28),
+                          blurRadius: 5,
+                          offset: const Offset(-2, 3),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.edit_rounded, size: 11.5, color: Colors.white),
+                        SizedBox(width: 3.5),
+                        Text(
+                          'Edit',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 11.5,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  ClipPath(
+                    clipper: _LeftTriangleFoldClipper(),
+                    child: Container(
+                      width: 8,
+                      height: 7,
+                      color: const Color(0xFF020617), // Dark Shadow Fold behind card edge
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
         // 3D Illusion Ribbon Tag (Emerging out from behind the top-right card edge)
         Positioned(
           top: 10,
@@ -1213,6 +1280,21 @@ class _TriangleFoldClipper extends CustomClipper<Path> {
     path.moveTo(0, 0);
     path.lineTo(size.width, 0);
     path.lineTo(0, size.height);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
+
+class _LeftTriangleFoldClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.moveTo(0, 0);
+    path.lineTo(size.width, 0);
+    path.lineTo(size.width, size.height);
     path.close();
     return path;
   }

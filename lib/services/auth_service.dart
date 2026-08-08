@@ -655,6 +655,69 @@ class AuthService {
     return true;
   }
 
+  /// Update an existing Customer Order Message text and items
+  static Future<bool> updateCustomerOrderMessage({
+    required int messageId,
+    required String sellerUsername,
+    required String customerMobile,
+    required String newText,
+  }) async {
+    final cleanSeller = sellerUsername.trim();
+    final cleanCust = customerMobile.trim();
+    final msgIdStr = messageId.toString();
+
+    try {
+      // 1. Update SharedPreferences local cache immediately
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys().where((k) => k.startsWith('msgs_') || k.startsWith('messages_')).toList();
+      for (var key in keys) {
+        final str = prefs.getString(key);
+        if (str != null && str.isNotEmpty) {
+          try {
+            final List decoded = jsonDecode(str);
+            final List<Map<String, dynamic>> list = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+            bool modified = false;
+            for (var item in list) {
+              if (item['id'] == messageId || item['id'].toString() == msgIdStr) {
+                item['message'] = newText;
+                // Re-parse text lines to update items_json
+                final lines = newText.split('\n');
+                final itemsList = <Map<String, dynamic>>[];
+                for (var line in lines) {
+                  final trimmed = line.trim();
+                  if (trimmed.isNotEmpty &&
+                      !trimmed.contains('📍 Delivery Address') &&
+                      !trimmed.contains('📍') &&
+                      !trimmed.contains('📏 Distance') &&
+                      !trimmed.contains('📏')) {
+                    itemsList.add({'text': trimmed, 'status': 0});
+                  }
+                }
+                item['items_json'] = jsonEncode(itemsList);
+                modified = true;
+              }
+            }
+            if (modified) {
+              await prefs.setString(key, jsonEncode(list));
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+
+    try {
+      // 2. Post to VPS API
+      final res = await VpsApiService.post('update-order-message', {
+        'message_id': messageId,
+        'seller_username': cleanSeller,
+        'customer_mobile': cleanCust,
+        'message': newText,
+      });
+      return res != null && res['success'] == true;
+    } catch (_) {}
+    return true;
+  }
+
   /// Update Order Item Checkbox Status & Record Action Log (Seller only)
   static Future<bool> updateItemStatus({
     required int messageId,

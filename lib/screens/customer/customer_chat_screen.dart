@@ -42,6 +42,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
   late Razorpay _razorpay;
   int _activePendingMsgId = 0;
   double _activePendingAmount = 0.0;
+  Map<String, dynamic>? _editingMessage;
 
   @override
   void initState() {
@@ -180,6 +181,42 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
     return '📍 Delivery Address ($tag): ${parts.join(', ')}';
   }
 
+  void _startEditingOrder(Map<String, dynamic> msg) {
+    final orderStatus = (msg['order_status'] ?? '').toString().toLowerCase();
+    final delStatus = (msg['delivery_status'] ?? '').toString().toLowerCase();
+    if (orderStatus == 'ready' || orderStatus == 'delivered' || delStatus == 'delivered') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This order is already processed and cannot be edited.'),
+          backgroundColor: Color(0xFFEF4444),
+        ),
+      );
+      return;
+    }
+
+    final rawText = (msg['message'] ?? '').toString();
+    final lines = rawText.split('\n').where((l) =>
+      !l.contains('📍 Delivery Address') &&
+      !l.contains('📍') &&
+      !l.contains('📏 Distance') &&
+      !l.contains('📏')
+    ).toList();
+
+    setState(() {
+      _editingMessage = msg;
+      _msgController.text = lines.join('\n');
+      _msgController.selection = TextSelection.fromPosition(TextPosition(offset: _msgController.text.length));
+    });
+
+    if (_chatScrollController.hasClients) {
+      _chatScrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
   void _sendMessage() async {
     if (_isBlocked) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -189,6 +226,36 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
     }
     final text = _msgController.text.trim();
     if (text.isEmpty) return;
+
+    if (_editingMessage != null) {
+      final msgId = (_editingMessage!['id'] as num?)?.toInt() ?? 0;
+      if (msgId != 0) {
+        final success = await AuthService.updateCustomerOrderMessage(
+          messageId: msgId,
+          sellerUsername: widget.sellerUsername,
+          customerMobile: widget.customer.mobile ?? '',
+          newText: text,
+        );
+
+        if (success) {
+          setState(() {
+            _editingMessage = null;
+            _msgController.clear();
+            _selectedOrderItems.clear();
+          });
+          _loadMessages();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Order updated successfully! ✏️'),
+                backgroundColor: Color(0xFF10B981),
+              ),
+            );
+          }
+          return;
+        }
+      }
+    }
 
     // Load saved customer addresses
     final prefs = await SharedPreferences.getInstance();
@@ -1327,6 +1394,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                                     searchQuery: query,
                                     onDeleteTap: isCustomer ? () => _confirmDeleteMessage(msg) : null,
                                     onPayNowTap: () => _showUpiPaymentQrSheet(msg),
+                                    onEditTap: isCustomer ? () => _startEditingOrder(msg) : null,
                                   ),
                                 ),
                               );
@@ -1358,6 +1426,49 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
               : Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // Editing Order Amber Banner (if editing)
+                    if (_editingMessage != null)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFEF3C7),
+                          border: Border(top: BorderSide(color: Color(0xFFFDE68A))),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.edit_note_rounded, color: Color(0xFFD97706), size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Editing ${_editingMessage!['order_id'] ?? 'Order'} ✏️',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: Color(0xFF92400E),
+                                ),
+                              ),
+                            ),
+                            InkWell(
+                              onTap: () {
+                                setState(() {
+                                  _editingMessage = null;
+                                  _msgController.clear();
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFDE68A),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(Icons.close_rounded, color: Color(0xFF92400E), size: 16),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
                     // Mode Selector Bar: List 📋 vs Chat 💬
                     Container(
                       width: double.infinity,
