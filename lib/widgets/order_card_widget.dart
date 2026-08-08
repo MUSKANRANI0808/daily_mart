@@ -247,6 +247,19 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
         pickedUpAt.isNotEmpty ||
         rawDeliveredAt.isNotEmpty;
 
+    final bool hasCheckedItems = items.any((it) {
+          final s = (it['status'] as num?)?.toInt() ?? 0;
+          return s > 0;
+        }) || logs.isNotEmpty;
+
+    final bool canEdit = !widget.isSeller &&
+        widget.onEditTap != null &&
+        !isReady &&
+        !isPaid &&
+        !isCancelled &&
+        !isDelivered &&
+        !hasCheckedItems;
+
     final bool isDeleted = orderStatus.toString().toLowerCase() == 'deleted' ||
         widget.messageData['is_deleted'] == true ||
         widget.messageData['is_deleted'] == 1 ||
@@ -309,7 +322,7 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
                 Padding(
                   padding: EdgeInsets.only(
                     right: 85.0,
-                    top: (!widget.isSeller && widget.onEditTap != null && !isReady && !isPaid && !isCancelled && !isDelivered) ? 24.0 : 0.0,
+                    top: canEdit ? 24.0 : 0.0,
                   ),
                   child: ListView.builder(
                     shrinkWrap: true,
@@ -730,7 +743,7 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
     ),
 
         // Left 3D Illusion Ribbon Tag for EDIT (Emerging out from behind top-left card edge)
-        if (!widget.isSeller && widget.onEditTap != null && !isReady && !isPaid && !isCancelled && !isDelivered)
+        if (canEdit)
           Positioned(
             top: 10,
             left: -8,
