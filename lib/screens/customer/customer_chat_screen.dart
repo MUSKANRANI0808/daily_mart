@@ -2102,36 +2102,46 @@ class _CustomerProductItemTileState extends State<_CustomerProductItemTile> {
           // Row 2: Compact Controls [Unit ▾] | [- Qty +] | [₹ Amount] | [+ Add]
           Row(
             children: [
-              // Unit Dropdown
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: _selectedUnit == null ? const Color(0xFFF1F5F9) : const Color(0xFFEDE9FE),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: _selectedUnit == null ? const Color(0xFFCBD5E1) : const Color(0xFFDDD6FE),
+              // Unit Dropdown (PopupMenuButton position under so it never detaches when keyboard dismisses)
+              PopupMenuButton<String>(
+                position: PopupMenuPosition.under,
+                color: Colors.white,
+                surfaceTintColor: Colors.white,
+                elevation: 4,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                onSelected: (val) {
+                  setState(() {
+                    _selectedUnit = val;
+                  });
+                },
+                itemBuilder: (ctx) => _availableUnits.map((u) {
+                  return PopupMenuItem<String>(
+                    value: u,
+                    height: 34,
+                    child: Text(u, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                  );
+                }).toList(),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _selectedUnit == null ? const Color(0xFFF1F5F9) : const Color(0xFFEDE9FE),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: _selectedUnit == null ? const Color(0xFFCBD5E1) : const Color(0xFFDDD6FE),
+                    ),
                   ),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedUnit,
-                    hint: const Text('Unit ▾', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF8B5CF6))),
-                    isDense: true,
-                    icon: const SizedBox.shrink(),
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF6D28D9)),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() {
-                          _selectedUnit = val;
-                        });
-                      }
-                    },
-                    items: _availableUnits.map((u) {
-                      return DropdownMenuItem<String>(
-                        value: u,
-                        child: Text(u, style: const TextStyle(fontSize: 11)),
-                      );
-                    }).toList(),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _selectedUnit ?? 'Unit ▾',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                          color: _selectedUnit == null ? const Color(0xFF8B5CF6) : const Color(0xFF6D28D9),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -2345,24 +2355,43 @@ class _CustomUnlistedRedGlassTileState extends State<_CustomUnlistedRedGlassTile
           const SizedBox(height: 8),
           Row(
             children: [
-              // Unit Dropdown
-              Container(
-                height: 32,
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: const Color(0xFFFDA4AF)),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedUnit,
-                    hint: const Text('Unit *', style: TextStyle(fontSize: 11, color: Color(0xFFE11D48), fontWeight: FontWeight.bold)),
-                    isDense: true,
-                    items: _availableUnits
-                        .map((u) => DropdownMenuItem(value: u, child: Text(u, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))))
-                        .toList(),
-                    onChanged: (val) => setState(() => _selectedUnit = val),
+              // Unit Dropdown (PopupMenuButton position under so it never detaches when keyboard dismisses)
+              PopupMenuButton<String>(
+                position: PopupMenuPosition.under,
+                color: Colors.white,
+                surfaceTintColor: Colors.white,
+                elevation: 4,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                onSelected: (val) => setState(() => _selectedUnit = val),
+                itemBuilder: (ctx) => _availableUnits.map((u) {
+                  return PopupMenuItem<String>(
+                    value: u,
+                    height: 34,
+                    child: Text(u, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                  );
+                }).toList(),
+                child: Container(
+                  height: 32,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFFFDA4AF)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _selectedUnit ?? 'Unit *',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: _selectedUnit == null ? const Color(0xFFE11D48) : const Color(0xFF881337),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      const Icon(Icons.arrow_drop_down, size: 14, color: Color(0xFFE11D48)),
+                    ],
                   ),
                 ),
               ),
