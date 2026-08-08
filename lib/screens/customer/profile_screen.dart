@@ -132,11 +132,74 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
       }
     }
 
-    if (mounted) {
-      setState(() {
-        _addressSubtitle = 'Tap to add Home, Work or Delivery address';
-      });
-    }
+    await _calculateVipPassStatus();
+  }
+
+  bool _isVipActive = false;
+  int _deliveredCountInMonth = 0;
+
+  Future<void> _calculateVipPassStatus() async {
+    final mobile = (widget.customer.mobile ?? '').trim();
+    if (mobile.isEmpty) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final allKeys = prefs.getKeys().toList();
+      final msgKeys = allKeys.where((k) => (k.startsWith('msgs_') || k.startsWith('messages_')) && k.contains(mobile)).toList();
+
+      int prevMonthDeliveredCount = 0;
+      int currMonthDeliveredCount = 0;
+
+      final now = DateTime.now();
+      final currYear = now.year;
+      final currMonth = now.month;
+
+      final prevMonthDate = DateTime(now.year, now.month - 1, 1);
+      final prevYear = prevMonthDate.year;
+      final prevMonth = prevMonthDate.month;
+
+      for (var key in msgKeys) {
+        final str = prefs.getString(key);
+        if (str != null && str.isNotEmpty) {
+          try {
+            final List decoded = jsonDecode(str);
+            for (var m in decoded) {
+              final delStat = (m['delivery_status'] ?? '').toString().toLowerCase();
+              final ordStat = (m['order_status'] ?? '').toString().toLowerCase();
+              final isDelivered = delStat == 'delivered' || ordStat == 'delivered';
+
+              if (isDelivered) {
+                final dtStr = m['created_at']?.toString();
+                if (dtStr != null && dtStr.isNotEmpty) {
+                  final dt = DateTime.tryParse(dtStr);
+                  if (dt != null) {
+                    if (dt.year == currYear && dt.month == currMonth) {
+                      currMonthDeliveredCount++;
+                    } else if (dt.year == prevYear && dt.month == prevMonth) {
+                      prevMonthDeliveredCount++;
+                    }
+                  } else {
+                    currMonthDeliveredCount++;
+                  }
+                } else {
+                  currMonthDeliveredCount++;
+                }
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
+      final isActive = prevMonthDeliveredCount >= 3 || currMonthDeliveredCount >= 3;
+      final count = currMonthDeliveredCount > prevMonthDeliveredCount ? currMonthDeliveredCount : prevMonthDeliveredCount;
+
+      if (mounted) {
+        setState(() {
+          _isVipActive = isActive;
+          _deliveredCountInMonth = count;
+        });
+      }
+    } catch (_) {}
   }
 
   void _deleteSeller() async {
@@ -324,15 +387,17 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                   ),
                   const SizedBox(height: 6),
 
-                  // Larger Avatar with Gold-Emerald Ring & Verified Badge
+                  // Larger Avatar with Dynamic Status Ring & Badge
                   Stack(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: LinearGradient(
-                            colors: [Color(0xFFF59E0B), Color(0xFF10B981), Colors.white],
+                            colors: _isVipActive
+                                ? [const Color(0xFFF59E0B), const Color(0xFF10B981), Colors.white]
+                                : [const Color(0xFF94A3B8), const Color(0xFF64748B), Colors.white],
                           ),
                         ),
                         child: const CircleAvatar(
@@ -346,11 +411,15 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                         right: 2,
                         child: Container(
                           padding: const EdgeInsets.all(4.5),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF10B981),
+                          decoration: BoxDecoration(
+                            color: _isVipActive ? const Color(0xFF10B981) : const Color(0xFF64748B),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.verified_rounded, size: 20, color: Colors.white),
+                          child: Icon(
+                            _isVipActive ? Icons.verified_rounded : Icons.person_rounded,
+                            size: 20,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ],
@@ -398,22 +467,29 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                   ),
                   const SizedBox(height: 14),
 
-                  // Glassmorphic Verified Premium Account Pill Tag
+                  // Glassmorphic Dynamic Account Pill Tag
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
+                      color: _isVipActive ? Colors.white.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1.0),
+                      border: Border.all(
+                        color: _isVipActive ? Colors.white.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.15),
+                        width: 1.0,
+                      ),
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.workspace_premium_rounded, size: 18, color: Color(0xFFFBBF24)),
-                        SizedBox(width: 7),
+                        Icon(
+                          _isVipActive ? Icons.workspace_premium_rounded : Icons.person_outline_rounded,
+                          size: 18,
+                          color: _isVipActive ? const Color(0xFFFBBF24) : const Color(0xFFCBD5E1),
+                        ),
+                        const SizedBox(width: 7),
                         Text(
-                          'Verified Premium Account',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5, letterSpacing: 0.3),
+                          _isVipActive ? 'Verified VIP Account' : 'Standard Account',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5, letterSpacing: 0.3),
                         ),
                       ],
                     ),
@@ -517,11 +593,24 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF10B981).withValues(alpha: 0.25),
+                          color: _isVipActive
+                              ? const Color(0xFF10B981).withValues(alpha: 0.25)
+                              : const Color(0xFFEF4444).withValues(alpha: 0.25),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.5)),
+                          border: Border.all(
+                            color: _isVipActive
+                                ? const Color(0xFF10B981).withValues(alpha: 0.5)
+                                : const Color(0xFFEF4444).withValues(alpha: 0.5),
+                          ),
                         ),
-                        child: const Text('ACTIVE ✅', style: TextStyle(color: Color(0xFF6EE7B7), fontSize: 10, fontWeight: FontWeight.bold)),
+                        child: Text(
+                          _isVipActive ? 'ACTIVE ✅' : 'INACTIVE ❌',
+                          style: TextStyle(
+                            color: _isVipActive ? const Color(0xFF6EE7B7) : const Color(0xFFFCA5A5),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -560,14 +649,24 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                               style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.w600),
                             ),
                             const SizedBox(height: 6),
-                            const Text(
-                              'Member Tier: VIP Platinum 💎',
-                              style: TextStyle(color: Color(0xFFFBBF24), fontSize: 11.5, fontWeight: FontWeight.bold),
+                            Text(
+                              _isVipActive ? 'Member Tier: VIP Platinum 💎' : 'Member Tier: Standard Member 👤',
+                              style: TextStyle(
+                                color: _isVipActive ? const Color(0xFFFBBF24) : const Color(0xFF94A3B8),
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             const SizedBox(height: 4),
-                            const Text(
-                              'Priority Express Support',
-                              style: TextStyle(color: Colors.white60, fontSize: 11),
+                            Text(
+                              _isVipActive
+                                  ? 'Priority Express Support'
+                                  : 'Need 3 delivered orders/mo ($_deliveredCountInMonth/3 delivered)',
+                              style: TextStyle(
+                                color: _isVipActive ? Colors.white60 : const Color(0xFFF87171),
+                                fontSize: 11,
+                                fontWeight: _isVipActive ? FontWeight.normal : FontWeight.w600,
+                              ),
                             ),
                           ],
                         ),
