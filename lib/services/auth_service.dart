@@ -4504,4 +4504,64 @@ class AuthService {
 
     return true;
   }
+
+  /// Generate Auto-Incrementing Sequential Order ID (#DM-1001, #DM-1002...)
+  static Future<String> generateNextOrderId() async {
+    final prefs = await SharedPreferences.getInstance();
+    int currentId = prefs.getInt('last_generated_order_id_num') ?? 1000;
+    currentId++;
+    await prefs.setInt('last_generated_order_id_num', currentId);
+    return '#DM-$currentId';
+  }
+
+  /// Save Customer Placed Order to local storage & VPS
+  static Future<void> saveCustomerPlacedOrder(Map<String, dynamic> order) async {
+    final prefs = await SharedPreferences.getInstance();
+    final custMobile = (order['customer_mobile'] ?? '').toString().trim();
+    final key = 'customer_orders_history_$custMobile';
+
+    final String? existingJson = prefs.getString(key);
+    List<Map<String, dynamic>> ordersList = [];
+    if (existingJson != null && existingJson.isNotEmpty) {
+      try {
+        final List raw = jsonDecode(existingJson);
+        ordersList = List<Map<String, dynamic>>.from(raw);
+      } catch (_) {}
+    }
+
+    ordersList.insert(0, order);
+    await prefs.setString(key, jsonEncode(ordersList));
+
+    // Also notify message log for seller
+    final sellerUser = (order['seller_username'] ?? '').toString().trim();
+    if (sellerUser.isNotEmpty) {
+      final msgKey = 'seller_customer_orders_${sellerUser}_$custMobile';
+      final String? existingSellerMsg = prefs.getString(msgKey);
+      List<Map<String, dynamic>> sellerMsgs = [];
+      if (existingSellerMsg != null && existingSellerMsg.isNotEmpty) {
+        try {
+          final List rawM = jsonDecode(existingSellerMsg);
+          sellerMsgs = List<Map<String, dynamic>>.from(rawM);
+        } catch (_) {}
+      }
+      sellerMsgs.insert(0, order);
+      await prefs.setString(msgKey, jsonEncode(sellerMsgs));
+    }
+  }
+
+  /// Fetch Customer Placed Orders History List
+  static Future<List<Map<String, dynamic>>> getCustomerPlacedOrders(String customerMobile) async {
+    final prefs = await SharedPreferences.getInstance();
+    final custMobile = customerMobile.trim();
+    final key = 'customer_orders_history_$custMobile';
+
+    final String? existingJson = prefs.getString(key);
+    if (existingJson != null && existingJson.isNotEmpty) {
+      try {
+        final List raw = jsonDecode(existingJson);
+        return List<Map<String, dynamic>>.from(raw);
+      } catch (_) {}
+    }
+    return [];
+  }
 }
