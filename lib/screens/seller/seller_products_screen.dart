@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 
@@ -38,7 +40,9 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
   List<Map<String, dynamic>> _allProducts = [];
   List<Map<String, dynamic>> _filteredProducts = [];
   List<Map<String, dynamic>> _sellerUnits = [];
+  List<Map<String, dynamic>> _sellerCategories = [];
   String _searchQuery = '';
+  String _selectedCategoryFilter = 'All';
 
   @override
   void initState() {
@@ -54,11 +58,13 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     final username = widget.seller.username ?? '';
     final products = await AuthService.getSellerProducts(username);
     final units = await AuthService.getSellerUnits(username);
+    final categories = await AuthService.getSellerCategories(username);
 
     if (mounted) {
       setState(() {
         _allProducts = products;
         _sellerUnits = units;
+        _sellerCategories = categories;
         _isLoading = false;
       });
       _applyFilter();
@@ -67,20 +73,415 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
 
   void _applyFilter() {
     final query = _searchQuery.trim().toLowerCase();
-    if (query.isEmpty) {
-      setState(() {
-        _filteredProducts = List.from(_allProducts);
-      });
-    } else {
-      setState(() {
-        _filteredProducts = _allProducts.where((p) {
-          final name = safeString(p['name']).toLowerCase();
-          final desc = safeString(p['description']).toLowerCase();
-          final unit = safeString(p['unit']).toLowerCase();
-          return name.contains(query) || desc.contains(query) || unit.contains(query);
-        }).toList();
-      });
-    }
+    setState(() {
+      _filteredProducts = _allProducts.where((p) {
+        final name = safeString(p['name']).toLowerCase();
+        final desc = safeString(p['description']).toLowerCase();
+        final unit = safeString(p['unit']).toLowerCase();
+        final cat = safeString(p['category']).toLowerCase();
+
+        final matchesQuery = query.isEmpty || name.contains(query) || desc.contains(query) || unit.contains(query) || cat.contains(query);
+        final matchesCategory = _selectedCategoryFilter == 'All' || cat == _selectedCategoryFilter.toLowerCase();
+
+        return matchesQuery && matchesCategory;
+      }).toList();
+    });
+  }
+
+  /// Open Manage Categories Dialog (Category Name + Image Picker)
+  void _showManageCategoriesDialog({Function(String)? onCategoryCreated}) {
+    final catNameController = TextEditingController();
+    String catImageUrl = '🏷️';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final username = widget.seller.username ?? '';
+
+          Future<void> _pickCategoryImage() async {
+            try {
+              final picker = ImagePicker();
+              final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 600);
+              if (picked != null) {
+                final bytes = await picked.readAsBytes();
+                final base64Str = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+                setModalState(() {
+                  catImageUrl = base64Str;
+                });
+              }
+            } catch (_) {}
+          }
+
+          return Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              left: 20,
+              right: 20,
+              top: 16,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  Row(
+                    children: [
+                      const CircleAvatar(
+                        radius: 18,
+                        backgroundColor: Color(0xFFE0F2FE),
+                        child: Icon(Icons.category_rounded, color: Color(0xFF0284C7), size: 20),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Manage Store Categories 📁',
+                              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Add, edit or delete product categories & images',
+                              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B), size: 22),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 20),
+
+                  // Add New Category Row
+                  const Text('Category Name & Image *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                  const SizedBox(height: 8),
+
+                  Row(
+                    children: [
+                      // Thumbnail Image Picker Button
+                      InkWell(
+                        onTap: _pickCategoryImage,
+                        child: Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFF0284C7), width: 1.5),
+                          ),
+                          child: catImageUrl.startsWith('data:image')
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Image.memory(
+                                    base64Decode(catImageUrl.split(',').last),
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              : Center(
+                                  child: Text(
+                                    catImageUrl,
+                                    style: const TextStyle(fontSize: 22),
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+
+                      // Category Name Input Field
+                      Expanded(
+                        child: TextField(
+                          controller: catNameController,
+                          decoration: InputDecoration(
+                            hintText: 'Enter category (e.g. Snacks, Oils)',
+                            hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: Color(0xFF0284C7), width: 2),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+
+                      ElevatedButton(
+                        onPressed: () async {
+                          final cName = catNameController.text.trim();
+                          if (cName.isEmpty) return;
+
+                          catNameController.clear();
+                          await AuthService.addSellerCategory(username, cName, catImageUrl);
+                          final updatedCats = await AuthService.getSellerCategories(username);
+
+                          setModalState(() {
+                            _sellerCategories = updatedCats;
+                            catImageUrl = '🏷️';
+                          });
+                          setState(() {
+                            _sellerCategories = updatedCats;
+                          });
+
+                          if (onCategoryCreated != null) {
+                            onCategoryCreated(cName);
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0284C7),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
+                        ),
+                        child: const Text('Add', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 10),
+                  // Preset Icons Quick Picker
+                  Row(
+                    children: [
+                      const Text('Preset Icons: ', style: TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: ['🍿', '🛢️', '🌶️', '🌾', '🥤', '🥛', '🍞', '🥩', '🧹', '🍬', '📦', '🏷️'].map((emoji) {
+                              final isSel = catImageUrl == emoji;
+                              return InkWell(
+                                onTap: () => setModalState(() => catImageUrl = emoji),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  margin: const EdgeInsets.only(right: 6),
+                                  decoration: BoxDecoration(
+                                    color: isSel ? const Color(0xFFBAE6FD) : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(emoji, style: const TextStyle(fontSize: 18)),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Saved Store Categories List
+                  const Text('Your Saved Categories:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                  const SizedBox(height: 8),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.35),
+                    child: _sellerCategories.isEmpty
+                        ? Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: const Center(
+                              child: Text(
+                                'No categories created yet. Type above and click "Add"!',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: _sellerCategories.length,
+                            itemBuilder: (context, idx) {
+                              final cMap = _sellerCategories[idx];
+                              final cId = safeInt(cMap['id']);
+                              final cName = safeString(cMap['name']);
+                              final cImg = safeString(cMap['image_url'], '🏷️');
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 6),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: ListTile(
+                                  dense: true,
+                                  leading: Container(
+                                    width: 34,
+                                    height: 34,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFE0F2FE),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: cImg.startsWith('data:image')
+                                        ? ClipRRect(
+                                            borderRadius: BorderRadius.circular(8),
+                                            child: Image.memory(base64Decode(cImg.split(',').last), fit: BoxFit.cover),
+                                          )
+                                        : Center(child: Text(cImg, style: const TextStyle(fontSize: 16))),
+                                  ),
+                                  title: Text(cName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Color(0xFF0F172A))),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.edit_rounded, color: Color(0xFF3B82F6), size: 18),
+                                        onPressed: () {
+                                          _showEditCategoryPrompt(ctx, cId, cName, cImg, setModalState);
+                                        },
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 18),
+                                        onPressed: () async {
+                                          await AuthService.deleteSellerCategory(cId, username, cName);
+                                          final updatedCats = await AuthService.getSellerCategories(username);
+                                          setModalState(() {
+                                            _sellerCategories = updatedCats;
+                                          });
+                                          setState(() {
+                                            _sellerCategories = updatedCats;
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0F172A),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Done', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showEditCategoryPrompt(BuildContext parentCtx, int catId, String currentName, String currentImg, StateSetter parentSetModalState) {
+    final editController = TextEditingController(text: currentName);
+    String editImg = currentImg;
+
+    showDialog(
+      context: parentCtx,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          Future<void> _pickNewImage() async {
+            try {
+              final picker = ImagePicker();
+              final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 600);
+              if (picked != null) {
+                final bytes = await picked.readAsBytes();
+                final base64Str = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+                setDialogState(() {
+                  editImg = base64Str;
+                });
+              }
+            } catch (_) {}
+          }
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text('Edit Category Details 📁', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                InkWell(
+                  onTap: _pickNewImage,
+                  child: Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE0F2FE),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF0284C7), width: 1.5),
+                    ),
+                    child: editImg.startsWith('data:image')
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.memory(base64Decode(editImg.split(',').last), fit: BoxFit.cover),
+                          )
+                        : Center(child: Text(editImg, style: const TextStyle(fontSize: 24))),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text('Tap box to change image/icon', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: editController,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    labelText: 'Category Name',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+                onPressed: () async {
+                  final newName = editController.text.trim();
+                  if (newName.isNotEmpty) {
+                    final username = widget.seller.username ?? '';
+                    Navigator.pop(ctx);
+                    await AuthService.updateSellerCategory(catId, username, newName, editImg);
+                    final updatedCats = await AuthService.getSellerCategories(username);
+                    parentSetModalState(() {
+                      _sellerCategories = updatedCats;
+                    });
+                    setState(() {
+                      _sellerCategories = updatedCats;
+                    });
+                  }
+                },
+                child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   /// Open Manage Custom Units Dialog
@@ -351,13 +752,21 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     );
 
     List<String> availableUnitNames = _sellerUnits.map((u) => safeString(u['unit_name'])).where((s) => s.isNotEmpty).toList();
+    List<String> availableCategoryNames = _sellerCategories.map((c) => safeString(c['name'])).where((s) => s.isNotEmpty).toList();
 
     String selectedUnit = isEditing
         ? safeString(productToEdit['unit'])
         : (availableUnitNames.isNotEmpty ? availableUnitNames.first : '');
 
+    String selectedCategory = isEditing
+        ? safeString(productToEdit['category'])
+        : (availableCategoryNames.isNotEmpty ? availableCategoryNames.first : '');
+
     if (selectedUnit.isNotEmpty && !availableUnitNames.contains(selectedUnit)) {
       availableUnitNames.insert(0, selectedUnit);
+    }
+    if (selectedCategory.isNotEmpty && !availableCategoryNames.contains(selectedCategory)) {
+      availableCategoryNames.insert(0, selectedCategory);
     }
 
     showModalBottomSheet(
@@ -470,6 +879,59 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 14),
+
+                  // Product Category Selection Header + Shortcut Button
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Product Category (Optional)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                      InkWell(
+                        onTap: () {
+                          _showManageCategoriesDialog(
+                            onCategoryCreated: (newCat) {
+                              setModalState(() {
+                                availableCategoryNames = _sellerCategories.map((c) => safeString(c['name'])).where((s) => s.isNotEmpty).toList();
+                                selectedCategory = newCat;
+                              });
+                            },
+                          );
+                        },
+                        child: const Row(
+                          children: [
+                            Icon(Icons.add_circle_outline_rounded, color: Color(0xFF0284C7), size: 16),
+                            SizedBox(width: 4),
+                            Text('+ Create Category', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0284C7))),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  availableCategoryNames.isEmpty
+                      ? const SizedBox.shrink()
+                      : Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          children: availableCategoryNames.map((cName) {
+                            final isSel = selectedCategory == cName;
+                            return ChoiceChip(
+                              label: Text(cName),
+                              selected: isSel,
+                              selectedColor: const Color(0xFF0284C7),
+                              backgroundColor: const Color(0xFFF1F5F9),
+                              labelStyle: TextStyle(
+                                color: isSel ? Colors.white : const Color(0xFF334155),
+                                fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
+                                fontSize: 12,
+                              ),
+                              onSelected: (val) {
+                                setModalState(() => selectedCategory = val ? cName : '');
+                              },
+                            );
+                          }).toList(),
+                        ),
                   const SizedBox(height: 14),
 
                   // Unit Selection Header + Shortcut "+ Add Unit" Button
@@ -656,6 +1118,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           name: pName,
                           description: pDesc,
                           unit: selectedUnit,
+                          category: selectedCategory,
                           qty: pQty,
                           rate: pRate,
                         );
@@ -665,6 +1128,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           name: pName,
                           description: pDesc,
                           unit: selectedUnit,
+                          category: selectedCategory,
                           qty: pQty,
                           rate: pRate,
                         );
@@ -752,6 +1216,11 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
         elevation: 0,
         actions: [
           IconButton(
+            icon: const Icon(Icons.category_rounded, color: Colors.white),
+            tooltip: 'Manage Categories',
+            onPressed: () => _showManageCategoriesDialog(),
+          ),
+          IconButton(
             icon: const Icon(Icons.straighten_rounded, color: Colors.white),
             tooltip: 'Manage Units',
             onPressed: () => _showManageUnitsDialog(),
@@ -814,20 +1283,84 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Text(
-                      '${_filteredProducts.length} Products | ${_sellerUnits.length} Custom Units',
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+                    Expanded(
+                      child: Text(
+                        '${_filteredProducts.length} Products | ${_sellerUnits.length} Units | ${_sellerCategories.length} Categories',
+                        style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    const Spacer(),
+                    InkWell(
+                      onTap: () => _showManageCategoriesDialog(),
+                      child: const Text(
+                        '📁 Categories',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0284C7)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     InkWell(
                       onTap: () => _showManageUnitsDialog(),
                       child: const Text(
-                        '🏷️ Manage Units',
+                        '🏷️ Units',
                         style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF8B5CF6)),
                       ),
                     ),
                   ],
                 ),
+                if (_sellerCategories.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        ChoiceChip(
+                          label: const Text('All'),
+                          selected: _selectedCategoryFilter == 'All',
+                          selectedColor: const Color(0xFF0F172A),
+                          backgroundColor: const Color(0xFFF1F5F9),
+                          labelStyle: TextStyle(
+                            color: _selectedCategoryFilter == 'All' ? Colors.white : const Color(0xFF334155),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11.5,
+                          ),
+                          onSelected: (val) {
+                            if (val) {
+                              setState(() {
+                                _selectedCategoryFilter = 'All';
+                              });
+                              _applyFilter();
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 6),
+                        ..._sellerCategories.map((c) {
+                          final cName = safeString(c['name']);
+                          final isSel = _selectedCategoryFilter.toLowerCase() == cName.toLowerCase();
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: ChoiceChip(
+                              label: Text(cName),
+                              selected: isSel,
+                              selectedColor: const Color(0xFF0284C7),
+                              backgroundColor: const Color(0xFFF1F5F9),
+                              labelStyle: TextStyle(
+                                color: isSel ? Colors.white : const Color(0xFF334155),
+                                fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
+                                fontSize: 11.5,
+                              ),
+                              onSelected: (val) {
+                                setState(() {
+                                  _selectedCategoryFilter = val ? cName : 'All';
+                                });
+                                _applyFilter();
+                              },
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

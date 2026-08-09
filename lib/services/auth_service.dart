@@ -3962,6 +3962,7 @@ class AuthService {
     required String name,
     String description = '',
     String unit = 'Pcs',
+    String category = '',
     int qty = 1,
     required double rate,
   }) async {
@@ -3978,6 +3979,7 @@ class AuthService {
         'name': cleanName,
         'description': description.trim(),
         'unit': unit.trim(),
+        'category': category.trim(),
         'qty': qty,
         'rate': rate,
       });
@@ -3993,6 +3995,7 @@ class AuthService {
       'name': cleanName,
       'description': description.trim(),
       'unit': unit.trim(),
+      'category': category.trim(),
       'qty': qty,
       'rate': rate,
     };
@@ -4020,6 +4023,7 @@ class AuthService {
     required String name,
     String description = '',
     String unit = 'Pcs',
+    String category = '',
     int qty = 1,
     required double rate,
   }) async {
@@ -4035,6 +4039,7 @@ class AuthService {
         'name': cleanName,
         'description': description.trim(),
         'unit': unit.trim(),
+        'category': category.trim(),
         'qty': qty,
         'rate': rate,
       });
@@ -4053,6 +4058,7 @@ class AuthService {
             p['name'] = cleanName;
             p['description'] = description.trim();
             p['unit'] = unit.trim();
+            p['category'] = category.trim();
             p['qty'] = qty;
             p['rate'] = rate;
           }
@@ -4227,6 +4233,196 @@ class AuthService {
         final units = list.map((e) => Map<String, dynamic>.from(e)).toList();
         units.removeWhere((u) => (u['id'] as num?)?.toInt() == id || u['unit_name'] == unitName);
         await prefs.setString(cacheKey, jsonEncode(units));
+      }
+    } catch (_) {}
+
+    return true;
+  }
+
+  // ==========================================
+  // SELLER CATEGORIES CRUD API & LOCAL CACHE
+  // ==========================================
+
+  /// Default preset store categories with built-in icons/images
+  static List<Map<String, dynamic>> get defaultStoreCategories => [
+    {
+      'id': 101,
+      'name': 'Snacks & Munchies',
+      'image_url': '🍿',
+    },
+    {
+      'id': 102,
+      'name': 'Grocery & Oils',
+      'image_url': '🛢️',
+    },
+    {
+      'id': 103,
+      'name': 'Spices & Masalas',
+      'image_url': '🌶️',
+    },
+    {
+      'id': 104,
+      'name': 'Grains & Pulses',
+      'image_url': '🌾',
+    },
+    {
+      'id': 105,
+      'name': 'Beverages & Drinks',
+      'image_url': '🥤',
+    },
+    {
+      'id': 106,
+      'name': 'Dairy & Bakery',
+      'image_url': '🥛',
+    },
+  ];
+
+  /// Get Custom Categories for Seller (from VPS Database with local cache fallback)
+  static Future<List<Map<String, dynamic>>> getSellerCategories(String sellerUsername) async {
+    final cleanSeller = sellerUsername.trim();
+    if (cleanSeller.isEmpty) return defaultStoreCategories;
+
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_categories_$cleanSeller';
+
+    // 1. Fetch from VPS API
+    try {
+      final res = await VpsApiService.get('get-seller-categories&seller_username=$cleanSeller');
+      if (res != null && res['success'] == true && res['categories'] is List) {
+        final List<dynamic> rawList = res['categories'];
+        if (rawList.isNotEmpty) {
+          final List<Map<String, dynamic>> categories = rawList.map((e) => Map<String, dynamic>.from(e)).toList();
+          await prefs.setString(cacheKey, jsonEncode(categories));
+          return categories;
+        }
+      }
+    } catch (_) {}
+
+    // 2. Local Fallback Cache
+    try {
+      final str = prefs.getString(cacheKey);
+      if (str != null && str.isNotEmpty) {
+        final List<dynamic> list = jsonDecode(str);
+        if (list.isNotEmpty) {
+          return list.map((e) => Map<String, dynamic>.from(e)).toList();
+        }
+      }
+    } catch (_) {}
+
+    return defaultStoreCategories;
+  }
+
+  /// Add Custom Category for Seller
+  static Future<bool> addSellerCategory(String sellerUsername, String categoryName, String imageUrl) async {
+    final cleanSeller = sellerUsername.trim();
+    final cleanName = categoryName.trim();
+    final cleanImg = imageUrl.trim();
+    if (cleanSeller.isEmpty || cleanName.isEmpty) return false;
+
+    Map<String, dynamic>? newCat;
+
+    // 1. VPS API
+    try {
+      final res = await VpsApiService.post('add-seller-category', {
+        'seller_username': cleanSeller,
+        'name': cleanName,
+        'image_url': cleanImg,
+      });
+      if (res != null && res['success'] == true && res['category'] != null) {
+        newCat = Map<String, dynamic>.from(res['category']);
+      }
+    } catch (_) {}
+
+    newCat ??= {
+      'id': DateTime.now().millisecondsSinceEpoch,
+      'seller_username': cleanSeller,
+      'name': cleanName,
+      'image_url': cleanImg.isEmpty ? '🏷️' : cleanImg,
+    };
+
+    // 2. Local Cache Update
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_categories_$cleanSeller';
+    List<Map<String, dynamic>> categories = [];
+    try {
+      final str = prefs.getString(cacheKey);
+      if (str != null && str.isNotEmpty) {
+        categories = (jsonDecode(str) as List).map((e) => Map<String, dynamic>.from(e)).toList();
+      } else {
+        categories = List.from(defaultStoreCategories);
+      }
+    } catch (_) {
+      categories = List.from(defaultStoreCategories);
+    }
+
+    bool exists = categories.any((c) => (c['name'] ?? '').toString().trim().toLowerCase() == cleanName.toLowerCase());
+    if (!exists) {
+      categories.add(newCat);
+      await prefs.setString(cacheKey, jsonEncode(categories));
+    }
+    return true;
+  }
+
+  /// Update Custom Category
+  static Future<bool> updateSellerCategory(int id, String sellerUsername, String categoryName, String imageUrl) async {
+    final cleanSeller = sellerUsername.trim();
+    final cleanName = categoryName.trim();
+    final cleanImg = imageUrl.trim();
+    if (cleanName.isEmpty) return false;
+
+    try {
+      if (id > 0) {
+        await VpsApiService.post('update-seller-category', {
+          'id': id,
+          'seller_username': cleanSeller,
+          'name': cleanName,
+          'image_url': cleanImg,
+        });
+      }
+    } catch (_) {}
+
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_categories_$cleanSeller';
+    try {
+      final str = prefs.getString(cacheKey);
+      if (str != null && str.isNotEmpty) {
+        final List<dynamic> list = jsonDecode(str);
+        final categories = list.map((e) => Map<String, dynamic>.from(e)).toList();
+        for (var c in categories) {
+          if ((c['id'] as num?)?.toInt() == id) {
+            c['name'] = cleanName;
+            if (cleanImg.isNotEmpty) c['image_url'] = cleanImg;
+          }
+        }
+        await prefs.setString(cacheKey, jsonEncode(categories));
+      }
+    } catch (_) {}
+
+    return true;
+  }
+
+  /// Delete Custom Category
+  static Future<bool> deleteSellerCategory(int id, String sellerUsername, String categoryName) async {
+    final cleanSeller = sellerUsername.trim();
+
+    try {
+      if (id > 0) {
+        await VpsApiService.post('delete-seller-category', {
+          'id': id,
+          'seller_username': cleanSeller,
+        });
+      }
+    } catch (_) {}
+
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_categories_$cleanSeller';
+    try {
+      final str = prefs.getString(cacheKey);
+      if (str != null && str.isNotEmpty) {
+        final List<dynamic> list = jsonDecode(str);
+        final categories = list.map((e) => Map<String, dynamic>.from(e)).toList();
+        categories.removeWhere((c) => (c['id'] as num?)?.toInt() == id || c['name'] == categoryName);
+        await prefs.setString(cacheKey, jsonEncode(categories));
       }
     } catch (_) {}
 
