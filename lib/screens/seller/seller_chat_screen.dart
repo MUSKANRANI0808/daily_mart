@@ -706,11 +706,40 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
         return;
       }
 
-      // 2. Check if Order Amount is added
+      // 2. Check if Order Amount is added or auto-calculated from items
       final rawAmt = msgData['order_amount'] ?? msgData['amount'];
       double orderAmt = 0.0;
       if (rawAmt != null && rawAmt.toString().isNotEmpty && rawAmt.toString() != 'null') {
         orderAmt = double.tryParse(rawAmt.toString()) ?? 0.0;
+      }
+
+      if (orderAmt <= 0) {
+        double calcTotal = 0.0;
+        for (var item in items) {
+          final text = (item['text'] ?? '').toString();
+          final rawItemAmt = item['amount'] ?? item['price'] ?? item['total'];
+          if (rawItemAmt != null) {
+            final p = double.tryParse(rawItemAmt.toString()) ?? 0.0;
+            if (p > 0) {
+              calcTotal += p;
+              continue;
+            }
+          }
+          final match = RegExp(r'₹\s*([\d\.]+)').firstMatch(text);
+          if (match != null) {
+            final amt = double.tryParse(match.group(1) ?? '');
+            if (amt != null && amt > 0) {
+              calcTotal += amt;
+            }
+          }
+        }
+        if (calcTotal > 0) {
+          orderAmt = calcTotal;
+          final amtStr = (calcTotal % 1 == 0) ? calcTotal.toInt().toString() : calcTotal.toStringAsFixed(2);
+          msgData['order_amount'] = amtStr;
+          msgData['amount'] = amtStr;
+          AuthService.updateOrderAmount(messageId: msgId, orderAmount: calcTotal);
+        }
       }
 
       if (orderAmt <= 0) {

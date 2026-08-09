@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
+import '../../services/notification_service.dart';
 import '../../utils/header_theme_helper.dart';
 import '../seller/seller_chat_screen.dart';
 import '../seller/seller_sliders_screen.dart';
@@ -40,6 +41,54 @@ class _SellerDashboardState extends State<SellerDashboard> {
     _loadHeaderTheme();
     _loadConversations();
     _loadSellerSliders();
+    _startSellerDashboardPolling();
+  }
+
+  Timer? _sellerDashboardPoller;
+
+  void _startSellerDashboardPolling() {
+    _sellerDashboardPoller?.cancel();
+    _sellerDashboardPoller = Timer.periodic(const Duration(milliseconds: 1500), (timer) async {
+      if (!mounted) return;
+      try {
+        final sellerUser = widget.seller.username ?? '';
+        final convs = await AuthService.getSellerConversations(sellerUser);
+
+        int maxKnownId = 0;
+        for (var c in _conversations) {
+          final id = (c['last_message_id'] as num?)?.toInt() ?? 0;
+          if (id > maxKnownId) maxKnownId = id;
+        }
+
+        bool hasNewIncomingOrder = false;
+        String newCustName = 'Customer';
+        String newOrderId = '';
+
+        for (var c in convs) {
+          final id = (c['last_message_id'] as num?)?.toInt() ?? 0;
+          final senderType = (c['last_sender_type'] ?? '').toString().toLowerCase();
+          if (id > maxKnownId && senderType == 'customer' && maxKnownId > 0) {
+            hasNewIncomingOrder = true;
+            newCustName = (c['display_name'] ?? c['customer_name'] ?? 'Customer').toString();
+            newOrderId = (c['last_order_id'] ?? 'New Order').toString();
+            break;
+          }
+        }
+
+        if (hasNewIncomingOrder) {
+          NotificationService.showSystemNotification(
+            id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            title: '🛍️ New Order Received!',
+            body: 'Customer $newCustName placed a new order ($newOrderId).',
+            payload: 'seller_new_order',
+          );
+        }
+
+        if (mounted) {
+          await _processSellerConversationsAndSetState(convs);
+        }
+      } catch (_) {}
+    });
   }
 
   Future<void> _loadHeaderTheme() async {
@@ -53,6 +102,7 @@ class _SellerDashboardState extends State<SellerDashboard> {
 
   @override
   void dispose() {
+    _sellerDashboardPoller?.cancel();
     _sliderTimer?.cancel();
     _sliderPageController.dispose();
     super.dispose();

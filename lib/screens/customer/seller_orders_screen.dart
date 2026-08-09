@@ -127,6 +127,33 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
       mobile: widget.sellerMobile,
     );
     _loadData();
+    _startSellerOrdersPolling();
+  }
+
+  Timer? _ordersPoller;
+
+  void _startSellerOrdersPolling() {
+    _ordersPoller?.cancel();
+    _ordersPoller = Timer.periodic(const Duration(milliseconds: 1500), (timer) async {
+      if (!mounted) return;
+      try {
+        final msgs = await AuthService.getMessages(
+          sellerUsername: widget.sellerUsername,
+          customerMobile: widget.customer.mobile ?? '',
+        );
+        await AuthService.annotateMessagesWithLifetimeHierarchy(
+          sellerUsername: widget.sellerUsername,
+          customerMobile: widget.customer.mobile ?? '',
+          messages: msgs,
+        );
+        if (mounted) {
+          setState(() {
+            _messages = msgs;
+            _isLoading = false;
+          });
+        }
+      } catch (_) {}
+    });
   }
 
   static List<Map<String, dynamic>> get presetThemes => [
@@ -267,6 +294,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
 
   @override
   void dispose() {
+    _ordersPoller?.cancel();
     _sliderTimer?.cancel();
     _sliderController.dispose();
     _ordersScrollController.dispose();

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -56,6 +57,52 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
     _loadSellerProducts();
     _loadDraft();
     _msgController.addListener(_onDraftTextChanged);
+    _startRealtimeChatPolling();
+  }
+
+  Timer? _realtimeChatTimer;
+
+  void _startRealtimeChatPolling() {
+    _realtimeChatTimer?.cancel();
+    _realtimeChatTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) async {
+      if (!mounted) return;
+      try {
+        final msgs = await AuthService.getMessages(
+          sellerUsername: widget.sellerUsername,
+          customerMobile: widget.customer.mobile ?? '',
+        );
+        await AuthService.annotateMessagesWithLifetimeHierarchy(
+          sellerUsername: widget.sellerUsername,
+          customerMobile: widget.customer.mobile ?? '',
+          messages: msgs,
+        );
+
+        // Detect newly 'ready' orders and trigger instant notification for Customer
+        for (var m in msgs) {
+          final id = m['id'];
+          final status = (m['order_status'] ?? '').toString().toLowerCase();
+          final prevMsg = _messages.firstWhere((old) => old['id'] == id, orElse: () => {});
+          final prevStatus = (prevMsg['order_status'] ?? '').toString().toLowerCase();
+
+          if (status == 'ready' && prevStatus != 'ready' && prevMsg.isNotEmpty) {
+            final rawOrderId = (m['order_id'] ?? 'Order #$id').toString();
+            NotificationService.showSystemNotification(
+              id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+              title: '✅ Order Approved & Ready!',
+              body: '${widget.sellerName} approved $rawOrderId. It is ready for delivery!',
+              payload: 'customer_order_ready',
+            );
+          }
+        }
+
+        if (mounted) {
+          setState(() {
+            _messages = msgs;
+            _isLoading = false;
+          });
+        }
+      } catch (_) {}
+    });
   }
 
   void _onDraftTextChanged() {
@@ -148,6 +195,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
 
   @override
   void dispose() {
+    _realtimeChatTimer?.cancel();
     _saveDraft();
     _msgController.removeListener(_onDraftTextChanged);
     _msgController.dispose();
@@ -802,11 +850,18 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                               _isListMode = false;
                             });
                             _loadMessages();
-                            NotificationService.notifySellerNewOrder(
-                              sellerUsername: widget.sellerUsername,
-                              customerName: widget.customer.name ?? 'Customer',
-                              customerMobile: widget.customer.mobile ?? '',
-                              orderId: nextOrderId,
+                            NotificationService.showSystemNotification(
+                              id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+                              title: '🛍️ Order Placed Successfully!',
+                              body: 'Your $nextOrderId has been sent to ${widget.sellerName}.',
+                              payload: 'customer_order_placed',
+                            );
+                            NotificationService.saveNotificationForUser(
+                              recipientKey: 'seller_${widget.sellerUsername.toLowerCase().trim()}',
+                              title: '🛍️ New Order Received!',
+                              body: 'Customer ${widget.customer.name ?? "Customer"} (${widget.customer.mobile}) placed $nextOrderId.',
+                              type: 'new_order',
+                              data: {'order_id': nextOrderId, 'customer_mobile': widget.customer.mobile},
                             );
                           } else {
                             if (mounted) {
