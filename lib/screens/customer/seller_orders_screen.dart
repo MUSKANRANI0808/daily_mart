@@ -1414,52 +1414,6 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
            ),
          ),
 
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          if (_isBlockedBySeller) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('You have been blocked by this seller. You cannot place orders.'),
-                backgroundColor: Color(0xFFEF4444),
-              ),
-            );
-            return;
-          }
-
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => SellerOrderCartScreen(
-                seller: UserModel(
-                  id: widget.sellerUsername,
-                  name: widget.sellerName,
-                  mobile: widget.sellerMobile,
-                  username: widget.sellerUsername,
-                  role: UserRole.seller,
-                ),
-                customer: widget.customer,
-              ),
-            ),
-          );
-          _loadData();
-        },
-        backgroundColor: _isBlockedBySeller
-            ? const Color(0xFFEF4444)
-            : const Color(0xFF10B981),
-        icon: Icon(
-          _isBlockedBySeller
-              ? Icons.block_rounded
-              : Icons.receipt_long_rounded,
-          color: Colors.white,
-        ),
-        label: Text(
-          _isBlockedBySeller
-              ? 'Seller Blocked'
-              : (_cartBadgeCount > 0 ? 'View Order Bill ($_cartBadgeCount Items)' : 'View Order Bill 🧾'),
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-      ),
-
       bottomNavigationBar: widget.hideBottomNav ? null : Container(
         decoration: BoxDecoration(
           color: Colors.white,

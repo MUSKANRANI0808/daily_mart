@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
+import '../../services/cart_service.dart';
 import '../dashboards/customer_dashboard.dart';
+import '../seller/seller_order_cart_screen.dart';
 import 'seller_orders_screen.dart';
 import 'profile_screen.dart';
 
@@ -25,12 +28,35 @@ class _CustomerMainNavScreenState extends State<CustomerMainNavScreen> {
   late int _currentIndex;
   Map<String, String>? _lastSeller;
   bool _isLoadingSeller = true;
+  int _cartBadgeCount = 0;
+  Timer? _cartPoller;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialTab;
     _checkSellerStatus();
+    _startCartPoller();
+  }
+
+  @override
+  void dispose() {
+    _cartPoller?.cancel();
+    super.dispose();
+  }
+
+  void _startCartPoller() {
+    _cartPoller = Timer.periodic(const Duration(milliseconds: 1000), (timer) async {
+      if (_lastSeller != null && (_lastSeller!['username'] ?? '').isNotEmpty) {
+        final items = await CartService.getCartItems(_lastSeller!['username']!);
+        final totalCount = CartService.getTotalCount(items);
+        if (mounted && totalCount != _cartBadgeCount) {
+          setState(() {
+            _cartBadgeCount = totalCount;
+          });
+        }
+      }
+    });
   }
 
   Future<bool> _showExitConfirmationDialog() async {
@@ -120,7 +146,15 @@ class _CustomerMainNavScreenState extends State<CustomerMainNavScreen> {
     }
 
     // 2. CUSTOMER HAS ADDED/SELECTED A SELLER:
-    // Render Bottom Navigation Bar for this active seller.
+    // Render 3 Bottom Navigation Bar tabs for this active seller.
+    final sellerModel = UserModel(
+      id: _lastSeller!['username']!,
+      name: _lastSeller!['name']!,
+      mobile: _lastSeller!['mobile']!,
+      username: _lastSeller!['username']!,
+      role: UserRole.seller,
+    );
+
     final List<Widget> pages = [
       CustomerSellerOrdersScreen(
         customer: widget.customer,
@@ -128,6 +162,10 @@ class _CustomerMainNavScreenState extends State<CustomerMainNavScreen> {
         sellerName: _lastSeller!['name']!,
         sellerMobile: _lastSeller!['mobile']!,
         hideBottomNav: true,
+      ),
+      SellerOrderCartScreen(
+        seller: sellerModel,
+        customer: widget.customer,
       ),
       CustomerProfileScreen(customer: widget.customer),
     ];
@@ -181,13 +219,30 @@ class _CustomerMainNavScreenState extends State<CustomerMainNavScreen> {
             selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
             unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 11),
             elevation: 0,
-            items: const [
-              BottomNavigationBarItem(
+            items: [
+              const BottomNavigationBarItem(
                 icon: Icon(Icons.home_rounded),
                 activeIcon: Icon(Icons.home_rounded, size: 26),
                 label: 'Home',
               ),
               BottomNavigationBarItem(
+                icon: _cartBadgeCount > 0
+                    ? Badge(
+                        label: Text('$_cartBadgeCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                        backgroundColor: const Color(0xFF10B981),
+                        child: const Icon(Icons.receipt_long_rounded),
+                      )
+                    : const Icon(Icons.receipt_long_rounded),
+                activeIcon: _cartBadgeCount > 0
+                    ? Badge(
+                        label: Text('$_cartBadgeCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                        backgroundColor: const Color(0xFF10B981),
+                        child: const Icon(Icons.receipt_long_rounded, size: 26),
+                      )
+                    : const Icon(Icons.receipt_long_rounded, size: 26),
+                label: 'My Order',
+              ),
+              const BottomNavigationBarItem(
                 icon: Icon(Icons.person_rounded),
                 activeIcon: Icon(Icons.person_rounded, size: 26),
                 label: 'Profile',
