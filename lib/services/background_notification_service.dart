@@ -16,7 +16,7 @@ class BackgroundNotificationService {
       androidConfiguration: AndroidConfiguration(
         onStart: onStart,
         autoStart: true,
-        isForegroundMode: false, // Silent background task without forcing persistent banner
+        isForegroundMode: false,
         autoStartOnBoot: true,
       ),
       iosConfiguration: IosConfiguration(
@@ -40,19 +40,20 @@ class BackgroundNotificationService {
     WidgetsFlutterBinding.ensureInitialized();
     await NotificationService.initialize();
 
-    Timer.periodic(const Duration(milliseconds: 3000), (timer) async {
+    Timer.periodic(const Duration(milliseconds: 2000), (timer) async {
       try {
         final prefs = await SharedPreferences.getInstance();
 
-        // 1. Check Seller Background Notifications
-        final userStr = prefs.getString('auth_user');
+        final userStr = prefs.getString('current_user');
         if (userStr != null && userStr.isNotEmpty) {
           try {
             final userMap = jsonDecode(userStr);
             final role = (userMap['role'] ?? '').toString().toLowerCase();
-            final username = (userMap['username'] ?? userMap['mobile'] ?? '').toString().trim();
+            final username = (userMap['username'] ?? '').toString().trim();
+            final mobile = (userMap['mobile'] ?? '').toString().trim();
 
             if (role == 'seller' && username.isNotEmpty) {
+              // --- SELLER AUTOMATIC BACKGROUND NOTIFICATION ---
               final convs = await AuthService.getSellerConversations(username);
               for (var c in convs) {
                 final custMobile = (c['customer_mobile'] ?? '').toString().trim();
@@ -75,39 +76,38 @@ class BackgroundNotificationService {
                   );
                 }
               }
-            } else if (role == 'customer' && username.isNotEmpty) {
-              // 2. Check Customer Background Notifications
-              final lastSellerStr = prefs.getString('last_selected_seller');
-              if (lastSellerStr != null && lastSellerStr.isNotEmpty) {
-                try {
-                  final sMap = jsonDecode(lastSellerStr);
-                  final sellerUsername = (sMap['username'] ?? '').toString().trim();
-                  final sellerName = (sMap['name'] ?? 'Store').toString().trim();
+            } else if (role == 'customer' && mobile.isNotEmpty) {
+              // --- CUSTOMER AUTOMATIC BACKGROUND NOTIFICATION ---
+              final convs = await AuthService.getCustomerConversations(mobile);
+              for (var c in convs) {
+                final sellerUsername = (c['seller_username'] ?? '').toString().trim();
+                final sellerName = (c['seller_name'] ?? 'Store').toString().trim();
+                final orderStatus = (c['order_status'] ?? '').toString().toLowerCase();
+                final msgId = (c['last_message_id'] ?? c['id'] ?? 0).toString();
+                final orderId = (c['last_order_id'] ?? 'Order #$msgId').toString();
+                final unreadCount = (c['unread_count'] as num?)?.toInt() ?? 0;
+                final senderType = (c['last_sender_type'] ?? '').toString().toLowerCase();
 
-                  if (sellerUsername.isNotEmpty) {
-                    final msgs = await AuthService.getMessages(
-                      sellerUsername: sellerUsername,
-                      customerMobile: username,
-                    );
+                final key = 'cust_${mobile}_${sellerUsername}_${msgId}_$orderStatus';
 
-                    for (var m in msgs) {
-                      final idStr = (m['id'] ?? '').toString();
-                      final status = (m['order_status'] ?? '').toString().toLowerCase();
-                      final rawOrderId = (m['order_id'] ?? 'Order #$idStr').toString();
-                      final key = 'cust_${username}_${idStr}_$status';
-
-                      if ((status == 'ready' || status == 'approved') && !_notifiedKeys.contains(key)) {
-                        _notifiedKeys.add(key);
-                        NotificationService.showSystemNotification(
-                          id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-                          title: '✅ Order Approved & Ready!',
-                          body: '$sellerName approved $rawOrderId. It is ready for delivery!',
-                          payload: 'customer_order_ready',
-                        );
-                      }
-                    }
-                  }
-                } catch (_) {}
+                if ((orderStatus == 'ready' || orderStatus == 'approved') && !_notifiedKeys.contains(key)) {
+                  _notifiedKeys.add(key);
+                  NotificationService.showSystemNotification(
+                    id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+                    title: '✅ Order Approved & Ready!',
+                    body: '$sellerName approved $orderId. It is ready for delivery!',
+                    payload: 'customer_order_ready',
+                  );
+                } else if (unreadCount > 0 && senderType == 'seller' && !_notifiedKeys.contains('msg_$key')) {
+                  _notifiedKeys.add('msg_$key');
+                  final lastMsg = (c['last_message'] ?? 'New message from seller').toString();
+                  NotificationService.showSystemNotification(
+                    id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+                    title: '💬 New Message from $sellerName',
+                    body: lastMsg,
+                    payload: 'customer_new_message',
+                  );
+                }
               }
             }
           } catch (_) {}
