@@ -122,30 +122,35 @@ class _SellerDashboardState extends State<SellerDashboard> {
   Future<void> _loadSellerCategories() async {
     final list = await AuthService.getSellerCategories(_sellerUsername);
     if (mounted) {
-      setState(() {
-        _sellerCategories = list;
-      });
+      if (jsonEncode(list) != jsonEncode(_sellerCategories)) {
+        setState(() {
+          _sellerCategories = list;
+        });
+      }
     }
   }
 
   Future<void> _loadSellerProducts() async {
     final list = await AuthService.getSellerProducts(_sellerUsername);
     if (mounted) {
-      setState(() {
-        _sellerProducts = list;
-      });
+      if (jsonEncode(list) != jsonEncode(_sellerProducts)) {
+        setState(() {
+          _sellerProducts = list;
+        });
+      }
     }
   }
 
   Future<void> _loadSellerSliders() async {
     final list = await AuthService.getSellerSliders(_sellerUsername);
-
     if (mounted) {
-      setState(() {
-        _sliders = list;
-      });
-      if (list.isNotEmpty) {
-        _startSliderAutoScroll();
+      if (jsonEncode(list) != jsonEncode(_sliders)) {
+        setState(() {
+          _sliders = list;
+        });
+        if (list.isNotEmpty) {
+          _startSliderAutoScroll();
+        }
       }
     }
   }
@@ -562,6 +567,7 @@ class _SellerDashboardState extends State<SellerDashboard> {
       return Image.network(
         img,
         fit: fit,
+        gaplessPlayback: true,
         width: double.infinity,
         height: double.infinity,
         errorBuilder: (_, __, ___) => Center(child: Text('📦', style: TextStyle(fontSize: emojiSize))),
@@ -582,6 +588,7 @@ class _SellerDashboardState extends State<SellerDashboard> {
         return Image.memory(
           bytes,
           fit: fit,
+          gaplessPlayback: true,
           width: double.infinity,
           height: double.infinity,
           errorBuilder: (_, __, ___) => Center(child: Text('📦', style: TextStyle(fontSize: emojiSize))),

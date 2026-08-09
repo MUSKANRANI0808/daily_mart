@@ -1354,6 +1354,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
       return Image.network(
         img,
         fit: fit,
+        gaplessPlayback: true,
         width: double.infinity,
         height: double.infinity,
         errorBuilder: (_, __, ___) => Center(child: Text('📦', style: TextStyle(fontSize: emojiSize))),
@@ -1374,6 +1375,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
         return Image.memory(
           bytes,
           fit: fit,
+          gaplessPlayback: true,
           width: double.infinity,
           height: double.infinity,
           errorBuilder: (_, __, ___) => Center(child: Text('📦', style: TextStyle(fontSize: emojiSize))),
