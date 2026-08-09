@@ -45,43 +45,42 @@ class _SellerDashboardState extends State<SellerDashboard> {
   }
 
   Timer? _sellerDashboardPoller;
+  int _lastSeenMaxMsgId = 0;
 
   void _startSellerDashboardPolling() {
     _sellerDashboardPoller?.cancel();
-    _sellerDashboardPoller = Timer.periodic(const Duration(milliseconds: 1500), (timer) async {
+    _sellerDashboardPoller = Timer.periodic(const Duration(milliseconds: 1000), (timer) async {
       if (!mounted) return;
       try {
         final sellerUser = widget.seller.username ?? '';
         final convs = await AuthService.getSellerConversations(sellerUser);
 
-        int maxKnownId = 0;
-        for (var c in _conversations) {
-          final id = (c['last_message_id'] as num?)?.toInt() ?? 0;
-          if (id > maxKnownId) maxKnownId = id;
-        }
-
-        bool hasNewIncomingOrder = false;
-        String newCustName = 'Customer';
-        String newOrderId = '';
-
-        for (var c in convs) {
-          final id = (c['last_message_id'] as num?)?.toInt() ?? 0;
-          final senderType = (c['last_sender_type'] ?? '').toString().toLowerCase();
-          if (id > maxKnownId && senderType == 'customer' && maxKnownId > 0) {
-            hasNewIncomingOrder = true;
-            newCustName = (c['display_name'] ?? c['customer_name'] ?? 'Customer').toString();
-            newOrderId = (c['last_order_id'] ?? 'New Order').toString();
-            break;
+        if (_lastSeenMaxMsgId == 0) {
+          for (var c in convs) {
+            final id = (c['last_message_id'] as num?)?.toInt() ?? 0;
+            if (id > _lastSeenMaxMsgId) _lastSeenMaxMsgId = id;
           }
-        }
-
-        if (hasNewIncomingOrder) {
-          NotificationService.showSystemNotification(
-            id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-            title: '🛍️ New Order Received!',
-            body: 'Customer $newCustName placed a new order ($newOrderId).',
-            payload: 'seller_new_order',
-          );
+        } else {
+          int highestId = _lastSeenMaxMsgId;
+          for (var c in convs) {
+            final id = (c['last_message_id'] as num?)?.toInt() ?? 0;
+            final senderType = (c['last_sender_type'] ?? '').toString().toLowerCase();
+            if (id > _lastSeenMaxMsgId) {
+              if (id > highestId) highestId = id;
+              if (senderType == 'customer' || senderType.isEmpty) {
+                final custName = (c['display_name'] ?? c['customer_name'] ?? 'Customer').toString();
+                final orderId = (c['last_order_id'] ?? 'New Order').toString();
+                final custMobile = (c['customer_mobile'] ?? '').toString();
+                NotificationService.showSystemNotification(
+                  id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+                  title: '🛍️ New Order Received!',
+                  body: 'Customer $custName ($custMobile) placed $orderId.',
+                  payload: 'seller_new_order',
+                );
+              }
+            }
+          }
+          _lastSeenMaxMsgId = highestId;
         }
 
         if (mounted) {

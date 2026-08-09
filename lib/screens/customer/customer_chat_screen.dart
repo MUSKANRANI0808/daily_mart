@@ -61,10 +61,11 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
   }
 
   Timer? _realtimeChatTimer;
+  final Set<String> _notifiedReadyMsgKeys = {};
 
   void _startRealtimeChatPolling() {
     _realtimeChatTimer?.cancel();
-    _realtimeChatTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) async {
+    _realtimeChatTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) async {
       if (!mounted) return;
       try {
         final msgs = await AuthService.getMessages(
@@ -77,15 +78,15 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
           messages: msgs,
         );
 
-        // Detect newly 'ready' orders and trigger instant notification for Customer
+        // Detect newly 'ready' or 'approved' orders and trigger push notification for Customer
         for (var m in msgs) {
-          final id = m['id'];
+          final idStr = (m['id'] ?? '').toString();
           final status = (m['order_status'] ?? '').toString().toLowerCase();
-          final prevMsg = _messages.firstWhere((old) => old['id'] == id, orElse: () => {});
-          final prevStatus = (prevMsg['order_status'] ?? '').toString().toLowerCase();
+          final rawOrderId = (m['order_id'] ?? 'Order #$idStr').toString();
+          final key = '${idStr}_$status';
 
-          if (status == 'ready' && prevStatus != 'ready' && prevMsg.isNotEmpty) {
-            final rawOrderId = (m['order_id'] ?? 'Order #$id').toString();
+          if ((status == 'ready' || status == 'approved') && !_notifiedReadyMsgKeys.contains(key)) {
+            _notifiedReadyMsgKeys.add(key);
             NotificationService.showSystemNotification(
               id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
               title: '✅ Order Approved & Ready!',
@@ -834,22 +835,28 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                             };
                             await prefs.setString('saved_order_delivery_details', jsonEncode(deliveryDetailsMap));
 
-                            final success = await AuthService.sendMessage(
-                              sellerUsername: widget.sellerUsername,
-                              customerMobile: widget.customer.mobile ?? '',
-                              message: rawOrderText.trim(),
-                              senderType: 'customer',
-                              customOrderId: nextOrderId,
-                            );
+                            final newLocalMsg = <String, dynamic>{
+                              'id': DateTime.now().millisecondsSinceEpoch,
+                              'seller_username': widget.sellerUsername.trim(),
+                              'customer_mobile': (widget.customer.mobile ?? '').trim(),
+                              'message': rawOrderText.trim(),
+                              'sender_type': 'customer',
+                              'order_id': nextOrderId,
+                              'order_status': 'Pending',
+                              'created_at': DateTime.now().toIso8601String(),
+                            };
 
-                          if (success) {
-                            await _clearDraft();
-                            setState(() {
-                              _selectedOrderItems.clear();
-                              _msgController.clear();
-                              _isListMode = false;
-                            });
-                            _loadMessages();
+                            if (mounted) {
+                              setState(() {
+                                _messages.add(newLocalMsg);
+                                _selectedOrderItems.clear();
+                                _msgController.clear();
+                                _isListMode = false;
+                              });
+                              _clearDraft();
+                            }
+
+                            // Trigger Customer System Notification Instantly (0ms)
                             NotificationService.showSystemNotification(
                               id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
                               title: '🛍️ Order Placed Successfully!',
@@ -863,13 +870,15 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                               type: 'new_order',
                               data: {'order_id': nextOrderId, 'customer_mobile': widget.customer.mobile},
                             );
-                          } else {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Failed to send order message.')),
-                               );
-                            }
-                          }
+
+                            // Background VPS API post (non-blocking)
+                            AuthService.sendMessage(
+                              sellerUsername: widget.sellerUsername,
+                              customerMobile: widget.customer.mobile ?? '',
+                              message: rawOrderText.trim(),
+                              senderType: 'customer',
+                              customOrderId: nextOrderId,
+                            );
                         },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF10B981),

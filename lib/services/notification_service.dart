@@ -248,17 +248,10 @@ class NotificationService {
     required String sellerName,
     required String orderId,
   }) async {
-    // Notify Customer
     const String custTitle = '✅ Order Approved & Ready!';
     final String custBody = '$sellerName approved $orderId. It is ready for delivery!';
 
-    await showSystemNotification(
-      id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      title: custTitle,
-      body: custBody,
-      payload: 'customer_order_ready',
-    );
-
+    // Save persistent notification log for Customer
     await saveNotificationForUser(
       recipientKey: 'customer_${customerMobile.toLowerCase().trim()}',
       title: custTitle,
