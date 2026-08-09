@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
@@ -22,11 +23,21 @@ class SellerOrderCartScreen extends StatefulWidget {
 class _SellerOrderCartScreenState extends State<SellerOrderCartScreen> {
   List<Map<String, dynamic>> _cartItems = [];
   bool _isLoading = true;
+  Timer? _cartPoller;
 
   @override
   void initState() {
     super.initState();
     _loadCart();
+    _cartPoller = Timer.periodic(const Duration(milliseconds: 1000), (timer) {
+      _loadCart();
+    });
+  }
+
+  @override
+  void dispose() {
+    _cartPoller?.cancel();
+    super.dispose();
   }
 
   String get _sellerUsername => (widget.seller.username ?? widget.seller.mobile ?? '').trim();
@@ -34,10 +45,14 @@ class _SellerOrderCartScreenState extends State<SellerOrderCartScreen> {
   Future<void> _loadCart() async {
     final items = await CartService.getCartItems(_sellerUsername);
     if (mounted) {
-      setState(() {
-        _cartItems = items;
-        _isLoading = false;
-      });
+      final newJson = jsonEncode(items);
+      final oldJson = jsonEncode(_cartItems);
+      if (newJson != oldJson || _isLoading) {
+        setState(() {
+          _cartItems = items;
+          _isLoading = false;
+        });
+      }
     }
   }
 
