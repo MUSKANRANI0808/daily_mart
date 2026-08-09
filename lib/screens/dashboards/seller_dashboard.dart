@@ -34,6 +34,9 @@ class _SellerDashboardState extends State<SellerDashboard> {
   Timer? _sliderTimer;
   List<Map<String, dynamic>> _sliders = [];
   Map<String, dynamic> _headerThemeConfig = {};
+  List<Map<String, dynamic>> _sellerCategories = [];
+  List<Map<String, dynamic>> _sellerProducts = [];
+  String _selectedCategoryFilter = 'All';
 
   @override
   void initState() {
@@ -41,6 +44,8 @@ class _SellerDashboardState extends State<SellerDashboard> {
     _loadHeaderTheme();
     _loadConversations();
     _loadSellerSliders();
+    _loadSellerCategories();
+    _loadSellerProducts();
     _startSellerDashboardPolling();
   }
 
@@ -105,6 +110,24 @@ class _SellerDashboardState extends State<SellerDashboard> {
     final u = (widget.seller.username ?? '').trim();
     if (u.isNotEmpty) return u;
     return (widget.seller.mobile ?? '').trim();
+  }
+
+  Future<void> _loadSellerCategories() async {
+    final list = await AuthService.getSellerCategories(_sellerUsername);
+    if (mounted) {
+      setState(() {
+        _sellerCategories = list;
+      });
+    }
+  }
+
+  Future<void> _loadSellerProducts() async {
+    final list = await AuthService.getSellerProducts(_sellerUsername);
+    if (mounted) {
+      setState(() {
+        _sellerProducts = list;
+      });
+    }
   }
 
   Future<void> _loadSellerSliders() async {
@@ -404,110 +427,133 @@ class _SellerDashboardState extends State<SellerDashboard> {
     );
   }
 
-  Widget _buildFilterBar() {
-    final allCount = _conversations.length;
-    final pendingCount = _conversations.where((c) => c['is_ready'] != true).length;
-    final readyCount = _conversations.where((c) => c['is_ready'] == true).length;
+  Widget _buildCategoriesSection() {
+    if (_sellerCategories.isEmpty) return const SizedBox.shrink();
 
-    return Container(
-      margin: const EdgeInsets.only(top: 6, bottom: 4),
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE2E8F0).withValues(alpha: 0.7),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          _buildFilterChip(
-            id: 'all',
-            label: 'All',
-            count: allCount,
-            activeColor: const Color(0xFF0F172A),
-          ),
-          const SizedBox(width: 3),
-          _buildFilterChip(
-            id: 'pending',
-            label: 'Pending',
-            count: pendingCount,
-            activeColor: const Color(0xFFD97706),
-          ),
-          const SizedBox(width: 3),
-          _buildFilterChip(
-            id: 'ready',
-            label: 'Ready',
-            count: readyCount,
-            activeColor: const Color(0xFF059669),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilterChip({
-    required String id,
-    required String label,
-    required int count,
-    required Color activeColor,
-  }) {
-    final isSelected = _selectedFilter == id;
-
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _selectedFilter = id;
-          });
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeInOut,
-          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-          decoration: BoxDecoration(
-            color: isSelected ? activeColor : Colors.transparent,
-            borderRadius: BorderRadius.circular(9),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: activeColor.withValues(alpha: 0.25),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
-          ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                label,
+              const Text(
+                'Explore Categories 📁',
                 style: TextStyle(
-                  color: isSelected ? Colors.white : const Color(0xFF475569),
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                  fontSize: 12,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
                 ),
               ),
-              const SizedBox(width: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? Colors.white.withValues(alpha: 0.22)
-                      : Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '$count',
-                  style: TextStyle(
-                    color: isSelected ? Colors.white : const Color(0xFF334155),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 10.5,
+              if (_selectedCategoryFilter != 'All')
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      _selectedCategoryFilter = 'All';
+                    });
+                  },
+                  child: const Text(
+                    'Clear Filter',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFFEF4444),
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
         ),
-      ),
+        SizedBox(
+          height: 102,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            itemCount: _sellerCategories.length,
+            itemBuilder: (ctx, idx) {
+              final cat = _sellerCategories[idx];
+              final cName = (cat['name'] ?? '').toString();
+              final cImg = (cat['image_url'] ?? '🏷️').toString();
+              final isSel = _selectedCategoryFilter.toLowerCase() == cName.toLowerCase();
+
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedCategoryFilter = isSel ? 'All' : cName;
+                  });
+                },
+                child: Container(
+                  width: 74,
+                  margin: const EdgeInsets.symmetric(horizontal: 5),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Round Shape Outer Circle
+                      Container(
+                        width: 62,
+                        height: 62,
+                        padding: const EdgeInsets.all(2.5),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: isSel
+                                ? [const Color(0xFF8B5CF6), const Color(0xFFC084FC)]
+                                : [const Color(0xFFCBD5E1), const Color(0xFFE2E8F0)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: isSel ? const Color(0xFF8B5CF6).withValues(alpha: 0.35) : Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white,
+                          ),
+                          child: ClipOval(
+                            child: cImg.startsWith('data:image')
+                                ? Image.memory(
+                                    base64Decode(cImg.split(',').last),
+                                    fit: BoxFit.cover,
+                                    width: 56,
+                                    height: 56,
+                                  )
+                                : Center(
+                                    child: Text(
+                                      cImg,
+                                      style: const TextStyle(fontSize: 26),
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      // Category Name Text Below Round Circle
+                      Text(
+                        cName,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: isSel ? FontWeight.bold : FontWeight.w600,
+                          color: isSel ? const Color(0xFF8B5CF6) : const Color(0xFF334155),
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -618,67 +664,81 @@ class _SellerDashboardState extends State<SellerDashboard> {
           ),
         ),
 
-            // 3D Banner Carousel Slider placed OUTSIDE green header, right ABOVE Customer Conversations & Orders
+            // 3D Banner Carousel Slider
             if (_sliders.isNotEmpty) ...[
               const SizedBox(height: 12),
               _buildSliderSection(),
               const SizedBox(height: 8),
             ],
 
+            // Round Shape Categories Carousel placed directly BELOW Sliders
+            _buildCategoriesSection(),
+
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Hide Seller Management Area card when conversations exist
-              if (_conversations.isEmpty) ...[
-                Card(
-                  elevation: 1,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  color: Colors.white,
-                  child: const Padding(
-                    padding: EdgeInsets.all(20.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+                  if (_conversations.isEmpty) ...[
+                    Card(
+                      elevation: 1,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      color: Colors.white,
+                      child: const Padding(
+                        padding: EdgeInsets.all(20.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.store_rounded, color: Color(0xFF8B5CF6)),
-                            SizedBox(width: 8),
+                            Row(
+                              children: [
+                                Icon(Icons.storefront_rounded, color: Color(0xFF8B5CF6)),
+                                SizedBox(width: 8),
+                                Text(
+                                  'E-Commerce Storefront',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 10),
                             Text(
-                              'Seller Management Area',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF0F172A),
-                              ),
+                              'No customer orders yet. When customers browse your store and place orders, they will appear here automatically!',
+                              style: TextStyle(fontSize: 14, color: Colors.black54),
                             ),
                           ],
                         ),
-                        SizedBox(height: 10),
-                        Text(
-                          'No customer messages yet. When customers search for your store and place orders, they will appear here automatically!',
-                          style: TextStyle(fontSize: 14, color: Colors.black54),
-                        ),
-                      ],
+                      ),
                     ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // E-Commerce Storefront Customer Orders Section
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Recent Customer Orders 🛍️',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      Text(
+                        '${filteredList.length} Active',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF8B5CF6),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 20),
-              ],
-
-              // Customer Orders Header
-              const Text(
-                'Customer Conversations & Orders',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-
-              // Filter Bar (All, Pending, Ready)
-              _buildFilterBar(),
+                  const SizedBox(height: 10),
 
               // Conversation list
               _isLoading
