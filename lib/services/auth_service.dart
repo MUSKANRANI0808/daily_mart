@@ -860,6 +860,9 @@ class AuthService {
             for (var item in list) {
               if (item['id'] == messageId || item['id'].toString() == msgIdStr) {
                 item['order_status'] = orderStatus;
+                if (orderStatus.toLowerCase() != 'cancelled' && orderStatus.toLowerCase() != 'rejected') {
+                  item.remove('cancel_reason');
+                }
                 modified = true;
               }
             }

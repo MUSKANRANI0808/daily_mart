@@ -862,12 +862,10 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
       final status = (msg['order_status'] ?? '').toString().trim().toLowerCase();
       final delStatus = (msg['delivery_status'] ?? '').toString().trim().toLowerCase();
 
-      final bool isCancelled = status == 'cancelled' ||
-          status == 'rejected' ||
-          delStatus == 'cancelled' ||
-          msg['cancel_reason'] != null;
-
+      final bool isApproved = status == 'ready' || status == 'approved' || status == 'processing';
       final bool isDelivered = status == 'delivered' || delStatus == 'delivered';
+      final bool isOutForDelivery = delStatus == 'out_for_delivery' || delStatus == 'out for delivery' || status == 'out for delivery';
+      final bool isCancelled = (status == 'cancelled' || status == 'rejected' || delStatus == 'cancelled') && !isApproved && !isDelivered && !isOutForDelivery;
 
       if (_selectedOrderFilter == 'Pending') {
         return !isDelivered && !isCancelled;
@@ -943,10 +941,9 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
         final lowerStatus = orderStatus.toLowerCase();
         final lowerDelStatus = delStatus.toLowerCase();
 
-        final bool isCancelled = lowerStatus == 'cancelled' ||
-            lowerStatus == 'rejected' ||
-            lowerDelStatus == 'cancelled' ||
-            msg['cancel_reason'] != null;
+        final bool isApproved = lowerStatus == 'ready' ||
+            lowerStatus == 'approved' ||
+            lowerStatus == 'processing';
 
         final bool isDelivered = lowerStatus == 'delivered' ||
             lowerDelStatus == 'delivered';
@@ -955,9 +952,12 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
             lowerDelStatus == 'out for delivery' ||
             lowerStatus == 'out for delivery';
 
-        final bool isApproved = lowerStatus == 'ready' ||
-            lowerStatus == 'approved' ||
-            lowerStatus == 'processing';
+        final bool isCancelled = (lowerStatus == 'cancelled' ||
+            lowerStatus == 'rejected' ||
+            lowerDelStatus == 'cancelled') &&
+            !isApproved &&
+            !isDelivered &&
+            !isOutForDelivery;
 
         String badgeText = 'Pending';
         Color badgeBgColor = const Color(0xFFFEF9C3);
@@ -980,7 +980,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
           badgeTextColor = const Color(0xFF1D4ED8);
           badgeBorder = Border.all(color: const Color(0xFF93C5FD));
         } else if (isApproved) {
-          badgeText = 'Approved';
+          badgeText = (lowerStatus == 'ready' || lowerStatus == 'approved') ? 'Approved' : 'Processing';
           badgeBgColor = const Color(0xFFE0E7FF);
           badgeTextColor = const Color(0xFF4338CA);
           badgeBorder = Border.all(color: const Color(0xFFA5B4FC));
