@@ -8,10 +8,12 @@ import 'screens/seller/seller_main_nav_screen.dart';
 import 'screens/customer/customer_main_nav_screen.dart';
 
 import 'services/notification_service.dart';
+import 'services/background_notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await NotificationService.initialize();
+  await BackgroundNotificationService.initialize();
   final currentDeliveryBoy = await AuthService.getDeliveryBoySession();
   final currentUser = await AuthService.getCurrentUser();
   runApp(DailyMartApp(initialUser: currentUser, initialDeliveryBoy: currentDeliveryBoy));
