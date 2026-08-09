@@ -107,8 +107,10 @@ $conn->query("CREATE TABLE IF NOT EXISTS locations (
     name VARCHAR(255) NOT NULL,
     description TEXT DEFAULT NULL,
     unit VARCHAR(50) NOT NULL DEFAULT 'Pcs',
+    category VARCHAR(255) DEFAULT NULL,
     qty INT NOT NULL DEFAULT 1,
     rate DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    image_url LONGTEXT DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX(seller_username)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");

@@ -892,7 +892,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                         onTap: () async {
                           try {
                             final picker = ImagePicker();
-                            final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 600);
+                            final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 40, maxWidth: 320, maxHeight: 320);
                             if (picked != null) {
                               final bytes = await picked.readAsBytes();
                               final base64Str = 'data:image/jpeg;base64,${base64Encode(bytes)}';
@@ -941,7 +941,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                               onPressed: () async {
                                 try {
                                   final picker = ImagePicker();
-                                  final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 600);
+                                  final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 40, maxWidth: 320, maxHeight: 320);
                                   if (picked != null) {
                                     final bytes = await picked.readAsBytes();
                                     final base64Str = 'data:image/jpeg;base64,${base64Encode(bytes)}';
