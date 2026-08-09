@@ -38,27 +38,19 @@ class ProductDetailBottomSheet extends StatefulWidget {
 
 class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
   late TextEditingController _qtyController;
+  late String _baseUnit;
   late String _selectedUnit;
   late int _quantity;
   late double _baseRate;
-
-  final List<String> _defaultUnits = [
-    'Pcs',
-    'Kg',
-    'Gram',
-    'L',
-    'Packet',
-    'Box',
-    'Dozen',
-    'Bottle',
-    'Can',
-  ];
+  late List<String> _compatibleUnits;
 
   @override
   void initState() {
     super.initState();
     final defaultProductUnit = (widget.product['unit'] ?? 'Pcs').toString().trim();
-    _selectedUnit = defaultProductUnit.isNotEmpty ? defaultProductUnit : 'Pcs';
+    _baseUnit = defaultProductUnit.isNotEmpty ? defaultProductUnit : 'Pcs';
+    _compatibleUnits = _getCompatibleUnits(_baseUnit);
+    _selectedUnit = _compatibleUnits.contains(_baseUnit) ? _baseUnit : _compatibleUnits.first;
     _quantity = (widget.product['qty'] as num?)?.toInt() ?? 1;
     if (_quantity < 1) _quantity = 1;
     _baseRate = (widget.product['rate'] as num?)?.toDouble() ?? 0.0;
@@ -71,6 +63,25 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
     super.dispose();
   }
 
+  /// Filter compatible units based on seller's base unit
+  List<String> _getCompatibleUnits(String baseUnitRaw) {
+    final u = baseUnitRaw.trim().toLowerCase();
+
+    // Weight Category: Kg, Gram, gm, g
+    if (u == 'kg' || u == 'gram' || u == 'gm' || u == 'g') {
+      return ['Kg', 'Gram'];
+    }
+
+    // Volume / Liquid Category: L, Liter, Litre, Ml, ml
+    if (u == 'l' || u == 'liter' || u == 'litre' || u == 'ml') {
+      return ['L', 'Ml'];
+    }
+
+    // Specific / Discrete Category (Pcs, Packet, Box, Dozen, Bottle, Can, etc.)
+    // Show ONLY the seller's specific base unit!
+    return [baseUnitRaw.trim().isNotEmpty ? baseUnitRaw.trim() : 'Pcs'];
+  }
+
   void _updateQty(int newQty) {
     if (newQty < 1) return;
     setState(() {
@@ -80,7 +91,94 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
     });
   }
 
-  double get _calculatedTotal => _baseRate * _quantity;
+  void _onUnitChanged(String newUnit) {
+    if (newUnit == _selectedUnit) return;
+
+    final oldIsSmall = _selectedUnit.toLowerCase() == 'gram' || _selectedUnit.toLowerCase() == 'ml';
+    final newIsSmall = newUnit.toLowerCase() == 'gram' || newUnit.toLowerCase() == 'ml';
+
+    int defaultNewQty = _quantity;
+    if (!oldIsSmall && newIsSmall) {
+      defaultNewQty = 500;
+    } else if (oldIsSmall && !newIsSmall) {
+      defaultNewQty = 1;
+    }
+
+    setState(() {
+      _selectedUnit = newUnit;
+      _quantity = defaultNewQty;
+      _qtyController.text = _quantity.toString();
+    });
+  }
+
+  /// Precise Unit Conversion Math
+  double get _effectiveBaseQty {
+    final b = _baseUnit.trim().toLowerCase();
+    final s = _selectedUnit.trim().toLowerCase();
+    final q = _quantity.toDouble();
+
+    // Base is Kg
+    if (b == 'kg') {
+      if (s == 'gram' || s == 'gm' || s == 'g') {
+        return q / 1000.0;
+      }
+      return q;
+    }
+
+    // Base is Gram / g / gm
+    if (b == 'gram' || b == 'gm' || b == 'g') {
+      if (s == 'kg') {
+        return q * 1000.0;
+      }
+      return q;
+    }
+
+    // Base is L / Liter / Litre
+    if (b == 'l' || b == 'liter' || b == 'litre') {
+      if (s == 'ml') {
+        return q / 1000.0;
+      }
+      return q;
+    }
+
+    // Base is Ml
+    if (b == 'ml') {
+      if (s == 'l' || s == 'liter' || s == 'litre') {
+        return q * 1000.0;
+      }
+      return q;
+    }
+
+    return q;
+  }
+
+  double get _calculatedTotal => _baseRate * _effectiveBaseQty;
+
+  String get _formulaText {
+    final b = _baseUnit.trim();
+    final s = _selectedUnit.trim();
+    final rateStr = _baseRate % 1 == 0 ? _baseRate.toInt().toString() : _baseRate.toStringAsFixed(2);
+
+    if (b.toLowerCase() == 'kg' && (s.toLowerCase() == 'gram' || s.toLowerCase() == 'gm' || s.toLowerCase() == 'g')) {
+      final baseEquiv = _effectiveBaseQty % 1 == 0 ? _effectiveBaseQty.toInt().toString() : _effectiveBaseQty.toStringAsFixed(3);
+      return '₹$rateStr / $b × $_quantity $s ($baseEquiv $b)';
+    }
+
+    if ((b.toLowerCase() == 'l' || b.toLowerCase() == 'liter') && s.toLowerCase() == 'ml') {
+      final baseEquiv = _effectiveBaseQty % 1 == 0 ? _effectiveBaseQty.toInt().toString() : _effectiveBaseQty.toStringAsFixed(3);
+      return '₹$rateStr / $b × $_quantity $s ($baseEquiv $b)';
+    }
+
+    return '₹$rateStr × $_quantity $s';
+  }
+
+  List<int> get _presetQuantities {
+    final s = _selectedUnit.trim().toLowerCase();
+    if (s == 'gram' || s == 'gm' || s == 'g' || s == 'ml') {
+      return [50, 100, 250, 500, 1000];
+    }
+    return [1, 2, 5, 10, 50, 100];
+  }
 
   Widget _buildProductImageWidget(String rawImg, {double emojiSize = 54}) {
     final img = rawImg.trim();
@@ -137,10 +235,8 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
     final imgVal = (widget.product['image'] ?? '').toString().trim();
     final img = imgUrl.isNotEmpty ? imgUrl : (imgVal.isNotEmpty ? imgVal : '📦');
 
-    final availableUnits = List<String>.from(_defaultUnits);
-    if (_selectedUnit.isNotEmpty && !availableUnits.contains(_selectedUnit)) {
-      availableUnits.insert(0, _selectedUnit);
-    }
+    final totalStr = _calculatedTotal % 1 == 0 ? _calculatedTotal.toInt().toString() : _calculatedTotal.toStringAsFixed(2);
+    final rateStr = _baseRate % 1 == 0 ? _baseRate.toInt().toString() : _baseRate.toStringAsFixed(2);
 
     return Container(
       decoration: const BoxDecoration(
@@ -236,7 +332,7 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
             ),
             const SizedBox(height: 16),
 
-            // Product Name & Base Rate Section
+            // Product Name & Seller Base Rate Section
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0),
               child: Column(
@@ -261,7 +357,7 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                   Row(
                     children: [
                       Text(
-                        '₹${_baseRate % 1 == 0 ? _baseRate.toInt() : _baseRate.toStringAsFixed(2)}',
+                        '₹$rateStr',
                         style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w900,
@@ -269,11 +365,23 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                         ),
                       ),
                       Text(
-                        ' / $_selectedUnit',
+                        ' / $_baseUnit',
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF64748B),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDCFCE7),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Seller Unit: $_baseUnit',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
                         ),
                       ),
                     ],
@@ -283,7 +391,7 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
             ),
             const Divider(height: 28, indent: 20, endIndent: 20),
 
-            // Unit Selection Section (Clickable Unit Chips)
+            // Unit Selection Section (Only Compatible Units Shown!)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0),
               child: Column(
@@ -303,7 +411,7 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                   Wrap(
                     spacing: 8,
                     runSpacing: 6,
-                    children: availableUnits.map((u) {
+                    children: _compatibleUnits.map((u) {
                       final isSelected = _selectedUnit.toLowerCase() == u.toLowerCase();
                       return ChoiceChip(
                         label: Text(u),
@@ -317,9 +425,7 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                         ),
                         onSelected: (val) {
                           if (val) {
-                            setState(() {
-                              _selectedUnit = u;
-                            });
+                            _onUnitChanged(u);
                           }
                         },
                       );
@@ -330,7 +436,7 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
             ),
             const SizedBox(height: 16),
 
-            // Quantity Selection Counter & Quick Presets Section
+            // Quantity Selection Counter & Unit-Specific Presets Section
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0),
               child: Column(
@@ -420,16 +526,16 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                   ),
                   const SizedBox(height: 10),
 
-                  // Quick Quantity Preset Chips
+                  // Unit-Specific Quantity Preset Chips
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
-                      children: [1, 2, 5, 10, 50, 100].map((presetQty) {
+                      children: _presetQuantities.map((presetQty) {
                         final isSel = _quantity == presetQty;
                         return Padding(
                           padding: const EdgeInsets.only(right: 6.0),
                           child: ActionChip(
-                            label: Text('$presetQty Qty'),
+                            label: Text('$presetQty $_selectedUnit'),
                             backgroundColor: isSel ? const Color(0xFFEDE9FE) : const Color(0xFFF8FAFC),
                             side: BorderSide(
                               color: isSel ? const Color(0xFF8B5CF6) : const Color(0xFFE2E8F0),
@@ -451,7 +557,7 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
             ),
             const SizedBox(height: 16),
 
-            // Live Calculated Amount Box
+            // Live Converted Total Price Calculation Box
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 20),
               padding: const EdgeInsets.all(14),
@@ -463,22 +569,26 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Total Calculated Price:',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF047857)),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '₹${_baseRate % 1 == 0 ? _baseRate.toInt() : _baseRate} × $_quantity $_selectedUnit',
-                        style: const TextStyle(fontSize: 11.5, color: Color(0xFF065F46)),
-                      ),
-                    ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Total Calculated Price:',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF047857)),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _formulaText,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11.5, color: Color(0xFF065F46), fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Text(
-                    '₹${_calculatedTotal % 1 == 0 ? _calculatedTotal.toInt() : _calculatedTotal.toStringAsFixed(2)}',
+                    '₹$totalStr',
                     style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w900,
@@ -497,7 +607,10 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                 onPressed: () async {
                   await CartService.addToCart(
                     sellerUsername: widget.sellerUsername,
-                    product: widget.product,
+                    product: {
+                      ...widget.product,
+                      'rate': _baseRate,
+                    },
                     selectedUnit: _selectedUnit,
                     quantity: _quantity,
                   );
@@ -514,7 +627,7 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                '✓ Added "$name" ($_quantity $_selectedUnit - ₹${_calculatedTotal.toInt()}) to Order List!',
+                                '✓ Added "$name" ($_quantity $_selectedUnit - ₹$totalStr) to Order List!',
                                 style: const TextStyle(fontWeight: FontWeight.bold),
                               ),
                             ),
@@ -530,7 +643,7 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                 },
                 icon: const Icon(Icons.add_shopping_cart_rounded, color: Colors.white),
                 label: Text(
-                  'Add to Order List (₹${_calculatedTotal % 1 == 0 ? _calculatedTotal.toInt() : _calculatedTotal.toStringAsFixed(2)})',
+                  'Add to Order List (₹$totalStr)',
                   style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 style: ElevatedButton.styleFrom(
