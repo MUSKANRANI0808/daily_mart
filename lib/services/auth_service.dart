@@ -4243,44 +4243,13 @@ class AuthService {
   // SELLER CATEGORIES CRUD API & LOCAL CACHE
   // ==========================================
 
-  /// Default preset store categories with built-in icons/images
-  static List<Map<String, dynamic>> get defaultStoreCategories => [
-    {
-      'id': 101,
-      'name': 'Snacks & Munchies',
-      'image_url': '🍿',
-    },
-    {
-      'id': 102,
-      'name': 'Grocery & Oils',
-      'image_url': '🛢️',
-    },
-    {
-      'id': 103,
-      'name': 'Spices & Masalas',
-      'image_url': '🌶️',
-    },
-    {
-      'id': 104,
-      'name': 'Grains & Pulses',
-      'image_url': '🌾',
-    },
-    {
-      'id': 105,
-      'name': 'Beverages & Drinks',
-      'image_url': '🥤',
-    },
-    {
-      'id': 106,
-      'name': 'Dairy & Bakery',
-      'image_url': '🥛',
-    },
-  ];
+  /// Default store categories (Empty by default until created by seller)
+  static List<Map<String, dynamic>> get defaultStoreCategories => [];
 
   /// Get Custom Categories for Seller (from VPS Database with local cache fallback)
   static Future<List<Map<String, dynamic>>> getSellerCategories(String sellerUsername) async {
     final cleanSeller = sellerUsername.trim();
-    if (cleanSeller.isEmpty) return defaultStoreCategories;
+    if (cleanSeller.isEmpty) return [];
 
     final prefs = await SharedPreferences.getInstance();
     final cacheKey = 'seller_categories_$cleanSeller';
@@ -4290,11 +4259,9 @@ class AuthService {
       final res = await VpsApiService.get('get-seller-categories&seller_username=$cleanSeller');
       if (res != null && res['success'] == true && res['categories'] is List) {
         final List<dynamic> rawList = res['categories'];
-        if (rawList.isNotEmpty) {
-          final List<Map<String, dynamic>> categories = rawList.map((e) => Map<String, dynamic>.from(e)).toList();
-          await prefs.setString(cacheKey, jsonEncode(categories));
-          return categories;
-        }
+        final List<Map<String, dynamic>> categories = rawList.map((e) => Map<String, dynamic>.from(e)).toList();
+        await prefs.setString(cacheKey, jsonEncode(categories));
+        return categories;
       }
     } catch (_) {}
 
@@ -4303,13 +4270,11 @@ class AuthService {
       final str = prefs.getString(cacheKey);
       if (str != null && str.isNotEmpty) {
         final List<dynamic> list = jsonDecode(str);
-        if (list.isNotEmpty) {
-          return list.map((e) => Map<String, dynamic>.from(e)).toList();
-        }
+        return list.map((e) => Map<String, dynamic>.from(e)).toList();
       }
     } catch (_) {}
 
-    return defaultStoreCategories;
+    return [];
   }
 
   /// Add Custom Category for Seller
@@ -4348,12 +4313,8 @@ class AuthService {
       final str = prefs.getString(cacheKey);
       if (str != null && str.isNotEmpty) {
         categories = (jsonDecode(str) as List).map((e) => Map<String, dynamic>.from(e)).toList();
-      } else {
-        categories = List.from(defaultStoreCategories);
       }
-    } catch (_) {
-      categories = List.from(defaultStoreCategories);
-    }
+    } catch (_) {}
 
     bool exists = categories.any((c) => (c['name'] ?? '').toString().trim().toLowerCase() == cleanName.toLowerCase());
     if (!exists) {
