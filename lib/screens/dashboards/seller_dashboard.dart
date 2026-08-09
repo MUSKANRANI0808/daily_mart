@@ -37,6 +37,7 @@ class _SellerDashboardState extends State<SellerDashboard> {
   List<Map<String, dynamic>> _sellerCategories = [];
   List<Map<String, dynamic>> _sellerProducts = [];
   String _selectedCategoryFilter = 'All';
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -545,6 +546,283 @@ class _SellerDashboardState extends State<SellerDashboard> {
     );
   }
 
+  Widget _buildStoreProductsCatalogSection() {
+    List<Map<String, dynamic>> filteredProducts = List.from(_sellerProducts);
+
+    if (_selectedCategoryFilter != 'All') {
+      filteredProducts = filteredProducts.where((p) {
+        final cat = (p['category'] ?? '').toString().trim().toLowerCase();
+        return cat == _selectedCategoryFilter.toLowerCase();
+      }).toList();
+    }
+
+    if (_searchQuery.trim().isNotEmpty) {
+      final q = _searchQuery.trim().toLowerCase();
+      filteredProducts = filteredProducts.where((p) {
+        final name = (p['name'] ?? '').toString().toLowerCase();
+        final desc = (p['description'] ?? '').toString().toLowerCase();
+        return name.contains(q) || desc.contains(q);
+      }).toList();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Search Input Bar
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: TextField(
+            onChanged: (val) {
+              setState(() {
+                _searchQuery = val;
+              });
+            },
+            decoration: const InputDecoration(
+              hintText: 'Search products in store... 🔍',
+              hintStyle: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+              prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF8B5CF6), size: 20),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 14),
+
+        // Section Title Row
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                const Text(
+                  'Store Products 📦',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                if (_selectedCategoryFilter != 'All') ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      _selectedCategoryFilter,
+                      style: const TextStyle(
+                        color: Color(0xFF8B5CF6),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            Text(
+              '${filteredProducts.length} Items',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF64748B),
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 12),
+
+        // Product Grid (2-Column E-Commerce Format)
+        filteredProducts.isEmpty
+            ? Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  children: [
+                    const Icon(Icons.inventory_2_outlined, size: 44, color: Color(0xFFCBD5E1)),
+                    const SizedBox(height: 10),
+                    Text(
+                      _sellerProducts.isEmpty
+                          ? 'No products added to your store yet.'
+                          : 'No products match "${_searchQuery.isNotEmpty ? _searchQuery : _selectedCategoryFilter}".',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 13.5, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 14),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF8B5CF6),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () {
+                        _loadSellerProducts();
+                      },
+                      icon: const Icon(Icons.refresh_rounded, size: 18, color: Colors.white),
+                      label: const Text('Refresh Catalog', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              )
+            : GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 0.72,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                ),
+                itemCount: filteredProducts.length,
+                itemBuilder: (ctx, idx) {
+                  final p = filteredProducts[idx];
+                  final name = (p['name'] ?? '').toString();
+                  final rate = (p['rate'] as num?)?.toDouble() ?? 0.0;
+                  final unit = (p['unit'] ?? 'Pcs').toString();
+                  final qty = (p['qty'] as num?)?.toInt() ?? 1;
+                  final img = (p['image'] ?? p['image_url'] ?? '📦').toString();
+                  final cat = (p['category'] ?? '').toString();
+
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Top Image Container with Stock Tag
+                        Expanded(
+                          child: Stack(
+                            children: [
+                              Container(
+                                width: double.infinity,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                                  child: img.startsWith('data:image')
+                                      ? Image.memory(
+                                          base64Decode(img.split(',').last),
+                                          fit: BoxFit.cover,
+                                          width: double.infinity,
+                                        )
+                                      : Center(
+                                          child: Text(
+                                            img.length <= 4 ? img : '📦',
+                                            style: const TextStyle(fontSize: 40),
+                                          ),
+                                        ),
+                                ),
+                              ),
+                              // Stock Qty Badge
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.65),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    '$qty Qty',
+                                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Bottom Info Section
+                        Padding(
+                          padding: const EdgeInsets.all(10.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (cat.isNotEmpty)
+                                Text(
+                                  cat.toUpperCase(),
+                                  style: const TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF8B5CF6),
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              const SizedBox(height: 2),
+                              Text(
+                                name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13.5,
+                                  color: Color(0xFF0F172A),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    '₹${rate % 1 == 0 ? rate.toInt() : rate.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 15,
+                                      color: Color(0xFF059669),
+                                    ),
+                                  ),
+                                  Text(
+                                    '/ $unit',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF64748B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final filteredList = _filteredConversations;
@@ -664,253 +942,7 @@ class _SellerDashboardState extends State<SellerDashboard> {
 
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Hide Seller Management Area card when conversations exist
-                  if (_conversations.isEmpty) ...[
-                    Card(
-                      elevation: 1,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      color: Colors.white,
-                      child: const Padding(
-                        padding: EdgeInsets.all(20.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.storefront_rounded, color: Color(0xFF8B5CF6)),
-                                SizedBox(width: 8),
-                                Text(
-                                  'E-Commerce Storefront',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF0F172A),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: 10),
-                            Text(
-                              'No customer orders yet. When customers browse your store and place orders, they will appear here automatically!',
-                              style: TextStyle(fontSize: 14, color: Colors.black54),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-
-                  // E-Commerce Storefront Customer Orders Section
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Recent Customer Orders 🛍️',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF0F172A),
-                        ),
-                      ),
-                      Text(
-                        '${filteredList.length} Active',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF8B5CF6),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-
-              // Conversation list
-              _isLoading
-                  ? const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: Color(0xFF8B5CF6))))
-                  : filteredList.isEmpty
-                      ? Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(30.0),
-                            child: Text(
-                              _selectedFilter == 'pending'
-                                  ? 'No pending customer orders.'
-                                  : _selectedFilter == 'ready'
-                                      ? 'No ready customer orders.'
-                                      : 'No customer conversations yet.',
-                              style: const TextStyle(color: Colors.black45, fontWeight: FontWeight.w500),
-                            ),
-                          ),
-                        )
-                      : ListView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: filteredList.length,
-                          itemBuilder: (ctx, idx) {
-                            final item = filteredList[idx];
-                            final custMobile = item['customer_mobile'] ?? 'Customer';
-                            final lastMsg = item['last_message'] ?? '';
-                            final lastTime = item['last_time'] ?? '';
-                            final unreadCount = (item['unread_count'] as num?)?.toInt() ?? 0;
-                            final displayName = item['display_name'] ?? 'Customer';
-                            final isReady = item['is_ready'] == true;
-                            final pendingCount = (item['pending_orders_count'] as num?)?.toInt() ?? 0;
-
-                            return Card(
-                              elevation: 0,
-                              margin: const EdgeInsets.only(bottom: 6),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                side: BorderSide.none,
-                              ),
-                              color: Colors.white,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(12),
-                                onTap: () async {
-                                  await Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => SellerChatScreen(
-                                        seller: widget.seller,
-                                        customerMobile: custMobile,
-                                      ),
-                                    ),
-                                  );
-                                  _loadConversations();
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                  child: Row(
-                                    children: [
-                                      CircleAvatar(
-                                        radius: 20,
-                                        backgroundColor: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
-                                        child: const Icon(Icons.person_rounded, color: Color(0xFF8B5CF6), size: 22),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              displayName,
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 15,
-                                                color: Color(0xFF0F172A),
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                            const SizedBox(height: 3),
-                                            Row(
-                                              children: [
-                                                Expanded(
-                                                  child: Text(
-                                                    lastMsg,
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                    style: const TextStyle(color: Colors.black54, fontSize: 13),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 6),
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                                                  decoration: BoxDecoration(
-                                                    color: isReady
-                                                        ? const Color(0xFF10B981).withValues(alpha: 0.12)
-                                                        : const Color(0xFFF59E0B).withValues(alpha: 0.12),
-                                                    borderRadius: BorderRadius.circular(6),
-                                                  ),
-                                                  child: Row(
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    children: [
-                                                      Icon(
-                                                        isReady ? Icons.check_circle_rounded : Icons.schedule_rounded,
-                                                        size: 10,
-                                                        color: isReady ? const Color(0xFF10B981) : const Color(0xFFD97706),
-                                                      ),
-                                                      const SizedBox(width: 3),
-                                                      Text(
-                                                        isReady ? 'Ready' : 'Pending',
-                                                        style: TextStyle(
-                                                          color: isReady ? const Color(0xFF047857) : const Color(0xFFB45309),
-                                                          fontWeight: FontWeight.bold,
-                                                          fontSize: 10,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Column(
-                                        crossAxisAlignment: CrossAxisAlignment.end,
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Text(
-                                            lastTime.toString().length >= 10
-                                                ? lastTime.toString().substring(11, 16)
-                                                : lastTime.toString(),
-                                            style: const TextStyle(color: Colors.black45, fontSize: 10.5),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              if (pendingCount > 0)
-                                                Container(
-                                                  margin: const EdgeInsets.only(right: 4),
-                                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(0xFFD97706),
-                                                    borderRadius: BorderRadius.circular(9),
-                                                  ),
-                                                  child: Text(
-                                                    '$pendingCount',
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 10,
-                                                      fontWeight: FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                ),
-                                              if (unreadCount > 0)
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(0xFF8B5CF6),
-                                                    borderRadius: BorderRadius.circular(9),
-                                                  ),
-                                                  child: Text(
-                                                    '$unreadCount',
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 10,
-                                                      fontWeight: FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                ],
-              ),
+              child: _buildStoreProductsCatalogSection(),
             ),
           ],
         ),
