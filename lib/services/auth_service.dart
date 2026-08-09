@@ -3956,7 +3956,7 @@ class AuthService {
     return [];
   }
 
-  /// Add a Product for a Seller
+  /// Add a Product for a Seller (VPS API + Local Cache)
   static Future<bool> addSellerProduct({
     required String sellerUsername,
     required String name,
@@ -3965,9 +3965,11 @@ class AuthService {
     String category = '',
     int qty = 1,
     required double rate,
+    String imageUrl = '',
   }) async {
     final cleanSeller = sellerUsername.trim();
     final cleanName = name.trim();
+    final cleanImg = imageUrl.trim();
     if (cleanSeller.isEmpty || cleanName.isEmpty) return false;
 
     Map<String, dynamic>? newProd;
@@ -3982,6 +3984,8 @@ class AuthService {
         'category': category.trim(),
         'qty': qty,
         'rate': rate,
+        'image_url': cleanImg,
+        'image': cleanImg,
       });
 
       if (res != null && res['success'] == true && res['product'] != null) {
@@ -3998,6 +4002,8 @@ class AuthService {
       'category': category.trim(),
       'qty': qty,
       'rate': rate,
+      'image_url': cleanImg.isEmpty ? '📦' : cleanImg,
+      'image': cleanImg.isEmpty ? '📦' : cleanImg,
     };
 
     // 2. Save/Update Local Cache
@@ -4026,9 +4032,11 @@ class AuthService {
     String category = '',
     int qty = 1,
     required double rate,
+    String imageUrl = '',
   }) async {
     final cleanSeller = sellerUsername.trim();
     final cleanName = name.trim();
+    final cleanImg = imageUrl.trim();
     if (id <= 0 || cleanName.isEmpty) return false;
 
     // 1. VPS API Update
@@ -4042,6 +4050,8 @@ class AuthService {
         'category': category.trim(),
         'qty': qty,
         'rate': rate,
+        'image_url': cleanImg,
+        'image': cleanImg,
       });
     } catch (_) {}
 
@@ -4061,6 +4071,10 @@ class AuthService {
             p['category'] = category.trim();
             p['qty'] = qty;
             p['rate'] = rate;
+            if (cleanImg.isNotEmpty) {
+              p['image_url'] = cleanImg;
+              p['image'] = cleanImg;
+            }
           }
         }
         await prefs.setString(cacheKey, jsonEncode(products));

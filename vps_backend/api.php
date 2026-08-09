@@ -118,6 +118,11 @@ if (!$colCheckQty || $colCheckQty->num_rows == 0) {
     @$conn->query("ALTER TABLE seller_products ADD COLUMN qty INT NOT NULL DEFAULT 1");
 }
 
+$colCheckProdImg = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'image_url'");
+if (!$colCheckProdImg || $colCheckProdImg->num_rows == 0) {
+    @$conn->query("ALTER TABLE seller_products ADD COLUMN image_url LONGTEXT DEFAULT NULL");
+}
+
 // 8. Auto-check & create seller_units table if missing
 @$conn->query("CREATE TABLE IF NOT EXISTS seller_units (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -897,13 +902,16 @@ if ($action == 'get-header-theme') {
     }
 
     $colCheckCat = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'category'");
-    if (!$colCheckCat || $colCheckCat->num_rows == 0) {
-        @$conn->query("ALTER TABLE seller_products ADD COLUMN category VARCHAR(255) DEFAULT NULL");
+    $image_url = isset($input['image_url']) ? trim($input['image_url']) : (isset($input['image']) ? trim($input['image']) : '');
+
+    $colCheckProdImg = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'image_url'");
+    if (!$colCheckProdImg || $colCheckProdImg->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_products ADD COLUMN image_url LONGTEXT DEFAULT NULL");
     }
 
-    $stmt = $conn->prepare("INSERT INTO seller_products (seller_username, name, description, unit, category, qty, rate) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    $stmt = $conn->prepare("INSERT INTO seller_products (seller_username, name, description, unit, category, qty, rate, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
     if ($stmt) {
-        $stmt->bind_param("sssssid", $seller_username, $name, $description, $unit, $category, $qty, $rate);
+        $stmt->bind_param("sssssids", $seller_username, $name, $description, $unit, $category, $qty, $rate, $image_url);
         if ($stmt->execute()) {
             $newId = $stmt->insert_id;
             echo json_encode([
@@ -917,7 +925,8 @@ if ($action == 'get-header-theme') {
                     "unit" => $unit,
                     "category" => $category,
                     "qty" => $qty,
-                    "rate" => $rate
+                    "rate" => $rate,
+                    "image_url" => $image_url
                 ]
             ]);
             exit();
@@ -954,15 +963,16 @@ if ($action == 'get-header-theme') {
     $qty = isset($input['qty']) ? (int)$input['qty'] : 1;
     if ($qty <= 0) $qty = 1;
     $rate = isset($input['rate']) ? (float)$input['rate'] : 0.0;
+    $image_url = isset($input['image_url']) ? trim($input['image_url']) : (isset($input['image']) ? trim($input['image']) : '');
 
     if ($id <= 0 || empty($name)) {
         echo json_encode(["success" => false, "message" => "Product ID and name required"]);
         exit();
     }
 
-    $stmt = $conn->prepare("UPDATE seller_products SET name = ?, description = ?, unit = ?, category = ?, qty = ?, rate = ? WHERE id = ?");
+    $stmt = $conn->prepare("UPDATE seller_products SET name = ?, description = ?, unit = ?, category = ?, qty = ?, rate = ?, image_url = ? WHERE id = ?");
     if ($stmt) {
-        $stmt->bind_param("ssssidi", $name, $description, $unit, $category, $qty, $rate, $id);
+        $stmt->bind_param("ssssidsi", $name, $description, $unit, $category, $qty, $rate, $image_url, $id);
         if ($stmt->execute()) {
             echo json_encode(["success" => true, "message" => "Product updated successfully"]);
             exit();

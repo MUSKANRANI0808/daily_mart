@@ -800,6 +800,8 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
         ? safeString(productToEdit['category'])
         : (availableCategoryNames.isNotEmpty ? availableCategoryNames.first : '');
 
+    String prodImageUrl = isEditing ? safeString(productToEdit['image_url'] ?? productToEdit['image'], '📦') : '📦';
+
     if (selectedUnit.isNotEmpty && !availableUnitNames.contains(selectedUnit)) {
       availableUnitNames.insert(0, selectedUnit);
     }
@@ -882,6 +884,105 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                     ],
                   ),
                   const Divider(height: 20),
+
+                  // Product Image Picker Section
+                  Row(
+                    children: [
+                      InkWell(
+                        onTap: () async {
+                          try {
+                            final picker = ImagePicker();
+                            final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 600);
+                            if (picked != null) {
+                              final bytes = await picked.readAsBytes();
+                              final base64Str = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+                              setModalState(() {
+                                prodImageUrl = base64Str;
+                              });
+                            }
+                          } catch (_) {}
+                        },
+                        child: Container(
+                          width: 58,
+                          height: 58,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFF8B5CF6), width: 1.5),
+                          ),
+                          child: prodImageUrl.startsWith('data:image')
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Image.memory(
+                                    base64Decode(prodImageUrl.split(',').last),
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              : Center(
+                                  child: Text(
+                                    prodImageUrl.length <= 4 ? prodImageUrl : '📦',
+                                    style: const TextStyle(fontSize: 26),
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF8B5CF6),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                elevation: 0,
+                              ),
+                              onPressed: () async {
+                                try {
+                                  final picker = ImagePicker();
+                                  final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 600);
+                                  if (picked != null) {
+                                    final bytes = await picked.readAsBytes();
+                                    final base64Str = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+                                    setModalState(() {
+                                      prodImageUrl = base64Str;
+                                    });
+                                  }
+                                } catch (_) {}
+                              },
+                              icon: const Icon(Icons.photo_library_rounded, size: 16, color: Colors.white),
+                              label: const Text('Pick Image from Gallery', style: TextStyle(fontSize: 11.5, color: Colors.white, fontWeight: FontWeight.bold)),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text('Or pick preset icon below:', style: TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: ['🍿', '🛢️', '🌶️', '🌾', '🥤', '🥛', '🍞', '🥩', '🧹', '🍬', '📦', '🏷️', '🍫', '🧼'].map((emoji) {
+                        final isSel = prodImageUrl == emoji;
+                        return InkWell(
+                          onTap: () => setModalState(() => prodImageUrl = emoji),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            margin: const EdgeInsets.only(right: 6),
+                            decoration: BoxDecoration(
+                              color: isSel ? const Color(0xFFDDD6FE) : Colors.transparent,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(emoji, style: const TextStyle(fontSize: 18)),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
 
                   // Product Name Input
                   const Text('Product Name *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
@@ -1159,6 +1260,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           category: selectedCategory,
                           qty: pQty,
                           rate: pRate,
+                          imageUrl: prodImageUrl,
                         );
                       } else {
                         await AuthService.addSellerProduct(
@@ -1169,6 +1271,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           category: selectedCategory,
                           qty: pQty,
                           rate: pRate,
+                          imageUrl: prodImageUrl,
                         );
                       }
 
@@ -1458,6 +1561,8 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           final qty = safeInt(p['qty'], 1);
                           final rate = safeDouble(p['rate'], 0.0);
 
+                          final img = safeString(p['image_url'] ?? p['image'], '📦');
+
                           return Container(
                             margin: const EdgeInsets.only(bottom: 8),
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1480,17 +1585,27 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                                 // Row 1: Full-width Product Name & Description at TOP
                                 Row(
                                   children: [
-                                    CircleAvatar(
-                                      radius: 14,
-                                      backgroundColor: const Color(0xFFEDE9FE),
-                                      child: Text(
-                                        name.isNotEmpty ? name[0].toUpperCase() : 'P',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFF8B5CF6),
-                                          fontSize: 13,
-                                        ),
+                                    Container(
+                                      width: 32,
+                                      height: 32,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEDE9FE),
+                                        borderRadius: BorderRadius.circular(8),
                                       ),
+                                      child: img.startsWith('data:image')
+                                          ? ClipRRect(
+                                              borderRadius: BorderRadius.circular(8),
+                                              child: Image.memory(
+                                                base64Decode(img.split(',').last),
+                                                fit: BoxFit.cover,
+                                              ),
+                                            )
+                                          : Center(
+                                              child: Text(
+                                                img.length <= 4 ? img : (name.isNotEmpty ? name[0].toUpperCase() : '📦'),
+                                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF8B5CF6)),
+                                              ),
+                                            ),
                                     ),
                                     const SizedBox(width: 8),
                                     Expanded(
