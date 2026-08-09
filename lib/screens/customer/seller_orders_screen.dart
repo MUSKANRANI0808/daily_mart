@@ -115,6 +115,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
   List<Map<String, dynamic>> _messages = [];
   List<Map<String, dynamic>> _sliders = [];
   List<Map<String, dynamic>> _products = [];
+  List<Map<String, dynamic>> _rawCategories = [];
   List<String> _categories = [];
   Map<String, dynamic> _headerThemeConfig = {};
   bool _isLoading = true;
@@ -446,14 +447,19 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
 
     final prods = await AuthService.getSellerProducts(widget.sellerUsername);
     final rawCats = await AuthService.getSellerCategories(widget.sellerUsername);
+    final List<Map<String, dynamic>> parsedRawCats = [];
     final List<String> parsedCats = [];
     for (var c in rawCats) {
       if (c is Map) {
+        parsedRawCats.add(Map<String, dynamic>.from(c));
         final name = (c['name'] ?? c['category_name'] ?? '').toString().trim();
         if (name.isNotEmpty && !parsedCats.contains(name)) parsedCats.add(name);
       } else {
         final name = c.toString().trim();
-        if (name.isNotEmpty && !parsedCats.contains(name)) parsedCats.add(name);
+        if (name.isNotEmpty && !parsedCats.contains(name)) {
+          parsedCats.add(name);
+          parsedRawCats.add({'name': name, 'image': '🏷️'});
+        }
       }
     }
     final cartItems = await CartService.getCartItems(widget.sellerUsername);
@@ -464,6 +470,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
         _messages = msgs;
         _sliders = sliders;
         _products = prods;
+        _rawCategories = parsedRawCats;
         _categories = parsedCats;
         _cartBadgeCount = cartCount;
         _isLoading = false;
@@ -1367,43 +1374,9 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                                ),
                              ),
 
-                             // Category Filter Carousel
-                             if (_categories.isNotEmpty) ...[
-                               SingleChildScrollView(
-                                 scrollDirection: Axis.horizontal,
-                                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-                                 child: Row(
-                                   children: [
-                                     'All',
-                                     ..._categories,
-                                   ].map((cat) {
-                                     final isSel = _selectedCategory.toLowerCase() == cat.toLowerCase();
-                                     return Padding(
-                                       padding: const EdgeInsets.only(right: 8.0),
-                                       child: ChoiceChip(
-                                         label: Text(cat),
-                                         selected: isSel,
-                                         selectedColor: const Color(0xFF8B5CF6),
-                                         backgroundColor: Colors.white,
-                                         labelStyle: TextStyle(
-                                           color: isSel ? Colors.white : const Color(0xFF334155),
-                                           fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
-                                           fontSize: 12,
-                                         ),
-                                         onSelected: (val) {
-                                           if (val) {
-                                             setState(() {
-                                               _selectedCategory = cat;
-                                             });
-                                           }
-                                         },
-                                       ),
-                                     );
-                                   }).toList(),
-                                 ),
-                               ),
-                               const SizedBox(height: 8),
-                             ],
+                             // Circular Category Avatars Carousel
+                             _buildCircularCategorySection(),
+                             const SizedBox(height: 8),
 
                              // Store Products Section Header
                              Padding(
@@ -1816,6 +1789,155 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
         );
       },
     );
+  }
+
+  Widget _buildCircularCategorySection() {
+    final List<Map<String, dynamic>> allCatItems = [
+      {'name': 'All', 'image': '🏪'},
+      ..._rawCategories,
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+          child: Text(
+            'Categories 🏷️',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 96,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            itemCount: allCatItems.length,
+            itemBuilder: (ctx, idx) {
+              final cat = allCatItems[idx];
+              final cName = (cat['name'] ?? cat['category_name'] ?? '').toString().trim();
+              final cImg = (cat['image'] ?? cat['image_url'] ?? '').toString().trim();
+              final isSel = _selectedCategory.toLowerCase() == cName.toLowerCase();
+              final ringColor = isSel ? const Color(0xFF8B5CF6) : const Color(0xFFE2E8F0);
+
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedCategory = cName;
+                  });
+                },
+                child: Container(
+                  width: 72,
+                  margin: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Column(
+                    children: [
+                      // Round Avatar Circle Container
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        width: 58,
+                        height: 58,
+                        padding: const EdgeInsets.all(2.5),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
+                          border: Border.all(color: ringColor, width: isSel ? 2.5 : 1.2),
+                          boxShadow: isSel
+                              ? [
+                                  BoxShadow(
+                                    color: const Color(0xFF8B5CF6).withValues(alpha: 0.25),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ]
+                              : [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.03),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                        ),
+                        child: ClipOval(
+                          child: Container(
+                            color: const Color(0xFFF8FAFC),
+                            child: _buildCategoryImageWidget(cImg, emojiSize: 26),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      // Category Name Text Below Round Circle
+                      Text(
+                        cName,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: isSel ? FontWeight.bold : FontWeight.w600,
+                          color: isSel ? const Color(0xFF8B5CF6) : const Color(0xFF334155),
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCategoryImageWidget(String rawImg, {double emojiSize = 26}) {
+    final img = rawImg.trim();
+    if (img.isEmpty) {
+      return Center(child: Text('🏷️', style: TextStyle(fontSize: emojiSize)));
+    }
+
+    if (img.startsWith('http://') || img.startsWith('https://')) {
+      return Image.network(
+        img,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        width: double.infinity,
+        height: double.infinity,
+        errorBuilder: (_, __, ___) => Center(child: Text('🏷️', style: TextStyle(fontSize: emojiSize))),
+      );
+    }
+
+    String base64Str = img;
+    if (img.startsWith('data:image')) {
+      final parts = img.split(',');
+      if (parts.length > 1) {
+        base64Str = parts.last.trim();
+      }
+    }
+
+    if (base64Str.length > 20) {
+      try {
+        final bytes = base64Decode(base64Str);
+        return Image.memory(
+          bytes,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (_, __, ___) => Center(child: Text('🏷️', style: TextStyle(fontSize: emojiSize))),
+        );
+      } catch (_) {}
+    }
+
+    if (img.length <= 4 && img.isNotEmpty) {
+      return Center(child: Text(img, style: TextStyle(fontSize: emojiSize)));
+    }
+
+    return Center(child: Text('🏷️', style: TextStyle(fontSize: emojiSize)));
   }
 }
 
