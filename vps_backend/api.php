@@ -134,6 +134,21 @@ if (!$colCheckQty || $colCheckQty->num_rows == 0) {
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+$colCheckCat = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'category'");
+if (!$colCheckCat || $colCheckCat->num_rows == 0) {
+    @$conn->query("ALTER TABLE seller_products ADD COLUMN category VARCHAR(255) DEFAULT NULL");
+}
+
+// 10. Auto-check & create seller_categories table if missing
+@$conn->query("CREATE TABLE IF NOT EXISTS seller_categories (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    seller_username VARCHAR(100) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    image_url LONGTEXT DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX(seller_username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
 if ($action == 'get-header-theme') {
     $res = $conn->query("SELECT setting_value FROM app_settings WHERE setting_key = 'global_header_theme'");
     if ($res && $row = $res->fetch_assoc()) {
@@ -865,6 +880,7 @@ if ($action == 'get-header-theme') {
     $name = isset($input['name']) ? trim($input['name']) : '';
     $description = isset($input['description']) ? trim($input['description']) : '';
     $unit = isset($input['unit']) ? trim($input['unit']) : 'Pcs';
+    $category = isset($input['category']) ? trim($input['category']) : '';
     $qty = isset($input['qty']) ? (int)$input['qty'] : 1;
     if ($qty <= 0) $qty = 1;
     $rate = isset($input['rate']) ? (float)$input['rate'] : 0.0;
@@ -874,9 +890,14 @@ if ($action == 'get-header-theme') {
         exit();
     }
 
-    $stmt = $conn->prepare("INSERT INTO seller_products (seller_username, name, description, unit, qty, rate) VALUES (?, ?, ?, ?, ?, ?)");
+    $colCheckCat = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'category'");
+    if (!$colCheckCat || $colCheckCat->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_products ADD COLUMN category VARCHAR(255) DEFAULT NULL");
+    }
+
+    $stmt = $conn->prepare("INSERT INTO seller_products (seller_username, name, description, unit, category, qty, rate) VALUES (?, ?, ?, ?, ?, ?, ?)");
     if ($stmt) {
-        $stmt->bind_param("ssssid", $seller_username, $name, $description, $unit, $qty, $rate);
+        $stmt->bind_param("sssssid", $seller_username, $name, $description, $unit, $category, $qty, $rate);
         if ($stmt->execute()) {
             $newId = $stmt->insert_id;
             echo json_encode([
@@ -888,6 +909,7 @@ if ($action == 'get-header-theme') {
                     "name" => $name,
                     "description" => $description,
                     "unit" => $unit,
+                    "category" => $category,
                     "qty" => $qty,
                     "rate" => $rate
                 ]
@@ -922,6 +944,7 @@ if ($action == 'get-header-theme') {
     $name = isset($input['name']) ? trim($input['name']) : '';
     $description = isset($input['description']) ? trim($input['description']) : '';
     $unit = isset($input['unit']) ? trim($input['unit']) : 'Pcs';
+    $category = isset($input['category']) ? trim($input['category']) : '';
     $qty = isset($input['qty']) ? (int)$input['qty'] : 1;
     if ($qty <= 0) $qty = 1;
     $rate = isset($input['rate']) ? (float)$input['rate'] : 0.0;
@@ -931,9 +954,9 @@ if ($action == 'get-header-theme') {
         exit();
     }
 
-    $stmt = $conn->prepare("UPDATE seller_products SET name = ?, description = ?, unit = ?, qty = ?, rate = ? WHERE id = ?");
+    $stmt = $conn->prepare("UPDATE seller_products SET name = ?, description = ?, unit = ?, category = ?, qty = ?, rate = ? WHERE id = ?");
     if ($stmt) {
-        $stmt->bind_param("sssidi", $name, $description, $unit, $qty, $rate, $id);
+        $stmt->bind_param("ssssidi", $name, $description, $unit, $category, $qty, $rate, $id);
         if ($stmt->execute()) {
             echo json_encode(["success" => true, "message" => "Product updated successfully"]);
             exit();
@@ -1040,6 +1063,117 @@ if ($action == 'get-header-theme') {
         }
     }
     echo json_encode(["success" => true, "message" => "Unit deleted"]);
+    exit();
+} elseif ($action == 'get-seller-categories') {
+    $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
+    if (empty($seller_username)) {
+        echo json_encode(["success" => true, "categories" => array()]);
+        exit();
+    }
+
+    $escapedSeller = $conn->real_escape_string($seller_username);
+    $res = $conn->query("SELECT * FROM seller_categories WHERE seller_username = '$escapedSeller' ORDER BY id ASC");
+    $categories = array();
+    if ($res && $res !== true) {
+        while ($row = $res->fetch_assoc()) {
+            $row['id'] = (int)$row['id'];
+            $categories[] = $row;
+        }
+    }
+    echo json_encode(["success" => true, "categories" => $categories]);
+    exit();
+} elseif ($action == 'add-seller-category') {
+    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : '';
+    $name = isset($input['name']) ? trim($input['name']) : '';
+    $image_url = isset($input['image_url']) ? trim($input['image_url']) : '';
+
+    if (empty($seller_username) || empty($name)) {
+        echo json_encode(["success" => false, "message" => "Seller username and category name required"]);
+        exit();
+    }
+
+    $escapedSeller = $conn->real_escape_string($seller_username);
+    $escapedName = $conn->real_escape_string($name);
+    $chk = $conn->query("SELECT id, image_url FROM seller_categories WHERE seller_username = '$escapedSeller' AND name = '$escapedName' LIMIT 1");
+    if ($chk && $row = $chk->fetch_assoc()) {
+        echo json_encode([
+            "success" => true,
+            "message" => "Category already exists",
+            "category" => [
+                "id" => (int)$row['id'],
+                "seller_username" => $seller_username,
+                "name" => $name,
+                "image_url" => $row['image_url']
+            ]
+        ]);
+        exit();
+    }
+
+    $stmt = $conn->prepare("INSERT INTO seller_categories (seller_username, name, image_url) VALUES (?, ?, ?)");
+    if ($stmt) {
+        $stmt->bind_param("sss", $seller_username, $name, $image_url);
+        if ($stmt->execute()) {
+            $newId = $stmt->insert_id;
+            echo json_encode([
+                "success" => true,
+                "message" => "Category added",
+                "category" => [
+                    "id" => $newId,
+                    "seller_username" => $seller_username,
+                    "name" => $name,
+                    "image_url" => $image_url
+                ]
+            ]);
+            exit();
+        }
+    }
+    echo json_encode(["success" => false, "message" => "Failed to add category"]);
+    exit();
+} elseif ($action == 'update-seller-category') {
+    $id = isset($input['id']) ? (int)$input['id'] : 0;
+    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : '';
+    $name = isset($input['name']) ? trim($input['name']) : '';
+    $image_url = isset($input['image_url']) ? trim($input['image_url']) : '';
+
+    if ($id <= 0 || empty($name)) {
+        echo json_encode(["success" => false, "message" => "Category ID and name required"]);
+        exit();
+    }
+
+    if (!empty($image_url)) {
+        $stmt = $conn->prepare("UPDATE seller_categories SET name = ?, image_url = ? WHERE id = ?");
+        if ($stmt) {
+            $stmt->bind_param("ssi", $name, $image_url, $id);
+            $stmt->execute();
+        }
+    } else {
+        $stmt = $conn->prepare("UPDATE seller_categories SET name = ? WHERE id = ?");
+        if ($stmt) {
+            $stmt->bind_param("si", $name, $id);
+            $stmt->execute();
+        }
+    }
+    echo json_encode(["success" => true, "message" => "Category updated"]);
+    exit();
+} elseif ($action == 'delete-seller-category') {
+    $id = isset($input['id']) ? (int)$input['id'] : (isset($_GET['id']) ? (int)$_GET['id'] : 0);
+    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : '';
+    $name = isset($input['name']) ? trim($input['name']) : '';
+
+    if ($id > 0) {
+        $stmt = $conn->prepare("DELETE FROM seller_categories WHERE id = ?");
+        if ($stmt) {
+            $stmt->bind_param("i", $id);
+            $stmt->execute();
+        }
+    } elseif (!empty($seller_username) && !empty($name)) {
+        $stmt = $conn->prepare("DELETE FROM seller_categories WHERE seller_username = ? AND name = ?");
+        if ($stmt) {
+            $stmt->bind_param("ss", $seller_username, $name);
+            $stmt->execute();
+        }
+    }
+    echo json_encode(["success" => true, "message" => "Category deleted"]);
     exit();
 } else {
     echo json_encode(["success" => true, "message" => "Daily Mart API Active"]);
