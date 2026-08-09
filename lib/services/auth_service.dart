@@ -1580,6 +1580,12 @@ class AuthService {
           final idStr = item['id']?.toString() ?? '';
           if (idStr.isNotEmpty && !mergedMap.containsKey(idStr)) {
             mergedMap[idStr] = item;
+          } else if (idStr.isNotEmpty && mergedMap.containsKey(idStr)) {
+            final remoteBg = (mergedMap[idStr]!['bg_image_url'] ?? '').toString().trim();
+            final localBg = (item['bg_image_url'] ?? '').toString().trim();
+            if ((remoteBg.isEmpty || remoteBg == 'none') && localBg.isNotEmpty && localBg != 'none') {
+              mergedMap[idStr]!['bg_image_url'] = localBg;
+            }
           }
         }
 

@@ -419,6 +419,10 @@ if ($action == 'get-header-theme') {
     $sliders = array();
     if ($res && $res !== true) {
         while ($row = $res->fetch_assoc()) {
+            $row['id'] = (int)$row['id'];
+            $row['overlay_dim'] = isset($row['overlay_dim']) ? (float)$row['overlay_dim'] : 0.0;
+            $row['remove_white_bg'] = isset($row['remove_white_bg']) ? (int)$row['remove_white_bg'] : 0;
+            $row['img_fit'] = isset($row['img_fit']) ? $row['img_fit'] : 'cover';
             $sliders[] = $row;
         }
     }
@@ -434,21 +438,56 @@ if ($action == 'get-header-theme') {
     $tag_shape = isset($input['tag_shape']) ? trim($input['tag_shape']) : 'pill';
     $title_color = isset($input['title_color']) ? trim($input['title_color']) : '#FFFFFF';
     $desc_color = isset($input['desc_color']) ? trim($input['desc_color']) : '#E2E8F0';
+    $overlay_dim = isset($input['overlay_dim']) ? (float)$input['overlay_dim'] : 0.0;
+    $remove_white_bg = isset($input['remove_white_bg']) ? (int)$input['remove_white_bg'] : 0;
+    $img_fit = isset($input['img_fit']) ? trim($input['img_fit']) : 'cover';
 
-    if (!empty($seller_username) && !empty($title)) {
-        $stmt = $conn->prepare("INSERT INTO seller_sliders (seller_username, tag, title, description, bg_image_url, tag_bg_color, tag_shape, title_color, desc_color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        if ($stmt) {
-            $stmt->bind_param("sssssssss", $seller_username, $tag, $title, $description, $bg_image_url, $tag_bg_color, $tag_shape, $title_color, $desc_color);
-            if ($stmt->execute()) {
-                echo json_encode(["success" => true, "message" => "Slider saved permanently in database"]);
-                exit();
-            }
+    if (empty($seller_username)) {
+        echo json_encode(["success" => false, "message" => "Seller username required"]);
+        exit();
+    }
+
+    if (empty($title) && empty($tag) && empty($description) && (empty($bg_image_url) || $bg_image_url == 'none')) {
+        echo json_encode(["success" => false, "message" => "Slider content or image required"]);
+        exit();
+    }
+
+    $colCheckOverlay = $conn->query("SHOW COLUMNS FROM seller_sliders LIKE 'overlay_dim'");
+    if (!$colCheckOverlay || $colCheckOverlay->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sliders ADD COLUMN overlay_dim DECIMAL(3,2) DEFAULT 0.00, ADD COLUMN remove_white_bg INT DEFAULT 0, ADD COLUMN img_fit VARCHAR(50) DEFAULT 'cover'");
+    }
+
+    $stmt = $conn->prepare("INSERT INTO seller_sliders (seller_username, tag, title, description, bg_image_url, tag_bg_color, tag_shape, title_color, desc_color, overlay_dim, remove_white_bg, img_fit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    if ($stmt) {
+        $stmt->bind_param("sssssssssdis", $seller_username, $tag, $title, $description, $bg_image_url, $tag_bg_color, $tag_shape, $title_color, $desc_color, $overlay_dim, $remove_white_bg, $img_fit);
+        if ($stmt->execute()) {
+            $newId = $stmt->insert_id;
+            echo json_encode([
+                "success" => true,
+                "message" => "Slider saved permanently in database",
+                "slider" => [
+                    "id" => $newId,
+                    "seller_username" => $seller_username,
+                    "tag" => $tag,
+                    "title" => $title,
+                    "description" => $description,
+                    "bg_image_url" => $bg_image_url,
+                    "tag_bg_color" => $tag_bg_color,
+                    "tag_shape" => $tag_shape,
+                    "title_color" => $title_color,
+                    "desc_color" => $desc_color,
+                    "overlay_dim" => $overlay_dim,
+                    "remove_white_bg" => $remove_white_bg,
+                    "img_fit" => $img_fit,
+                ]
+            ]);
+            exit();
         }
     }
-    echo json_encode(["success" => false, "message" => "Required fields missing or SQL error"]);
+    echo json_encode(["success" => false, "message" => "Failed to add slider"]);
     exit();
 } elseif ($action == 'update-seller-slider') {
-    $slider_id = isset($input['slider_id']) ? (int)$input['slider_id'] : 0;
+    $slider_id = isset($input['slider_id']) ? (int)$input['slider_id'] : (isset($input['id']) ? (int)$input['id'] : 0);
     $tag = isset($input['tag']) ? trim($input['tag']) : '';
     $title = isset($input['title']) ? trim($input['title']) : '';
     $description = isset($input['description']) ? trim($input['description']) : '';
@@ -457,11 +496,14 @@ if ($action == 'get-header-theme') {
     $tag_shape = isset($input['tag_shape']) ? trim($input['tag_shape']) : 'pill';
     $title_color = isset($input['title_color']) ? trim($input['title_color']) : '#FFFFFF';
     $desc_color = isset($input['desc_color']) ? trim($input['desc_color']) : '#E2E8F0';
+    $overlay_dim = isset($input['overlay_dim']) ? (float)$input['overlay_dim'] : 0.0;
+    $remove_white_bg = isset($input['remove_white_bg']) ? (int)$input['remove_white_bg'] : 0;
+    $img_fit = isset($input['img_fit']) ? trim($input['img_fit']) : 'cover';
 
     if ($slider_id > 0) {
-        $stmt = $conn->prepare("UPDATE seller_sliders SET tag = ?, title = ?, description = ?, bg_image_url = ?, tag_bg_color = ?, tag_shape = ?, title_color = ?, desc_color = ? WHERE id = ?");
+        $stmt = $conn->prepare("UPDATE seller_sliders SET tag = ?, title = ?, description = ?, bg_image_url = ?, tag_bg_color = ?, tag_shape = ?, title_color = ?, desc_color = ?, overlay_dim = ?, remove_white_bg = ?, img_fit = ? WHERE id = ?");
         if ($stmt) {
-            $stmt->bind_param("ssssssssi", $tag, $title, $description, $bg_image_url, $tag_bg_color, $tag_shape, $title_color, $desc_color, $slider_id);
+            $stmt->bind_param("ssssssssdisi", $tag, $title, $description, $bg_image_url, $tag_bg_color, $tag_shape, $title_color, $desc_color, $overlay_dim, $remove_white_bg, $img_fit, $slider_id);
             $stmt->execute();
             echo json_encode(["success" => true, "message" => "Slider updated in database"]);
             exit();
