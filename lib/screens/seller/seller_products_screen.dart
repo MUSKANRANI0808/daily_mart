@@ -1344,6 +1344,50 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     );
   }
 
+  Widget _buildProductImageWidget(String rawImg, {double emojiSize = 40, BoxFit fit = BoxFit.cover}) {
+    final img = rawImg.trim();
+    if (img.isEmpty) {
+      return Center(child: Text('📦', style: TextStyle(fontSize: emojiSize)));
+    }
+
+    if (img.startsWith('http://') || img.startsWith('https://')) {
+      return Image.network(
+        img,
+        fit: fit,
+        width: double.infinity,
+        height: double.infinity,
+        errorBuilder: (_, __, ___) => Center(child: Text('📦', style: TextStyle(fontSize: emojiSize))),
+      );
+    }
+
+    String base64Str = img;
+    if (img.startsWith('data:image')) {
+      final parts = img.split(',');
+      if (parts.length > 1) {
+        base64Str = parts.last.trim();
+      }
+    }
+
+    if (base64Str.length > 20) {
+      try {
+        final bytes = base64Decode(base64Str);
+        return Image.memory(
+          bytes,
+          fit: fit,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (_, __, ___) => Center(child: Text('📦', style: TextStyle(fontSize: emojiSize))),
+        );
+      } catch (_) {}
+    }
+
+    if (img.length <= 4 && img.isNotEmpty) {
+      return Center(child: Text(img, style: TextStyle(fontSize: emojiSize)));
+    }
+
+    return Center(child: Text('📦', style: TextStyle(fontSize: emojiSize)));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1594,20 +1638,10 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                                         color: const Color(0xFFEDE9FE),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
-                                      child: img.startsWith('data:image')
-                                          ? ClipRRect(
-                                              borderRadius: BorderRadius.circular(8),
-                                              child: Image.memory(
-                                                base64Decode(img.split(',').last),
-                                                fit: BoxFit.cover,
-                                              ),
-                                            )
-                                          : Center(
-                                              child: Text(
-                                                img.length <= 4 ? img : (name.isNotEmpty ? name[0].toUpperCase() : '📦'),
-                                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF8B5CF6)),
-                                              ),
-                                            ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: _buildProductImageWidget(img, emojiSize: 18),
+                                      ),
                                     ),
                                     const SizedBox(width: 8),
                                     Expanded(

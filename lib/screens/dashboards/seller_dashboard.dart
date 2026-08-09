@@ -546,6 +546,50 @@ class _SellerDashboardState extends State<SellerDashboard> {
     );
   }
 
+  Widget _buildProductImageWidget(String rawImg, {double emojiSize = 40, BoxFit fit = BoxFit.cover}) {
+    final img = rawImg.trim();
+    if (img.isEmpty) {
+      return Center(child: Text('📦', style: TextStyle(fontSize: emojiSize)));
+    }
+
+    if (img.startsWith('http://') || img.startsWith('https://')) {
+      return Image.network(
+        img,
+        fit: fit,
+        width: double.infinity,
+        height: double.infinity,
+        errorBuilder: (_, __, ___) => Center(child: Text('📦', style: TextStyle(fontSize: emojiSize))),
+      );
+    }
+
+    String base64Str = img;
+    if (img.startsWith('data:image')) {
+      final parts = img.split(',');
+      if (parts.length > 1) {
+        base64Str = parts.last.trim();
+      }
+    }
+
+    if (base64Str.length > 20) {
+      try {
+        final bytes = base64Decode(base64Str);
+        return Image.memory(
+          bytes,
+          fit: fit,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (_, __, ___) => Center(child: Text('📦', style: TextStyle(fontSize: emojiSize))),
+        );
+      } catch (_) {}
+    }
+
+    if (img.length <= 4 && img.isNotEmpty) {
+      return Center(child: Text(img, style: TextStyle(fontSize: emojiSize)));
+    }
+
+    return Center(child: Text('📦', style: TextStyle(fontSize: emojiSize)));
+  }
+
   Widget _buildStoreProductsCatalogSection() {
     List<Map<String, dynamic>> filteredProducts = List.from(_sellerProducts);
 
@@ -730,18 +774,7 @@ class _SellerDashboardState extends State<SellerDashboard> {
                                 ),
                                 child: ClipRRect(
                                   borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                                  child: img.startsWith('data:image')
-                                      ? Image.memory(
-                                          base64Decode(img.split(',').last),
-                                          fit: BoxFit.cover,
-                                          width: double.infinity,
-                                        )
-                                      : Center(
-                                          child: Text(
-                                            img.length <= 4 && img.isNotEmpty ? img : '📦',
-                                            style: const TextStyle(fontSize: 40),
-                                          ),
-                                        ),
+                                  child: _buildProductImageWidget(img, emojiSize: 40),
                                 ),
                               ),
                               // Stock Qty Badge
