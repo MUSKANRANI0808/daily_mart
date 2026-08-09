@@ -6,13 +6,16 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
+import '../../services/cart_service.dart';
 import '../../utils/header_theme_helper.dart';
+import '../../widgets/product_detail_bottom_sheet.dart';
 import '../dashboards/customer_dashboard.dart';
 import '../role_selection_screen.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../seller/seller_order_cart_screen.dart';
+import '../seller/seller_sliders_screen.dart';
 import 'customer_chat_screen.dart';
 import 'customer_main_nav_screen.dart';
-import '../seller/seller_sliders_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class AbstractPatternPainter extends CustomPainter {
   final String presetId;
@@ -111,10 +114,15 @@ class CustomerSellerOrdersScreen extends StatefulWidget {
 class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen> {
   List<Map<String, dynamic>> _messages = [];
   List<Map<String, dynamic>> _sliders = [];
+  List<Map<String, dynamic>> _products = [];
+  List<String> _categories = [];
   Map<String, dynamic> _headerThemeConfig = {};
   bool _isLoading = true;
   int _currentSliderPage = 0;
-  String _selectedOrderFilter = 'All'; // 'All', 'Pending', 'Delivered', 'Cancelled'
+  String _selectedCategory = 'All';
+  String _selectedOrderFilter = 'All';
+  String _searchQuery = '';
+  int _cartBadgeCount = 0;
   String _sellerLocation = '';
   final PageController _sliderController = PageController();
 
@@ -436,10 +444,28 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
       } catch (_) {}
     }
 
+    final prods = await AuthService.getSellerProducts(widget.sellerUsername);
+    final rawCats = await AuthService.getSellerCategories(widget.sellerUsername);
+    final List<String> parsedCats = [];
+    for (var c in rawCats) {
+      if (c is Map) {
+        final name = (c['name'] ?? c['category_name'] ?? '').toString().trim();
+        if (name.isNotEmpty && !parsedCats.contains(name)) parsedCats.add(name);
+      } else {
+        final name = c.toString().trim();
+        if (name.isNotEmpty && !parsedCats.contains(name)) parsedCats.add(name);
+      }
+    }
+    final cartItems = await CartService.getCartItems(widget.sellerUsername);
+    final cartCount = CartService.getTotalCount(cartItems);
+
     if (mounted) {
       setState(() {
         _messages = msgs;
         _sliders = sliders;
+        _products = prods;
+        _categories = parsedCats;
+        _cartBadgeCount = cartCount;
         _isLoading = false;
         _hasDraft = hasDraft;
         _draftSnippet = draftSnippet;
@@ -1308,37 +1334,112 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                               _buildSliderSection(),
                               const SizedBox(height: 8),
                             ],
+                              // Search Bar for Store Products
+                             Padding(
+                               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+                               child: TextField(
+                                 onChanged: (val) {
+                                   setState(() {
+                                     _searchQuery = val.trim();
+                                   });
+                                 },
+                                 decoration: InputDecoration(
+                                   hintText: 'Search products in ${widget.sellerName}... 🔍',
+                                   hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                                   prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF8B5CF6)),
+                                   isDense: true,
+                                   contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                   filled: true,
+                                   fillColor: Colors.white,
+                                   border: OutlineInputBorder(
+                                     borderRadius: BorderRadius.circular(16),
+                                     borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                                   ),
+                                   enabledBorder: OutlineInputBorder(
+                                     borderRadius: BorderRadius.circular(16),
+                                     borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                                   ),
+                                   focusedBorder: OutlineInputBorder(
+                                     borderRadius: BorderRadius.circular(16),
+                                     borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 1.8),
+                                   ),
+                                 ),
+                               ),
+                             ),
 
-                            // Section Title Header
-                            const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 2.0),
-                              child: Text(
-                                'Recent Orders',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF0F172A),
-                                ),
-                              ),
-                            ),
+                             // Category Filter Carousel
+                             if (_categories.isNotEmpty) ...[
+                               SingleChildScrollView(
+                                 scrollDirection: Axis.horizontal,
+                                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                                 child: Row(
+                                   children: [
+                                     'All',
+                                     ..._categories,
+                                   ].map((cat) {
+                                     final isSel = _selectedCategory.toLowerCase() == cat.toLowerCase();
+                                     return Padding(
+                                       padding: const EdgeInsets.only(right: 8.0),
+                                       child: ChoiceChip(
+                                         label: Text(cat),
+                                         selected: isSel,
+                                         selectedColor: const Color(0xFF8B5CF6),
+                                         backgroundColor: Colors.white,
+                                         labelStyle: TextStyle(
+                                           color: isSel ? Colors.white : const Color(0xFF334155),
+                                           fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
+                                           fontSize: 12,
+                                         ),
+                                         onSelected: (val) {
+                                           if (val) {
+                                             setState(() {
+                                               _selectedCategory = cat;
+                                             });
+                                           }
+                                         },
+                                       ),
+                                     );
+                                   }).toList(),
+                                 ),
+                               ),
+                               const SizedBox(height: 8),
+                             ],
 
-                            // Premium Segmented Filter Bar Track
-                            _buildSegmentedFilterBar(),
+                             // Store Products Section Header
+                             Padding(
+                               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                               child: Row(
+                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                 children: [
+                                   const Text(
+                                     'Store Products 📦',
+                                     style: TextStyle(
+                                       fontSize: 18,
+                                       fontWeight: FontWeight.bold,
+                                       color: Color(0xFF0F172A),
+                                     ),
+                                   ),
+                                   Text(
+                                     '${_filteredProducts.length} Items Available',
+                                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                                   ),
+                                 ],
+                               ),
+                             ),
 
-                            // Orders List
-                            _isLoading
-                                ? const Center(child: Padding(padding: EdgeInsets.all(30), child: CircularProgressIndicator(color: Color(0xFF8B5CF6))))
-                                : _buildRecentOrdersList(),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+                             // Product Grid Catalog
+                             _buildStoreProductsGrid(),
+                             const SizedBox(height: 80),
+                           ],
+                         ),
+                       ),
+                     ),
+                   ],
+                 ),
+               ),
+             ],
+           ),
+         ),
 
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
@@ -1351,14 +1452,19 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
             );
             return;
           }
+
           await Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => CustomerChatScreen(
+              builder: (_) => SellerOrderCartScreen(
+                seller: UserModel(
+                  id: widget.sellerUsername,
+                  name: widget.sellerName,
+                  mobile: widget.sellerMobile,
+                  username: widget.sellerUsername,
+                  role: UserRole.seller,
+                ),
                 customer: widget.customer,
-                sellerUsername: widget.sellerUsername,
-                sellerName: widget.sellerName,
-                sellerMobile: widget.sellerMobile,
               ),
             ),
           );
@@ -1366,17 +1472,17 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
         },
         backgroundColor: _isBlockedBySeller
             ? const Color(0xFFEF4444)
-            : (_hasDraft ? const Color(0xFFD97706) : const Color(0xFF10B981)),
+            : const Color(0xFF10B981),
         icon: Icon(
           _isBlockedBySeller
               ? Icons.block_rounded
-              : (_hasDraft ? Icons.edit_note_rounded : Icons.chat_bubble_rounded),
+              : Icons.receipt_long_rounded,
           color: Colors.white,
         ),
         label: Text(
           _isBlockedBySeller
               ? 'Seller Blocked'
-              : (_hasDraft ? 'Resume Draft Order' : 'Chat & Order'),
+              : (_cartBadgeCount > 0 ? 'View Order Bill ($_cartBadgeCount Items)' : 'View Order Bill 🧾'),
           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
@@ -1386,7 +1492,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
           color: Colors.white,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withValues(alpha: 0.08),
               blurRadius: 16,
               offset: const Offset(0, -3),
             ),
@@ -1394,10 +1500,26 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
         ),
         child: BottomNavigationBar(
           currentIndex: 0,
-          onTap: (index) {
+          onTap: (index) async {
             if (index == 0) {
-              // Recent Orders page IS the Home Page - Stay on this screen
               return;
+            } else if (index == 1) {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => SellerOrderCartScreen(
+                    seller: UserModel(
+                      id: widget.sellerUsername,
+                      name: widget.sellerName,
+                      mobile: widget.sellerMobile,
+                      username: widget.sellerUsername,
+                      role: UserRole.seller,
+                    ),
+                    customer: widget.customer,
+                  ),
+                ),
+              );
+              _loadData();
             } else {
               Navigator.pushAndRemoveUntil(
                 context,
@@ -1418,13 +1540,30 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
           selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
           unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 11),
           elevation: 0,
-          items: const [
-            BottomNavigationBarItem(
+          items: [
+            const BottomNavigationBarItem(
               icon: Icon(Icons.home_rounded),
               activeIcon: Icon(Icons.home_rounded, size: 26),
               label: 'Home',
             ),
             BottomNavigationBarItem(
+              icon: _cartBadgeCount > 0
+                  ? Badge(
+                      label: Text('$_cartBadgeCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                      backgroundColor: const Color(0xFF10B981),
+                      child: const Icon(Icons.receipt_long_rounded),
+                    )
+                  : const Icon(Icons.receipt_long_rounded),
+              activeIcon: _cartBadgeCount > 0
+                  ? Badge(
+                      label: Text('$_cartBadgeCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                      backgroundColor: const Color(0xFF10B981),
+                      child: const Icon(Icons.receipt_long_rounded, size: 26),
+                    )
+                  : const Icon(Icons.receipt_long_rounded, size: 26),
+              label: 'Order',
+            ),
+            const BottomNavigationBarItem(
               icon: Icon(Icons.person_rounded),
               activeIcon: Icon(Icons.person_rounded, size: 26),
               label: 'Profile',
@@ -1434,7 +1573,250 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
       ),
     ),
   );
- }
+}
+
+  List<Map<String, dynamic>> get _filteredProducts {
+    return _products.where((p) {
+      final name = (p['name'] ?? '').toString().toLowerCase();
+      final cat = (p['category'] ?? '').toString().toLowerCase();
+
+      final matchesSearch = _searchQuery.isEmpty || name.contains(_searchQuery.toLowerCase());
+      final matchesCat = _selectedCategory == 'All' || cat == _selectedCategory.toLowerCase();
+
+      return matchesSearch && matchesCat;
+    }).toList();
+  }
+
+  Widget _buildProductImageWidget(String rawImg, {double emojiSize = 38}) {
+    final img = rawImg.trim();
+    if (img.isEmpty) {
+      return Center(child: Text('📦', style: TextStyle(fontSize: emojiSize)));
+    }
+
+    if (img.startsWith('http://') || img.startsWith('https://')) {
+      return Image.network(
+        img,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        width: double.infinity,
+        height: double.infinity,
+        errorBuilder: (_, __, ___) => Center(child: Text('📦', style: TextStyle(fontSize: emojiSize))),
+      );
+    }
+
+    String base64Str = img;
+    if (img.startsWith('data:image')) {
+      final parts = img.split(',');
+      if (parts.length > 1) {
+        base64Str = parts.last.trim();
+      }
+    }
+
+    if (base64Str.length > 20) {
+      try {
+        final bytes = base64Decode(base64Str);
+        return Image.memory(
+          bytes,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (_, __, ___) => Center(child: Text('📦', style: TextStyle(fontSize: emojiSize))),
+        );
+      } catch (_) {}
+    }
+
+    if (img.length <= 4 && img.isNotEmpty) {
+      return Center(child: Text(img, style: TextStyle(fontSize: emojiSize)));
+    }
+
+    return Center(child: Text('📦', style: TextStyle(fontSize: emojiSize)));
+  }
+
+  Widget _buildStoreProductsGrid() {
+    final filtered = _filteredProducts;
+
+    if (_isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(40),
+          child: CircularProgressIndicator(color: Color(0xFF8B5CF6)),
+        ),
+      );
+    }
+
+    if (filtered.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            children: const [
+              Text('📦', style: TextStyle(fontSize: 48)),
+              SizedBox(height: 12),
+              Text(
+                'No Products Found',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A)),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'This store currently has no items matching your filter.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 0.74,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+      ),
+      itemCount: filtered.length,
+      itemBuilder: (ctx, idx) {
+        final p = filtered[idx];
+        final name = (p['name'] ?? '').toString();
+        final cat = (p['category'] ?? '').toString();
+        final rate = (p['rate'] as num?)?.toDouble() ?? 0.0;
+        final unit = (p['unit'] ?? 'Pcs').toString();
+        final qty = (p['qty'] as num?)?.toInt() ?? 1;
+        final imgUrl = (p['image_url'] ?? '').toString().trim();
+        final imgVal = (p['image'] ?? '').toString().trim();
+        final img = imgUrl.isNotEmpty ? imgUrl : (imgVal.isNotEmpty ? imgVal : '📦');
+
+        return InkWell(
+          onTap: () {
+            showProductDetailBottomSheet(
+              context: context,
+              product: p,
+              sellerUsername: widget.sellerUsername,
+              onCartUpdated: () async {
+                final items = await CartService.getCartItems(widget.sellerUsername);
+                if (mounted) {
+                  setState(() {
+                    _cartBadgeCount = CartService.getTotalCount(items);
+                  });
+                }
+              },
+            );
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Top Image Box with Stock Badge
+                Expanded(
+                  child: Stack(
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                          child: _buildProductImageWidget(img, emojiSize: 40),
+                        ),
+                      ),
+                      // Stock Qty Badge
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.65),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '$qty Qty',
+                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Bottom Info Section
+                Padding(
+                  padding: const EdgeInsets.all(10.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (cat.isNotEmpty)
+                        Text(
+                          cat.toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF8B5CF6),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      const SizedBox(height: 2),
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13.5,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '₹${rate % 1 == 0 ? rate.toInt() : rate.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15,
+                              color: Color(0xFF059669),
+                            ),
+                          ),
+                          Text(
+                            '/ $unit',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 /// Organic Arc Wave Clipper for Pro Header
