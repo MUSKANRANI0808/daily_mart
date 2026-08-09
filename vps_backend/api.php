@@ -951,6 +951,7 @@ if ($action == 'get-header-theme') {
             $row['id'] = (int)$row['id'];
             $row['qty'] = isset($row['qty']) ? (int)$row['qty'] : 1;
             $row['rate'] = (float)$row['rate'];
+            $row['image_url'] = isset($row['image_url']) ? $row['image_url'] : (isset($row['image']) ? $row['image'] : '');
             $products[] = $row;
         }
     }
