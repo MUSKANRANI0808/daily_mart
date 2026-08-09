@@ -4278,10 +4278,11 @@ class AuthService {
   }
 
   /// Add Custom Category for Seller
-  static Future<bool> addSellerCategory(String sellerUsername, String categoryName, String imageUrl) async {
+  static Future<bool> addSellerCategory(String sellerUsername, String categoryName, String imageUrl, {String color = '#8B5CF6'}) async {
     final cleanSeller = sellerUsername.trim();
     final cleanName = categoryName.trim();
     final cleanImg = imageUrl.trim();
+    final cleanColor = color.trim().isEmpty ? '#8B5CF6' : color.trim();
     if (cleanSeller.isEmpty || cleanName.isEmpty) return false;
 
     Map<String, dynamic>? newCat;
@@ -4292,6 +4293,7 @@ class AuthService {
         'seller_username': cleanSeller,
         'name': cleanName,
         'image_url': cleanImg,
+        'color': cleanColor,
       });
       if (res != null && res['success'] == true && res['category'] != null) {
         newCat = Map<String, dynamic>.from(res['category']);
@@ -4303,6 +4305,7 @@ class AuthService {
       'seller_username': cleanSeller,
       'name': cleanName,
       'image_url': cleanImg.isEmpty ? '🏷️' : cleanImg,
+      'color': cleanColor,
     };
 
     // 2. Local Cache Update
@@ -4325,10 +4328,11 @@ class AuthService {
   }
 
   /// Update Custom Category
-  static Future<bool> updateSellerCategory(int id, String sellerUsername, String categoryName, String imageUrl) async {
+  static Future<bool> updateSellerCategory(int id, String sellerUsername, String categoryName, String imageUrl, {String color = '#8B5CF6'}) async {
     final cleanSeller = sellerUsername.trim();
     final cleanName = categoryName.trim();
     final cleanImg = imageUrl.trim();
+    final cleanColor = color.trim().isEmpty ? '#8B5CF6' : color.trim();
     if (cleanName.isEmpty) return false;
 
     try {
@@ -4338,6 +4342,7 @@ class AuthService {
           'seller_username': cleanSeller,
           'name': cleanName,
           'image_url': cleanImg,
+          'color': cleanColor,
         });
       }
     } catch (_) {}
@@ -4353,6 +4358,7 @@ class AuthService {
           if ((c['id'] as num?)?.toInt() == id) {
             c['name'] = cleanName;
             if (cleanImg.isNotEmpty) c['image_url'] = cleanImg;
+            c['color'] = cleanColor;
           }
         }
         await prefs.setString(cacheKey, jsonEncode(categories));

@@ -92,6 +92,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
   void _showManageCategoriesDialog({Function(String)? onCategoryCreated}) {
     final catNameController = TextEditingController();
     String catImageUrl = '🏷️';
+    String selectedRingColor = '#8B5CF6';
 
     showModalBottomSheet(
       context: context,
@@ -235,7 +236,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           if (cName.isEmpty) return;
 
                           catNameController.clear();
-                          await AuthService.addSellerCategory(username, cName, catImageUrl);
+                          await AuthService.addSellerCategory(username, cName, catImageUrl, color: selectedRingColor);
                           final updatedCats = await AuthService.getSellerCategories(username);
 
                           setModalState(() {
@@ -262,26 +263,31 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                   ),
 
                   const SizedBox(height: 10),
-                  // Preset Icons Quick Picker
+                  // Ring Accent Color Picker
                   Row(
                     children: [
-                      const Text('Preset Icons: ', style: TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+                      const Text('Ring Color: ', style: TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
                       Expanded(
                         child: SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
                           child: Row(
-                            children: ['🍿', '🛢️', '🌶️', '🌾', '🥤', '🥛', '🍞', '🥩', '🧹', '🍬', '📦', '🏷️'].map((emoji) {
-                              final isSel = catImageUrl == emoji;
+                            children: [
+                              '#8B5CF6', '#10B981', '#F97316', '#0284C7', '#EC4899', '#F59E0B', '#EF4444', '#06B6D4'
+                            ].map((hex) {
+                              final isSel = selectedRingColor.toLowerCase() == hex.toLowerCase();
+                              final c = Color(int.parse(hex.replaceFirst('#', '0xFF')));
                               return InkWell(
-                                onTap: () => setModalState(() => catImageUrl = emoji),
+                                onTap: () => setModalState(() => selectedRingColor = hex),
                                 child: Container(
-                                  padding: const EdgeInsets.all(4),
+                                  width: 22,
+                                  height: 22,
                                   margin: const EdgeInsets.only(right: 6),
                                   decoration: BoxDecoration(
-                                    color: isSel ? const Color(0xFFBAE6FD) : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(6),
+                                    color: c,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: isSel ? Colors.black : Colors.white, width: isSel ? 2 : 1),
+                                    boxShadow: isSel ? [BoxShadow(color: c.withValues(alpha: 0.5), blurRadius: 4)] : null,
                                   ),
-                                  child: Text(emoji, style: const TextStyle(fontSize: 18)),
                                 ),
                               );
                             }).toList(),
@@ -352,7 +358,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                                       IconButton(
                                         icon: const Icon(Icons.edit_rounded, color: Color(0xFF3B82F6), size: 18),
                                         onPressed: () {
-                                          _showEditCategoryPrompt(ctx, cId, cName, cImg, setModalState);
+                                          _showEditCategoryPrompt(ctx, cId, cName, cImg, safeString(cMap['color'], '#8B5CF6'), setModalState);
                                         },
                                       ),
                                       IconButton(
@@ -394,9 +400,10 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     );
   }
 
-  void _showEditCategoryPrompt(BuildContext parentCtx, int catId, String currentName, String currentImg, StateSetter parentSetModalState) {
+  void _showEditCategoryPrompt(BuildContext parentCtx, int catId, String currentName, String currentImg, String currentColor, StateSetter parentSetModalState) {
     final editController = TextEditingController(text: currentName);
     String editImg = currentImg;
+    String editColor = currentColor.isEmpty ? '#8B5CF6' : currentColor;
 
     showDialog(
       context: parentCtx,
@@ -451,6 +458,37 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Text('Ring Color: ', style: TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: ['#8B5CF6', '#10B981', '#F97316', '#0284C7', '#EC4899', '#F59E0B', '#EF4444', '#06B6D4'].map((hex) {
+                            final isSel = editColor.toLowerCase() == hex.toLowerCase();
+                            final c = Color(int.parse(hex.replaceFirst('#', '0xFF')));
+                            return InkWell(
+                              onTap: () => setDialogState(() => editColor = hex),
+                              child: Container(
+                                width: 22,
+                                height: 22,
+                                margin: const EdgeInsets.only(right: 6),
+                                decoration: BoxDecoration(
+                                  color: c,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: isSel ? Colors.black : Colors.white, width: isSel ? 2 : 1),
+                                  boxShadow: isSel ? [BoxShadow(color: c.withValues(alpha: 0.5), blurRadius: 4)] : null,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
             actions: [
@@ -465,7 +503,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                   if (newName.isNotEmpty) {
                     final username = widget.seller.username ?? '';
                     Navigator.pop(ctx);
-                    await AuthService.updateSellerCategory(catId, username, newName, editImg);
+                    await AuthService.updateSellerCategory(catId, username, newName, editImg, color: editColor);
                     final updatedCats = await AuthService.getSellerCategories(username);
                     parentSetModalState(() {
                       _sellerCategories = updatedCats;

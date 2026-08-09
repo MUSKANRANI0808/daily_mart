@@ -145,9 +145,15 @@ if (!$colCheckCat || $colCheckCat->num_rows == 0) {
     seller_username VARCHAR(100) NOT NULL,
     name VARCHAR(255) NOT NULL,
     image_url LONGTEXT DEFAULT NULL,
+    color VARCHAR(50) DEFAULT '#8B5CF6',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX(seller_username)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+$colCheckCatColor = $conn->query("SHOW COLUMNS FROM seller_categories LIKE 'color'");
+if (!$colCheckCatColor || $colCheckCatColor->num_rows == 0) {
+    @$conn->query("ALTER TABLE seller_categories ADD COLUMN color VARCHAR(50) DEFAULT '#8B5CF6'");
+}
 
 if ($action == 'get-header-theme') {
     $res = $conn->query("SELECT setting_value FROM app_settings WHERE setting_key = 'global_header_theme'");
@@ -1086,6 +1092,7 @@ if ($action == 'get-header-theme') {
     $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : '';
     $name = isset($input['name']) ? trim($input['name']) : '';
     $image_url = isset($input['image_url']) ? trim($input['image_url']) : '';
+    $color = isset($input['color']) ? trim($input['color']) : '#8B5CF6';
 
     if (empty($seller_username) || empty($name)) {
         echo json_encode(["success" => false, "message" => "Seller username and category name required"]);
@@ -1094,7 +1101,7 @@ if ($action == 'get-header-theme') {
 
     $escapedSeller = $conn->real_escape_string($seller_username);
     $escapedName = $conn->real_escape_string($name);
-    $chk = $conn->query("SELECT id, image_url FROM seller_categories WHERE seller_username = '$escapedSeller' AND name = '$escapedName' LIMIT 1");
+    $chk = $conn->query("SELECT id, image_url, color FROM seller_categories WHERE seller_username = '$escapedSeller' AND name = '$escapedName' LIMIT 1");
     if ($chk && $row = $chk->fetch_assoc()) {
         echo json_encode([
             "success" => true,
@@ -1103,15 +1110,16 @@ if ($action == 'get-header-theme') {
                 "id" => (int)$row['id'],
                 "seller_username" => $seller_username,
                 "name" => $name,
-                "image_url" => $row['image_url']
+                "image_url" => $row['image_url'],
+                "color" => !empty($row['color']) ? $row['color'] : '#8B5CF6'
             ]
         ]);
         exit();
     }
 
-    $stmt = $conn->prepare("INSERT INTO seller_categories (seller_username, name, image_url) VALUES (?, ?, ?)");
+    $stmt = $conn->prepare("INSERT INTO seller_categories (seller_username, name, image_url, color) VALUES (?, ?, ?, ?)");
     if ($stmt) {
-        $stmt->bind_param("sss", $seller_username, $name, $image_url);
+        $stmt->bind_param("ssss", $seller_username, $name, $image_url, $color);
         if ($stmt->execute()) {
             $newId = $stmt->insert_id;
             echo json_encode([
@@ -1121,7 +1129,8 @@ if ($action == 'get-header-theme') {
                     "id" => $newId,
                     "seller_username" => $seller_username,
                     "name" => $name,
-                    "image_url" => $image_url
+                    "image_url" => $image_url,
+                    "color" => $color
                 ]
             ]);
             exit();
@@ -1134,6 +1143,7 @@ if ($action == 'get-header-theme') {
     $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : '';
     $name = isset($input['name']) ? trim($input['name']) : '';
     $image_url = isset($input['image_url']) ? trim($input['image_url']) : '';
+    $color = isset($input['color']) ? trim($input['color']) : '#8B5CF6';
 
     if ($id <= 0 || empty($name)) {
         echo json_encode(["success" => false, "message" => "Category ID and name required"]);
@@ -1141,15 +1151,15 @@ if ($action == 'get-header-theme') {
     }
 
     if (!empty($image_url)) {
-        $stmt = $conn->prepare("UPDATE seller_categories SET name = ?, image_url = ? WHERE id = ?");
+        $stmt = $conn->prepare("UPDATE seller_categories SET name = ?, image_url = ?, color = ? WHERE id = ?");
         if ($stmt) {
-            $stmt->bind_param("ssi", $name, $image_url, $id);
+            $stmt->bind_param("sssi", $name, $image_url, $color, $id);
             $stmt->execute();
         }
     } else {
-        $stmt = $conn->prepare("UPDATE seller_categories SET name = ? WHERE id = ?");
+        $stmt = $conn->prepare("UPDATE seller_categories SET name = ?, color = ? WHERE id = ?");
         if ($stmt) {
-            $stmt->bind_param("si", $name, $id);
+            $stmt->bind_param("ssi", $name, $color, $id);
             $stmt->execute();
         }
     }

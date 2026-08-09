@@ -264,10 +264,14 @@ class _SellerDashboardState extends State<SellerDashboard> {
     }
 
     if (mounted) {
-      setState(() {
-        _conversations = convs;
-        _isLoading = false;
-      });
+      final newJson = jsonEncode(convs);
+      final oldJson = jsonEncode(_conversations);
+      if (newJson != oldJson || _isLoading) {
+        setState(() {
+          _conversations = convs;
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -477,6 +481,14 @@ class _SellerDashboardState extends State<SellerDashboard> {
               final cImg = (cat['image_url'] ?? '🏷️').toString();
               final isSel = _selectedCategoryFilter.toLowerCase() == cName.toLowerCase();
 
+              final cColorHex = (cat['color'] ?? cat['ring_color'] ?? '#8B5CF6').toString();
+              Color ringColor;
+              try {
+                ringColor = Color(int.parse(cColorHex.replaceFirst('#', '0xFF')));
+              } catch (_) {
+                ringColor = const Color(0xFF8B5CF6);
+              }
+
               return GestureDetector(
                 onTap: () {
                   setState(() {
@@ -489,48 +501,24 @@ class _SellerDashboardState extends State<SellerDashboard> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Round Shape Outer Circle
-                      Container(
-                        width: 62,
-                        height: 62,
-                        padding: const EdgeInsets.all(2.5),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: isSel
-                                ? [const Color(0xFF8B5CF6), const Color(0xFFC084FC)]
-                                : [const Color(0xFFCBD5E1), const Color(0xFFE2E8F0)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: isSel ? const Color(0xFF8B5CF6).withValues(alpha: 0.35) : Colors.black.withValues(alpha: 0.05),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: Container(
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white,
-                          ),
-                          child: ClipOval(
-                            child: cImg.startsWith('data:image')
-                                ? Image.memory(
-                                    base64Decode(cImg.split(',').last),
-                                    fit: BoxFit.cover,
-                                    width: 56,
-                                    height: 56,
-                                  )
-                                : Center(
-                                    child: Text(
-                                      cImg,
-                                      style: const TextStyle(fontSize: 26),
-                                    ),
+                      // Continuous Rotating Color Ring Outer Circle
+                      RotatingCategoryColorRing(
+                        ringColor: ringColor,
+                        isSelected: isSel,
+                        child: ClipOval(
+                          child: cImg.startsWith('data:image')
+                              ? Image.memory(
+                                  base64Decode(cImg.split(',').last),
+                                  fit: BoxFit.cover,
+                                  width: 54,
+                                  height: 54,
+                                )
+                              : Center(
+                                  child: Text(
+                                    cImg,
+                                    style: const TextStyle(fontSize: 26),
                                   ),
-                          ),
+                                ),
                         ),
                       ),
                       const SizedBox(height: 5),
@@ -540,7 +528,7 @@ class _SellerDashboardState extends State<SellerDashboard> {
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: isSel ? FontWeight.bold : FontWeight.w600,
-                          color: isSel ? const Color(0xFF8B5CF6) : const Color(0xFF334155),
+                          color: isSel ? ringColor : const Color(0xFF334155),
                         ),
                         textAlign: TextAlign.center,
                         maxLines: 2,
@@ -1116,6 +1104,95 @@ class _GroceryFloatingBackgroundParticlesState extends State<GroceryFloatingBack
           }).toList(),
         );
       },
+    );
+  }
+}
+
+class RotatingCategoryColorRing extends StatefulWidget {
+  final Color ringColor;
+  final bool isSelected;
+  final Widget child;
+
+  const RotatingCategoryColorRing({
+    super.key,
+    required this.ringColor,
+    required this.isSelected,
+    required this.child,
+  });
+
+  @override
+  State<RotatingCategoryColorRing> createState() => _RotatingCategoryColorRingState();
+}
+
+class _RotatingCategoryColorRingState extends State<RotatingCategoryColorRing> with SingleTickerProviderStateMixin {
+  late AnimationController _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _anim = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 64,
+      height: 64,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Continuous Spinning Color Gradient Ring
+          RotationTransition(
+            turns: _anim,
+            child: Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: SweepGradient(
+                  colors: [
+                    widget.ringColor.withValues(alpha: 0.15),
+                    widget.ringColor,
+                    widget.ringColor.withValues(alpha: 0.4),
+                    Colors.white,
+                    widget.ringColor,
+                  ],
+                ),
+                boxShadow: widget.isSelected
+                    ? [
+                        BoxShadow(
+                          color: widget.ringColor.withValues(alpha: 0.5),
+                          blurRadius: 10,
+                          spreadRadius: 1,
+                        ),
+                      ]
+                    : null,
+              ),
+            ),
+          ),
+
+          // Inner Avatar with Gap Ring
+          Container(
+            width: 58,
+            height: 58,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white,
+            ),
+            padding: const EdgeInsets.all(2),
+            child: widget.child,
+          ),
+        ],
+      ),
     );
   }
 }
