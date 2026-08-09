@@ -3933,12 +3933,39 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     final cacheKey = 'seller_products_$cleanSeller';
 
+    // Read local cache first for smart image preservation
+    Map<int, String> localImageMap = {};
+    try {
+      final str = prefs.getString(cacheKey);
+      if (str != null && str.isNotEmpty) {
+        final List<dynamic> localList = jsonDecode(str);
+        for (var l in localList) {
+          final id = (l['id'] as num?)?.toInt() ?? 0;
+          final img = (l['image_url'] ?? l['image'] ?? '').toString().trim();
+          if (id > 0 && img.isNotEmpty && img != '📦') {
+            localImageMap[id] = img;
+          }
+        }
+      }
+    } catch (_) {}
+
     // 1. Fetch from VPS API
     try {
       final res = await VpsApiService.get('get-seller-products&seller_username=$cleanSeller');
       if (res != null && res['success'] == true && res['products'] is List) {
         final List<dynamic> rawList = res['products'];
         final List<Map<String, dynamic>> products = rawList.map((e) => Map<String, dynamic>.from(e)).toList();
+
+        // Merge local image if VPS server returned empty image_url
+        for (var p in products) {
+          final pId = (p['id'] as num?)?.toInt() ?? 0;
+          final pImg = (p['image_url'] ?? p['image'] ?? '').toString().trim();
+          if ((pImg.isEmpty || pImg == '📦') && localImageMap.containsKey(pId)) {
+            p['image_url'] = localImageMap[pId];
+            p['image'] = localImageMap[pId];
+          }
+        }
+
         await prefs.setString(cacheKey, jsonEncode(products));
         return products;
       }
@@ -3990,6 +4017,10 @@ class AuthService {
 
       if (res != null && res['success'] == true && res['product'] != null) {
         newProd = Map<String, dynamic>.from(res['product']);
+        if (cleanImg.isNotEmpty) {
+          newProd['image_url'] = cleanImg;
+          newProd['image'] = cleanImg;
+        }
       }
     } catch (_) {}
 

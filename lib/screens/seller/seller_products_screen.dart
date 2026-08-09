@@ -1561,7 +1561,9 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           final qty = safeInt(p['qty'], 1);
                           final rate = safeDouble(p['rate'], 0.0);
 
-                          final img = safeString(p['image_url'] ?? p['image'], '📦');
+                          final imgUrl = safeString(p['image_url']).trim();
+                          final imgVal = safeString(p['image']).trim();
+                          final img = imgUrl.isNotEmpty ? imgUrl : (imgVal.isNotEmpty ? imgVal : '📦');
 
                           return Container(
                             margin: const EdgeInsets.only(bottom: 8),

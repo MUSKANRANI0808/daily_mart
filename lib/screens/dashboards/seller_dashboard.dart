@@ -698,7 +698,9 @@ class _SellerDashboardState extends State<SellerDashboard> {
                   final rate = (p['rate'] as num?)?.toDouble() ?? 0.0;
                   final unit = (p['unit'] ?? 'Pcs').toString();
                   final qty = (p['qty'] as num?)?.toInt() ?? 1;
-                  final img = (p['image'] ?? p['image_url'] ?? '📦').toString();
+                  final imgUrl = (p['image_url'] ?? '').toString().trim();
+                  final imgVal = (p['image'] ?? '').toString().trim();
+                  final img = imgUrl.isNotEmpty ? imgUrl : (imgVal.isNotEmpty ? imgVal : '📦');
                   final cat = (p['category'] ?? '').toString();
 
                   return Container(
@@ -736,7 +738,7 @@ class _SellerDashboardState extends State<SellerDashboard> {
                                         )
                                       : Center(
                                           child: Text(
-                                            img.length <= 4 ? img : '📦',
+                                            img.length <= 4 && img.isNotEmpty ? img : '📦',
                                             style: const TextStyle(fontSize: 40),
                                           ),
                                         ),
