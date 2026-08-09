@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -33,10 +34,63 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
     super.initState();
     _loadCustomerProfileName();
     _markReadAndLoad();
+    _startSellerChatPolling();
+  }
+
+  Timer? _sellerChatTimer;
+  final Set<int> _notifiedMsgIds = {};
+
+  void _startSellerChatPolling() {
+    _sellerChatTimer?.cancel();
+    _sellerChatTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) async {
+      if (!mounted) return;
+      try {
+        final sellerUsername = widget.seller.username ?? '';
+        final msgs = await AuthService.getMessages(
+          sellerUsername: sellerUsername,
+          customerMobile: widget.customerMobile,
+        );
+        await AuthService.annotateMessagesWithLifetimeHierarchy(
+          sellerUsername: sellerUsername,
+          customerMobile: widget.customerMobile,
+          messages: msgs,
+        );
+
+        if (_notifiedMsgIds.isEmpty) {
+          for (var m in msgs) {
+            final id = (m['id'] as num?)?.toInt() ?? 0;
+            if (id > 0) _notifiedMsgIds.add(id);
+          }
+        } else {
+          for (var m in msgs) {
+            final id = (m['id'] as num?)?.toInt() ?? 0;
+            final senderType = (m['sender_type'] ?? '').toString().toLowerCase();
+            if (id > 0 && senderType == 'customer' && !_notifiedMsgIds.contains(id)) {
+              _notifiedMsgIds.add(id);
+              final orderId = (m['order_id'] ?? 'New Order').toString();
+              NotificationService.showSystemNotification(
+                id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+                title: '🛍️ New Order Received!',
+                body: 'Customer $_customerDisplayName (${widget.customerMobile}) placed $orderId.',
+                payload: 'seller_new_order',
+              );
+            }
+          }
+        }
+
+        if (mounted) {
+          setState(() {
+            _messages = msgs;
+            _isLoading = false;
+          });
+        }
+      } catch (_) {}
+    });
   }
 
   @override
   void dispose() {
+    _sellerChatTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }

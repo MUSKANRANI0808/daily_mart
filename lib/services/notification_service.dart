@@ -56,7 +56,7 @@ class NotificationService {
       await initialize();
 
       const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-        'daily_mart_orders_channel',
+        'daily_mart_orders_channel_v2',
         'Order Notifications',
         channelDescription: 'Notifications for order updates, status changes, and deliveries',
         importance: Importance.max,
@@ -64,6 +64,8 @@ class NotificationService {
         ticker: 'Daily Mart Notification',
         playSound: true,
         enableVibration: true,
+        visibility: NotificationVisibility.public,
+        category: AndroidNotificationCategory.message,
         styleInformation: BigTextStyleInformation(''),
       );
 
