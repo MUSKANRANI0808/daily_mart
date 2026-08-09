@@ -52,11 +52,17 @@ class _SellerDashboardState extends State<SellerDashboard> {
 
   Timer? _sellerDashboardPoller;
   final Set<String> _notifiedSellerOrderKeys = {};
+  int _dashboardPollTick = 0;
 
   void _startSellerDashboardPolling() {
     _sellerDashboardPoller?.cancel();
     _sellerDashboardPoller = Timer.periodic(const Duration(milliseconds: 1000), (timer) async {
       if (!mounted) return;
+      _dashboardPollTick++;
+      if (_dashboardPollTick % 2 == 0 && mounted) {
+        _loadSellerProducts();
+        _loadSellerCategories();
+      }
       try {
         final sellerUser = widget.seller.username ?? '';
         final convs = await AuthService.getSellerConversations(sellerUser);

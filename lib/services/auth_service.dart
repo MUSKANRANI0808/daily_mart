@@ -4039,8 +4039,8 @@ class AuthService {
       'category': category.trim(),
       'qty': qty,
       'rate': rate,
-      'image_url': cleanImg.isEmpty ? '📦' : cleanImg,
-      'image': cleanImg.isEmpty ? '📦' : cleanImg,
+      'image_url': cleanImg,
+      'image': cleanImg,
     };
 
     // 2. Save/Update Local Cache
@@ -4108,10 +4108,8 @@ class AuthService {
             p['category'] = category.trim();
             p['qty'] = qty;
             p['rate'] = rate;
-            if (cleanImg.isNotEmpty) {
-              p['image_url'] = cleanImg;
-              p['image'] = cleanImg;
-            }
+            p['image_url'] = cleanImg;
+            p['image'] = cleanImg;
           }
         }
         await prefs.setString(cacheKey, jsonEncode(products));
