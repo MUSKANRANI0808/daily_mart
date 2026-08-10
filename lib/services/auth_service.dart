@@ -4746,6 +4746,16 @@ class AuthService {
         }
       }
 
+      // If normalizedItems is STILL empty, add a default Order Receipt item!
+      if (normalizedItems.isEmpty) {
+        normalizedItems.add({
+          'name': 'Order Receipt ($orderId)',
+          'qty': (m['total_count'] as num?)?.toInt() ?? 1,
+          'unit': 'Item',
+          'amount': totAmt,
+        });
+      }
+
       m['items'] = normalizedItems;
       m['total_amount'] = totAmt;
       m['total_count'] = normalizedItems.isNotEmpty ? normalizedItems.length : 1;

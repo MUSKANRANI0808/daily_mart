@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/cart_service.dart';
@@ -47,10 +48,17 @@ class _SellerOrderCartScreenState extends State<SellerOrderCartScreen> {
 
   Future<String> _getEffectiveCustomerMobile() async {
     final argMobile = (widget.customer?.mobile ?? '').trim();
-    if (argMobile.isNotEmpty) return argMobile;
+    if (argMobile.isNotEmpty && argMobile != 'Customer') return argMobile;
 
     final currentUser = await AuthService.getCurrentUser();
-    return (currentUser?.mobile ?? '').trim();
+    final userMobile = (currentUser?.mobile ?? '').trim();
+    if (userMobile.isNotEmpty && userMobile != 'Customer') return userMobile;
+
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getString('last_logged_in_customer_mobile') ??
+            prefs.getString('user_mobile') ??
+            prefs.getString('customer_mobile') ??
+            '').trim();
   }
 
   Future<void> _loadCart() async {
