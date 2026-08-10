@@ -4811,25 +4811,49 @@ class AuthService {
     // 3. Fetch from VPS MySQL Database messages table (messages/conversations fallback)
     try {
       final queryParam = last10.isNotEmpty ? 'customer_mobile=$last10' : '';
+      final List<Map<String, String>> sellersToQuery = [];
+
       final resConv = await VpsApiService.get('get-customer-conversations&$queryParam');
       if (resConv != null && resConv['success'] == true && resConv['conversations'] != null) {
         final List convs = resConv['conversations'];
         for (final c in convs) {
-          final sellerUser = (c['seller_username'] ?? '').toString().trim();
-          final sellerName = (c['seller_name'] ?? sellerUser).toString();
+          final sUser = (c['seller_username'] ?? '').toString().trim();
+          final sName = (c['seller_name'] ?? sUser).toString();
+          if (sUser.isNotEmpty) {
+            sellersToQuery.add({'username': sUser, 'name': sName});
+          }
+        }
+      }
 
-          if (sellerUser.isNotEmpty && last10.isNotEmpty) {
-            final resMsgs = await VpsApiService.get('get-messages&seller_username=$sellerUser&customer_mobile=$last10');
-            if (resMsgs != null && resMsgs['success'] == true && resMsgs['messages'] != null) {
-              final List msgs = resMsgs['messages'];
-              for (final msg in msgs) {
-                if (msg is Map) {
-                  final Map<String, dynamic> msgMap = Map<String, dynamic>.from(msg);
-                  msgMap['seller_username'] = sellerUser;
-                  msgMap['seller_name'] = sellerName;
-                  addOrUpdateOrder(msgMap);
-                }
-              }
+      // Fallback: If no sellers found from conversations, fetch all sellers list
+      if (sellersToQuery.isEmpty) {
+        final resSellers = await VpsApiService.get('sellers');
+        if (resSellers != null && resSellers['success'] == true && resSellers['sellers'] != null) {
+          final List sellersList = resSellers['sellers'];
+          for (final s in sellersList) {
+            final sUser = (s['username'] ?? '').toString().trim();
+            final sName = (s['name'] ?? sUser).toString();
+            if (sUser.isNotEmpty) {
+              sellersToQuery.add({'username': sUser, 'name': sName});
+            }
+          }
+        }
+      }
+
+      for (final seller in sellersToQuery) {
+        final sellerUser = seller['username']!;
+        final sellerName = seller['name']!;
+        final mobParam = last10.isNotEmpty ? '&customer_mobile=$last10' : '';
+
+        final resMsgs = await VpsApiService.get('get-messages&seller_username=$sellerUser$mobParam');
+        if (resMsgs != null && resMsgs['success'] == true && resMsgs['messages'] != null) {
+          final List msgs = resMsgs['messages'];
+          for (final msg in msgs) {
+            if (msg is Map) {
+              final Map<String, dynamic> msgMap = Map<String, dynamic>.from(msg);
+              msgMap['seller_username'] = sellerUser;
+              msgMap['seller_name'] = sellerName;
+              addOrUpdateOrder(msgMap);
             }
           }
         }
