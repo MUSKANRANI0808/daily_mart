@@ -4615,6 +4615,98 @@ class AuthService {
 
     final Map<String, Map<String, dynamic>> mergedMap = {};
 
+    // Helper to add/merge order into mergedMap
+    void addOrUpdateOrder(Map<String, dynamic> rawOrder) {
+      final Map<String, dynamic> m = Map<String, dynamic>.from(rawOrder);
+      
+      String orderId = (m['order_id'] ?? m['order_number'] ?? m['id'] ?? '').toString();
+      final msgStr = (m['message'] ?? '').toString();
+      
+      // Extract #DM-XXXX if contained in message text
+      final matchDm = RegExp(r'#DM-\d+').firstMatch(msgStr);
+      if (matchDm != null) {
+        orderId = matchDm.group(0)!;
+      }
+      
+      if (orderId.isEmpty || orderId == 'Status' || orderId == 'Order #') {
+        final idNum = (m['id'] as num?)?.toInt() ?? 0;
+        if (idNum > 0) {
+          orderId = '#DM-${1000 + idNum}';
+        } else {
+          return;
+        }
+      }
+
+      m['order_id'] = orderId;
+      m['order_number'] = orderId;
+
+      // Extract total_amount if 0
+      double totAmt = (m['total_amount'] as num?)?.toDouble() ?? (m['order_amount'] as num?)?.toDouble() ?? 0.0;
+      if (totAmt <= 0) {
+        final matchAmt = RegExp(r'(?:Total Amount|Total):\s*₹?\s*([\d\.]+)', caseSensitive: false).firstMatch(msgStr);
+        if (matchAmt != null) {
+          totAmt = double.tryParse(matchAmt.group(1)!) ?? 0.0;
+        }
+      }
+      m['total_amount'] = totAmt;
+
+      // Normalize items list
+      List items = List.from(m['items'] ?? []);
+      if (items.isEmpty && m['items_json'] != null) {
+        try {
+          final String jsonStr = m['items_json'].toString();
+          if (jsonStr.isNotEmpty && jsonStr != '[]' && jsonStr != 'null') {
+            final decoded = jsonDecode(jsonStr);
+            if (decoded is List) items = decoded;
+          }
+        } catch (_) {}
+      }
+
+      final List<Map<String, dynamic>> normalizedItems = [];
+      for (final it in items) {
+        if (it is Map) {
+          final mapIt = Map<String, dynamic>.from(it);
+          final rawName = (mapIt['name'] ?? mapIt['text'] ?? mapIt['title'] ?? '').toString();
+          if (rawName.isNotEmpty) {
+            String cleanName = rawName;
+            String unit = (mapIt['unit'] ?? 'Pcs').toString();
+            int qty = (mapIt['qty'] as num?)?.toInt() ?? 1;
+
+            final matchLine = RegExp(r'^\d+\.\s*(.*?)(?:\s*\((.*?)\))?(?:\s*-\s*₹.*)?$').firstMatch(rawName);
+            if (matchLine != null) {
+              cleanName = matchLine.group(1)?.trim() ?? rawName;
+              if (matchLine.group(2) != null) {
+                final spec = matchLine.group(2)!.trim();
+                final parts = spec.split(' ');
+                if (parts.length >= 2) {
+                  qty = int.tryParse(parts[0]) ?? qty;
+                  unit = parts.sublist(1).join(' ');
+                }
+              }
+            }
+
+            mapIt['name'] = cleanName;
+            mapIt['qty'] = mapIt['qty'] ?? qty;
+            mapIt['unit'] = mapIt['unit'] ?? unit;
+            mapIt['amount'] = mapIt['amount'] ?? (mapIt['rate'] != null ? (mapIt['rate'] as num).toDouble() * qty : 0.0);
+            normalizedItems.add(mapIt);
+          }
+        }
+      }
+
+      m['items'] = normalizedItems;
+      m['total_count'] = (m['total_count'] as num?)?.toInt() ?? (normalizedItems.isNotEmpty ? normalizedItems.length : 1);
+      m['seller_name'] = (m['seller_name'] ?? m['seller_username'] ?? 'Store').toString();
+      m['status'] = (m['status'] ?? m['order_status'] ?? m['delivery_status'] ?? 'PENDING').toString().toUpperCase();
+      if (m['status'] == 'STATUS') m['status'] = 'PENDING';
+
+      final dateStr = (m['date'] ?? m['created_at'] ?? '').toString();
+      m['date'] = dateStr;
+      m['timestamp'] = (m['timestamp'] as num?)?.toInt() ?? (DateTime.tryParse(dateStr)?.millisecondsSinceEpoch ?? 0);
+
+      mergedMap[orderId] = m;
+    }
+
     // 1. Load from Local Cache
     final keysToCheck = <String>[
       'global_all_customer_orders_history',
@@ -4628,27 +4720,23 @@ class AuthService {
         try {
           final List raw = jsonDecode(existingJson);
           for (final item in raw) {
-            final Map<String, dynamic> m = Map<String, dynamic>.from(item);
-            final id = (m['order_id'] ?? m['order_number'] ?? m['id'] ?? '').toString();
-            if (id.isNotEmpty && !mergedMap.containsKey(id)) {
-              mergedMap[id] = m;
+            if (item is Map) {
+              addOrUpdateOrder(Map<String, dynamic>.from(item));
             }
           }
         } catch (_) {}
       }
     }
 
-    // 2. Fetch from VPS MySQL Database customer_orders table
+    // 2. Fetch from VPS MySQL Database action=get-customer-orders
     try {
       final queryParam = last10.isNotEmpty ? 'customer_mobile=$last10' : '';
       final res = await VpsApiService.get('get-customer-orders&$queryParam');
       if (res != null && res['success'] == true && res['orders'] != null) {
         final List rawOrders = res['orders'];
         for (final item in rawOrders) {
-          final Map<String, dynamic> m = Map<String, dynamic>.from(item);
-          final id = (m['order_id'] ?? m['order_number'] ?? m['id'] ?? '').toString();
-          if (id.isNotEmpty) {
-            mergedMap[id] = m; // Database orders take priority
+          if (item is Map) {
+            addOrUpdateOrder(Map<String, dynamic>.from(item));
           }
         }
       }
@@ -4671,35 +4759,16 @@ class AuthService {
             if (resMsgs != null && resMsgs['success'] == true && resMsgs['messages'] != null) {
               final List msgs = resMsgs['messages'];
               for (final msg in msgs) {
-                final String rawItems = (msg['items_json'] ?? '').toString();
-                if (rawItems.isNotEmpty && rawItems != '[]' && rawItems != 'null') {
-                  try {
-                    final List decodedItems = jsonDecode(rawItems);
-                    if (decodedItems.isNotEmpty) {
-                      final orderIdStr = (msg['order_id'] ?? '#DM-${1000 + (msg['id'] as num).toInt()}').toString();
-                      final orderAmt = (msg['order_amount'] as num?)?.toDouble() ?? 0.0;
-                      final statusStr = (msg['order_status'] ?? msg['delivery_status'] ?? 'PENDING').toString().toUpperCase();
-                      final dateStr = (msg['created_at'] ?? '').toString();
+                if (msg is Map) {
+                  final Map<String, dynamic> msgMap = Map<String, dynamic>.from(msg);
+                  msgMap['seller_username'] = sellerUser;
+                  msgMap['seller_name'] = sellerName;
 
-                      if (!mergedMap.containsKey(orderIdStr)) {
-                        mergedMap[orderIdStr] = {
-                          'id': msg['id'],
-                          'order_id': orderIdStr,
-                          'order_number': orderIdStr,
-                          'seller_username': sellerUser,
-                          'seller_name': sellerName,
-                          'customer_mobile': last10,
-                          'customer_name': 'Customer',
-                          'items': decodedItems,
-                          'total_amount': orderAmt,
-                          'total_count': decodedItems.length,
-                          'status': statusStr,
-                          'date': dateStr,
-                          'timestamp': DateTime.tryParse(dateStr)?.millisecondsSinceEpoch ?? (msg['id'] as int) * 1000,
-                        };
-                      }
-                    }
-                  } catch (_) {}
+                  final rawItems = (msgMap['items_json'] ?? '').toString();
+                  final rawText = (msgMap['message'] ?? '').toString();
+                  if (rawItems.contains('ORDER PLACED') || rawItems.contains('text') || rawText.contains('ORDER PLACED') || rawText.contains('#DM-')) {
+                    addOrUpdateOrder(msgMap);
+                  }
                 }
               }
             }
