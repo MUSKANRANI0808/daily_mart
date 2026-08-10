@@ -920,11 +920,6 @@ if ($action == 'get-header-theme') {
 } elseif ($action == 'get-customer-orders') {
     $customer_mobile = isset($_GET['customer_mobile']) ? trim($_GET['customer_mobile']) : (isset($input['customer_mobile']) ? trim($input['customer_mobile']) : '');
 
-    if (empty($customer_mobile)) {
-        echo json_encode(["success" => true, "orders" => array()]);
-        exit();
-    }
-
     $digits = preg_replace('/[^0-9]/', '', $customer_mobile);
     $last10 = (strlen($digits) >= 10) ? substr($digits, -10) : $digits;
     $escapedLike = "%" . $conn->real_escape_string($last10) . "%";
@@ -945,7 +940,8 @@ if ($action == 'get-header-theme') {
         INDEX(seller_username)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-    $res = $conn->query("SELECT * FROM customer_orders WHERE customer_mobile = '$customer_mobile' OR customer_mobile LIKE '$escapedLike' ORDER BY id DESC");
+    $orderQuery = !empty($last10) ? "SELECT * FROM customer_orders WHERE customer_mobile = '$customer_mobile' OR customer_mobile LIKE '$escapedLike' ORDER BY id DESC" : "SELECT * FROM customer_orders ORDER BY id DESC LIMIT 50";
+    $res = $conn->query($orderQuery);
     $orders = array();
     if ($res && $res !== true) {
         while ($row = $res->fetch_assoc()) {
@@ -973,7 +969,7 @@ if ($action == 'get-header-theme') {
     }
 
     // ALSO fetch orders sent via chat / messages table
-    $msgQuery = "SELECT * FROM messages WHERE (customer_mobile = '$customer_mobile' OR customer_mobile LIKE '$escapedLike') AND items_json IS NOT NULL AND items_json != '' AND items_json != '[]' ORDER BY id DESC";
+    $msgQuery = !empty($last10) ? "SELECT * FROM messages WHERE (customer_mobile = '$customer_mobile' OR customer_mobile LIKE '$escapedLike') AND items_json IS NOT NULL AND items_json != '' AND items_json != '[]' ORDER BY id DESC" : "SELECT * FROM messages WHERE items_json IS NOT NULL AND items_json != '' AND items_json != '[]' ORDER BY id DESC LIMIT 50";
     $resMsg = $conn->query($msgQuery);
     if ($resMsg && $resMsg !== true) {
         while ($row = $resMsg->fetch_assoc()) {
