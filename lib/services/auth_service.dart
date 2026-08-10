@@ -4537,14 +4537,32 @@ class AuthService {
     // 1. ALWAYS Save locally first so order is NEVER lost!
     await _appendOrderToLocalHistory(custMobile, finalOrder, prefs);
 
-    // 2. Sync to VPS MySQL Database
+    // 2. Sync to VPS MySQL Database (customer_orders + messages tables)
     try {
       final res = await VpsApiService.post('place-order', orderPayload);
       if (res != null && res['success'] == true && res['order'] != null) {
         final Map<String, dynamic> remoteOrder = Map<String, dynamic>.from(res['order']);
         finalOrder = remoteOrder;
-        // Update local cache with remote DB order ID
         await _appendOrderToLocalHistory(custMobile, finalOrder, prefs, overwriteExistingId: localOrderId);
+      } else {
+        // Fallback: Also post as a message order to messages table
+        final sellerUser = (orderPayload['seller_username'] ?? '').toString().trim();
+        if (sellerUser.isNotEmpty && custMobile.isNotEmpty) {
+          final items = List.from(orderPayload['items'] ?? []);
+          final totalCount = (orderPayload['total_count'] as num?)?.toInt() ?? items.length;
+          final totalAmt = (orderPayload['total_amount'] as num?)?.toDouble() ?? 0.0;
+          final msgText = '🛒 NEW ORDER PLACED ($localOrderId)\nTotal Items: $totalCount\nTotal Amount: ₹$totalAmt';
+
+          await VpsApiService.post('send-message', {
+            'seller_username': sellerUser,
+            'customer_mobile': custMobile,
+            'message': msgText,
+            'items_json': jsonEncode(items),
+            'order_id': localOrderId,
+            'order_amount': totalAmt,
+            'sender_type': 'customer',
+          });
+        }
       }
     } catch (e) {
       debugPrint('Error syncing order to VPS Database: $e');
@@ -4592,13 +4610,16 @@ class AuthService {
       custMobile = (currentUser?.mobile ?? '').trim();
     }
 
+    final digits = custMobile.replaceAll(RegExp(r'[^0-9]'), '');
+    final last10 = digits.length >= 10 ? digits.substring(digits.length - 10) : digits;
+
     final Map<String, Map<String, dynamic>> mergedMap = {};
 
-    // 1. Load from Local Cache first
+    // 1. Load from Local Cache
     final keysToCheck = <String>[
       'global_all_customer_orders_history',
       if (custMobile.isNotEmpty) 'customer_orders_history_$custMobile',
-      if (custMobile.length >= 10) 'customer_orders_history_${custMobile.substring(custMobile.length - 10)}',
+      if (last10.isNotEmpty) 'customer_orders_history_$last10',
     ];
 
     for (final key in keysToCheck) {
@@ -4617,9 +4638,9 @@ class AuthService {
       }
     }
 
-    // 2. Fetch from VPS MySQL Database
+    // 2. Fetch from VPS MySQL Database customer_orders table
     try {
-      final queryParam = custMobile.isNotEmpty ? 'customer_mobile=$custMobile' : '';
+      final queryParam = last10.isNotEmpty ? 'customer_mobile=$last10' : '';
       final res = await VpsApiService.get('get-customer-orders&$queryParam');
       if (res != null && res['success'] == true && res['orders'] != null) {
         final List rawOrders = res['orders'];
@@ -4633,6 +4654,60 @@ class AuthService {
       }
     } catch (e) {
       debugPrint('Error fetching customer orders from VPS Database: $e');
+    }
+
+    // 3. Fetch from VPS MySQL Database messages table (messages/conversations fallback)
+    try {
+      final queryParam = last10.isNotEmpty ? 'customer_mobile=$last10' : '';
+      final resConv = await VpsApiService.get('get-customer-conversations&$queryParam');
+      if (resConv != null && resConv['success'] == true && resConv['conversations'] != null) {
+        final List convs = resConv['conversations'];
+        for (final c in convs) {
+          final sellerUser = (c['seller_username'] ?? '').toString().trim();
+          final sellerName = (c['seller_name'] ?? sellerUser).toString();
+
+          if (sellerUser.isNotEmpty && last10.isNotEmpty) {
+            final resMsgs = await VpsApiService.get('get-messages&seller_username=$sellerUser&customer_mobile=$last10');
+            if (resMsgs != null && resMsgs['success'] == true && resMsgs['messages'] != null) {
+              final List msgs = resMsgs['messages'];
+              for (final msg in msgs) {
+                final String rawItems = (msg['items_json'] ?? '').toString();
+                if (rawItems.isNotEmpty && rawItems != '[]' && rawItems != 'null') {
+                  try {
+                    final List decodedItems = jsonDecode(rawItems);
+                    if (decodedItems.isNotEmpty) {
+                      final orderIdStr = (msg['order_id'] ?? '#DM-${1000 + (msg['id'] as num).toInt()}').toString();
+                      final orderAmt = (msg['order_amount'] as num?)?.toDouble() ?? 0.0;
+                      final statusStr = (msg['order_status'] ?? msg['delivery_status'] ?? 'PENDING').toString().toUpperCase();
+                      final dateStr = (msg['created_at'] ?? '').toString();
+
+                      if (!mergedMap.containsKey(orderIdStr)) {
+                        mergedMap[orderIdStr] = {
+                          'id': msg['id'],
+                          'order_id': orderIdStr,
+                          'order_number': orderIdStr,
+                          'seller_username': sellerUser,
+                          'seller_name': sellerName,
+                          'customer_mobile': last10,
+                          'customer_name': 'Customer',
+                          'items': decodedItems,
+                          'total_amount': orderAmt,
+                          'total_count': decodedItems.length,
+                          'status': statusStr,
+                          'date': dateStr,
+                          'timestamp': DateTime.tryParse(dateStr)?.millisecondsSinceEpoch ?? (msg['id'] as int) * 1000,
+                        };
+                      }
+                    }
+                  } catch (_) {}
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching customer conversation messages from VPS: $e');
     }
 
     final result = mergedMap.values.toList();
