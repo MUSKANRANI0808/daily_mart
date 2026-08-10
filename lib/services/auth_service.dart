@@ -4808,7 +4808,23 @@ class AuthService {
       debugPrint('Error fetching customer orders from VPS Database: $e');
     }
 
-    // 3. Fetch from VPS MySQL Database messages table (messages/conversations fallback)
+    // 3. Direct Query messages table by customer_mobile
+    try {
+      final mobParam = last10.isNotEmpty ? 'customer_mobile=$last10' : '';
+      final resDirect = await VpsApiService.get('get-messages&$mobParam');
+      if (resDirect != null && resDirect['success'] == true && resDirect['messages'] != null) {
+        final List msgs = resDirect['messages'];
+        for (final msg in msgs) {
+          if (msg is Map) {
+            addOrUpdateOrder(Map<String, dynamic>.from(msg));
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching direct customer messages: $e');
+    }
+
+    // 4. Fetch from VPS MySQL Database messages table (messages/conversations fallback per seller)
     try {
       final queryParam = last10.isNotEmpty ? 'customer_mobile=$last10' : '';
       final List<Map<String, String>> sellersToQuery = [];

@@ -1092,25 +1092,27 @@ if ($action == 'get-header-theme') {
     $customer_mobile = isset($_GET['customer_mobile']) ? trim($_GET['customer_mobile']) : '';
     $digits = preg_replace('/[^0-9]/', '', $customer_mobile);
     $last10 = (strlen($digits) >= 10) ? substr($digits, -10) : $digits;
-    $searchLike = "%" . $last10 . "%";
+    $searchLike = "%" . $conn->real_escape_string($last10) . "%";
+    $escapedSeller = $conn->real_escape_string($seller_username);
 
+    $query = "SELECT * FROM messages ORDER BY id ASC LIMIT 50";
     if (!empty($seller_username) && !empty($last10)) {
-        $stmt = $conn->prepare("SELECT * FROM messages WHERE seller_username = ? AND customer_mobile LIKE ? ORDER BY id ASC");
-        if ($stmt) {
-            $stmt->bind_param("ss", $seller_username, $searchLike);
-            $stmt->execute();
-            $res = $stmt->get_result();
-            $messages = array();
-            if ($res) {
-                while ($row = $res->fetch_assoc()) {
-                    $messages[] = $row;
-                }
-            }
-            echo json_encode(["success" => true, "messages" => $messages]);
-            exit();
+        $query = "SELECT * FROM messages WHERE (seller_username = '$escapedSeller' OR seller_username LIKE '%$escapedSeller%') AND (customer_mobile = '$customer_mobile' OR customer_mobile LIKE '$searchLike') ORDER BY id ASC";
+    } elseif (!empty($last10)) {
+        $query = "SELECT * FROM messages WHERE customer_mobile = '$customer_mobile' OR customer_mobile LIKE '$searchLike' ORDER BY id ASC";
+    } elseif (!empty($seller_username)) {
+        $query = "SELECT * FROM messages WHERE seller_username = '$escapedSeller' OR seller_username LIKE '%$escapedSeller%' ORDER BY id ASC LIMIT 50";
+    }
+
+    $res = $conn->query($query);
+    $messages = array();
+    if ($res && $res !== true) {
+        while ($row = $res->fetch_assoc()) {
+            $messages[] = $row;
         }
     }
-    echo json_encode(["success" => false, "messages" => array()]);
+    echo json_encode(["success" => true, "messages" => $messages]);
+    exit();
 } elseif ($action == 'delete-seller') {
     $username = isset($input['username']) ? trim($input['username']) : '';
     $stmt = $conn->prepare("DELETE FROM sellers WHERE username = ?");
