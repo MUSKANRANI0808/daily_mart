@@ -4514,54 +4514,71 @@ class AuthService {
     return '#DM-$currentId';
   }
 
-  /// Save Customer Placed Order to local storage & VPS
-  static Future<void> saveCustomerPlacedOrder(Map<String, dynamic> order) async {
+  /// Save Customer Placed Order directly in MySQL Server Database & return permanent DB Order Number
+  static Future<Map<String, dynamic>?> saveCustomerPlacedOrder(Map<String, dynamic> orderPayload) async {
+    final custMobile = (orderPayload['customer_mobile'] ?? '').toString().trim();
     final prefs = await SharedPreferences.getInstance();
-    final custMobile = (order['customer_mobile'] ?? '').toString().trim();
-    final key = 'customer_orders_history_$custMobile';
 
-    final String? existingJson = prefs.getString(key);
-    List<Map<String, dynamic>> ordersList = [];
-    if (existingJson != null && existingJson.isNotEmpty) {
-      try {
-        final List raw = jsonDecode(existingJson);
-        ordersList = List<Map<String, dynamic>>.from(raw);
-      } catch (_) {}
-    }
+    try {
+      final res = await VpsApiService.post('place-order', orderPayload);
+      if (res != null && res['success'] == true && res['order'] != null) {
+        final Map<String, dynamic> placedOrder = Map<String, dynamic>.from(res['order']);
 
-    ordersList.insert(0, order);
-    await prefs.setString(key, jsonEncode(ordersList));
-
-    // Also notify message log for seller
-    final sellerUser = (order['seller_username'] ?? '').toString().trim();
-    if (sellerUser.isNotEmpty) {
-      final msgKey = 'seller_customer_orders_${sellerUser}_$custMobile';
-      final String? existingSellerMsg = prefs.getString(msgKey);
-      List<Map<String, dynamic>> sellerMsgs = [];
-      if (existingSellerMsg != null && existingSellerMsg.isNotEmpty) {
-        try {
-          final List rawM = jsonDecode(existingSellerMsg);
-          sellerMsgs = List<Map<String, dynamic>>.from(rawM);
-        } catch (_) {}
+        // Cache locally for offline availability
+        if (custMobile.isNotEmpty) {
+          final key = 'customer_orders_history_$custMobile';
+          final String? existingJson = prefs.getString(key);
+          List<Map<String, dynamic>> ordersList = [];
+          if (existingJson != null && existingJson.isNotEmpty) {
+            try {
+              final List raw = jsonDecode(existingJson);
+              ordersList = List<Map<String, dynamic>>.from(raw);
+            } catch (_) {}
+          }
+          ordersList.insert(0, placedOrder);
+          await prefs.setString(key, jsonEncode(ordersList));
+        }
+        return placedOrder;
       }
-      sellerMsgs.insert(0, order);
-      await prefs.setString(msgKey, jsonEncode(sellerMsgs));
+    } catch (e) {
+      debugPrint('Error placing order on VPS Database: $e');
     }
+    return null;
   }
 
-  /// Fetch Customer Placed Orders History List
+  /// Fetch Customer Placed Orders History List from MySQL Server Database
   static Future<List<Map<String, dynamic>>> getCustomerPlacedOrders(String customerMobile) async {
-    final prefs = await SharedPreferences.getInstance();
     final custMobile = customerMobile.trim();
-    final key = 'customer_orders_history_$custMobile';
+    final prefs = await SharedPreferences.getInstance();
 
-    final String? existingJson = prefs.getString(key);
-    if (existingJson != null && existingJson.isNotEmpty) {
+    if (custMobile.isNotEmpty) {
       try {
-        final List raw = jsonDecode(existingJson);
-        return List<Map<String, dynamic>>.from(raw);
-      } catch (_) {}
+        final res = await VpsApiService.get('get-customer-orders&customer_mobile=$custMobile');
+        if (res != null && res['success'] == true && res['orders'] != null) {
+          final List rawOrders = res['orders'];
+          final List<Map<String, dynamic>> remoteOrders = List<Map<String, dynamic>>.from(rawOrders);
+
+          // Save to local cache
+          final key = 'customer_orders_history_$custMobile';
+          await prefs.setString(key, jsonEncode(remoteOrders));
+
+          return remoteOrders;
+        }
+      } catch (e) {
+        debugPrint('Error fetching customer orders from VPS Database: $e');
+      }
+
+      // Fallback to local cache if offline
+      final key = 'customer_orders_history_$custMobile';
+      final String? existingJson = prefs.getString(key);
+      if (existingJson != null && existingJson.isNotEmpty) {
+        try {
+          final List raw = jsonDecode(existingJson);
+          return List<Map<String, dynamic>>.from(raw);
+        } catch (_) {}
+      }
     }
+
     return [];
   }
 }

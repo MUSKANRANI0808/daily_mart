@@ -842,6 +842,138 @@ if ($action == 'get-header-theme') {
         }
     }
     echo json_encode(["success" => true, "conversations" => $conversations]);
+} elseif ($action == 'place-order') {
+    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : '';
+    $customer_mobile = isset($input['customer_mobile']) ? trim($input['customer_mobile']) : '';
+    $customer_name = isset($input['customer_name']) ? trim($input['customer_name']) : 'Customer';
+    $seller_name = isset($input['seller_name']) ? trim($input['seller_name']) : '';
+    $items = isset($input['items']) ? $input['items'] : array();
+    $total_amount = isset($input['total_amount']) ? (float)$input['total_amount'] : 0.0;
+    $total_count = isset($input['total_count']) ? (int)$input['total_count'] : 0;
+
+    if (empty($seller_username) || empty($customer_mobile) || empty($items)) {
+        echo json_encode(["success" => false, "message" => "Required fields missing"]);
+        exit();
+    }
+
+    $items_json = json_encode($items);
+
+    // Auto-create customer_orders table in MySQL database
+    @$conn->query("CREATE TABLE IF NOT EXISTS customer_orders (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        order_number VARCHAR(50) NOT NULL,
+        seller_username VARCHAR(100) NOT NULL,
+        seller_name VARCHAR(255) DEFAULT NULL,
+        customer_mobile VARCHAR(20) NOT NULL,
+        customer_name VARCHAR(255) DEFAULT NULL,
+        items_json LONGTEXT NOT NULL,
+        total_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        total_count INT NOT NULL DEFAULT 0,
+        order_status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX(customer_mobile),
+        INDEX(seller_username)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $stmt = $conn->prepare("INSERT INTO customer_orders (order_number, seller_username, seller_name, customer_mobile, customer_name, items_json, total_amount, total_count, order_status) VALUES ('TEMP', ?, ?, ?, ?, ?, ?, ?, 'PENDING')");
+    if ($stmt) {
+        $stmt->bind_param("sssssdi", $seller_username, $seller_name, $customer_mobile, $customer_name, $items_json, $total_amount, $total_count);
+        if ($stmt->execute()) {
+            $dbInsertId = $stmt->insert_id;
+            // Generate DB Auto-Increment Serial Number (#DM-1001, #DM-1002...)
+            $orderNumber = "#DM-" . (1000 + $dbInsertId);
+
+            $conn->query("UPDATE customer_orders SET order_number = '$orderNumber' WHERE id = $dbInsertId");
+
+            // Also insert message for seller dashboard sync
+            $msgText = "🛒 *NEW ORDER PLACED ($orderNumber)*\nTotal Items: $total_count\nTotal Amount: ₹" . number_format($total_amount, 2);
+            $stmtMsg = $conn->prepare("INSERT INTO messages (seller_username, customer_mobile, message, items_json, order_id, order_status, order_amount, sender_type, is_read, payment_status, delivery_status) VALUES (?, ?, ?, ?, ?, 'Pending', ?, 'customer', 0, 'unpaid', 'pending')");
+            if ($stmtMsg) {
+                $stmtMsg->bind_param("sssssd", $seller_username, $customer_mobile, $msgText, $items_json, $orderNumber, $total_amount);
+                $stmtMsg->execute();
+            }
+
+            echo json_encode([
+                "success" => true,
+                "message" => "Order placed successfully in MySQL Database!",
+                "order" => [
+                    "id" => $dbInsertId,
+                    "order_id" => $orderNumber,
+                    "order_number" => $orderNumber,
+                    "seller_username" => $seller_username,
+                    "seller_name" => $seller_name,
+                    "customer_mobile" => $customer_mobile,
+                    "customer_name" => $customer_name,
+                    "items" => $items,
+                    "total_amount" => $total_amount,
+                    "total_count" => $total_count,
+                    "status" => "PENDING",
+                    "date" => date('d/m/Y H:i'),
+                    "timestamp" => time() * 1000
+                ]
+            ]);
+            exit();
+        }
+    }
+    echo json_encode(["success" => false, "message" => "SQL Insert Error"]);
+    exit();
+} elseif ($action == 'get-customer-orders') {
+    $customer_mobile = isset($_GET['customer_mobile']) ? trim($_GET['customer_mobile']) : (isset($input['customer_mobile']) ? trim($input['customer_mobile']) : '');
+
+    if (empty($customer_mobile)) {
+        echo json_encode(["success" => true, "orders" => array()]);
+        exit();
+    }
+
+    $digits = preg_replace('/[^0-9]/', '', $customer_mobile);
+    $last10 = (strlen($digits) >= 10) ? substr($digits, -10) : $digits;
+    $escapedLike = "%" . $conn->real_escape_string($last10) . "%";
+
+    @$conn->query("CREATE TABLE IF NOT EXISTS customer_orders (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        order_number VARCHAR(50) NOT NULL,
+        seller_username VARCHAR(100) NOT NULL,
+        seller_name VARCHAR(255) DEFAULT NULL,
+        customer_mobile VARCHAR(20) NOT NULL,
+        customer_name VARCHAR(255) DEFAULT NULL,
+        items_json LONGTEXT NOT NULL,
+        total_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        total_count INT NOT NULL DEFAULT 0,
+        order_status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX(customer_mobile),
+        INDEX(seller_username)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $res = $conn->query("SELECT * FROM customer_orders WHERE customer_mobile = '$customer_mobile' OR customer_mobile LIKE '$escapedLike' ORDER BY id DESC");
+    $orders = array();
+    if ($res && $res !== true) {
+        while ($row = $res->fetch_assoc()) {
+            $itemsDecoded = json_decode($row['items_json'], true);
+            if (!is_array($itemsDecoded)) $itemsDecoded = array();
+
+            $dateFormatted = date('d/m/Y H:i', strtotime($row['created_at']));
+
+            $orders[] = array(
+                "id" => (int)$row['id'],
+                "order_id" => $row['order_number'],
+                "order_number" => $row['order_number'],
+                "seller_username" => $row['seller_username'],
+                "seller_name" => !empty($row['seller_name']) ? $row['seller_name'] : $row['seller_username'],
+                "customer_mobile" => $row['customer_mobile'],
+                "customer_name" => $row['customer_name'],
+                "items" => $itemsDecoded,
+                "total_amount" => (float)$row['total_amount'],
+                "total_count" => (int)$row['total_count'],
+                "status" => strtoupper($row['order_status']),
+                "date" => $dateFormatted,
+                "timestamp" => strtotime($row['created_at']) * 1000
+            );
+        }
+    }
+
+    echo json_encode(["success" => true, "orders" => $orders]);
+    exit();
 } elseif ($action == 'get-customer-conversations') {
     $customer_mobile = isset($_GET['customer_mobile']) ? trim($_GET['customer_mobile']) : '';
     $digits = preg_replace('/[^0-9]/', '', $customer_mobile);
