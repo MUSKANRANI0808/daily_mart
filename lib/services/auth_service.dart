@@ -4615,12 +4615,12 @@ class AuthService {
 
     final Map<String, Map<String, dynamic>> mergedMap = {};
 
-    // Helper to add/merge order into mergedMap
     void addOrUpdateOrder(Map<String, dynamic> rawOrder) {
       final Map<String, dynamic> m = Map<String, dynamic>.from(rawOrder);
       
-      String orderId = (m['order_id'] ?? m['order_number'] ?? m['id'] ?? '').toString();
-      final msgStr = (m['message'] ?? '').toString();
+      final dbId = (m['id'] as num?)?.toInt() ?? 0;
+      String orderId = (m['order_id'] ?? m['order_number'] ?? '').toString().trim();
+      final msgStr = (m['message'] ?? '').toString().trim();
       
       // Extract #DM-XXXX if contained in message text
       final matchDm = RegExp(r'#DM-\d+').firstMatch(msgStr);
@@ -4629,11 +4629,16 @@ class AuthService {
       }
       
       if (orderId.isEmpty || orderId == 'Status' || orderId == 'Order #') {
-        final idNum = (m['id'] as num?)?.toInt() ?? 0;
-        if (idNum > 0) {
-          orderId = '#DM-${1000 + idNum}';
+        if (dbId > 0) {
+          orderId = '#DM-${1000 + dbId}';
         } else {
           return;
+        }
+      } else if (orderId.startsWith('Order #')) {
+        final numPart = orderId.replaceFirst('Order #', '').trim();
+        final n = int.tryParse(numPart);
+        if (n != null) {
+          orderId = '#DM-${1000 + n}';
         }
       }
 
@@ -4648,7 +4653,6 @@ class AuthService {
           totAmt = double.tryParse(matchAmt.group(1)!) ?? 0.0;
         }
       }
-      m['total_amount'] = totAmt;
 
       // Normalize items list
       List items = List.from(m['items'] ?? []);
@@ -4666,13 +4670,14 @@ class AuthService {
       for (final it in items) {
         if (it is Map) {
           final mapIt = Map<String, dynamic>.from(it);
-          final rawName = (mapIt['name'] ?? mapIt['text'] ?? mapIt['title'] ?? '').toString();
-          if (rawName.isNotEmpty) {
+          final rawName = (mapIt['name'] ?? mapIt['text'] ?? mapIt['title'] ?? '').toString().trim();
+          if (rawName.isNotEmpty && !rawName.startsWith('🛒') && !rawName.startsWith('NEW ORDER PLACED')) {
             String cleanName = rawName;
             String unit = (mapIt['unit'] ?? 'Pcs').toString();
             int qty = (mapIt['qty'] as num?)?.toInt() ?? 1;
+            double itemAmt = (mapIt['amount'] as num?)?.toDouble() ?? (mapIt['rate'] != null ? (mapIt['rate'] as num).toDouble() * qty : 0.0);
 
-            final matchLine = RegExp(r'^\d+\.\s*(.*?)(?:\s*\((.*?)\))?(?:\s*-\s*₹.*)?$').firstMatch(rawName);
+            final matchLine = RegExp(r'^\d+\.\s*(.*?)(?:\s*\((.*?)\))?(?:\s*-\s*₹\s*([\d\.]+))?$').firstMatch(rawName);
             if (matchLine != null) {
               cleanName = matchLine.group(1)?.trim() ?? rawName;
               if (matchLine.group(2) != null) {
@@ -4683,28 +4688,77 @@ class AuthService {
                   unit = parts.sublist(1).join(' ');
                 }
               }
+              if (matchLine.group(3) != null) {
+                itemAmt = double.tryParse(matchLine.group(3)!) ?? itemAmt;
+              }
             }
 
             mapIt['name'] = cleanName;
-            mapIt['qty'] = mapIt['qty'] ?? qty;
-            mapIt['unit'] = mapIt['unit'] ?? unit;
-            mapIt['amount'] = mapIt['amount'] ?? (mapIt['rate'] != null ? (mapIt['rate'] as num).toDouble() * qty : 0.0);
+            mapIt['qty'] = qty;
+            mapIt['unit'] = unit;
+            mapIt['amount'] = itemAmt;
             normalizedItems.add(mapIt);
           }
         }
       }
 
+      // If normalizedItems is empty but msgStr has content, build items from msgStr lines
+      if (normalizedItems.isEmpty && msgStr.isNotEmpty && !msgStr.startsWith('h')) {
+        final lines = msgStr.split('\n');
+        for (final line in lines) {
+          final trimmed = line.trim();
+          if (trimmed.isNotEmpty && !trimmed.contains('ORDER PLACED') && !trimmed.contains('Total')) {
+            String cName = trimmed;
+            String cUnit = 'Pcs';
+            int cQty = 1;
+            double cAmt = 0.0;
+
+            final matchL = RegExp(r'^\d+\.\s*(.*?)(?:\s*\((.*?)\))?(?:\s*-\s*₹\s*([\d\.]+))?$').firstMatch(trimmed);
+            if (matchL != null) {
+              cName = matchL.group(1)?.trim() ?? trimmed;
+              if (matchL.group(2) != null) {
+                final spec = matchL.group(2)!.trim();
+                final parts = spec.split(' ');
+                if (parts.length >= 2) {
+                  cQty = int.tryParse(parts[0]) ?? 1;
+                  cUnit = parts.sublist(1).join(' ');
+                }
+              }
+              if (matchL.group(3) != null) {
+                cAmt = double.tryParse(matchL.group(3)!) ?? 0.0;
+              }
+            }
+
+            normalizedItems.add({
+              'name': cName,
+              'qty': cQty,
+              'unit': cUnit,
+              'amount': cAmt,
+            });
+          }
+        }
+      }
+
+      // Calculate total amount if still 0
+      if (totAmt <= 0) {
+        for (final it in normalizedItems) {
+          totAmt += (it['amount'] as num?)?.toDouble() ?? 0.0;
+        }
+      }
+
       m['items'] = normalizedItems;
-      m['total_count'] = (m['total_count'] as num?)?.toInt() ?? (normalizedItems.isNotEmpty ? normalizedItems.length : 1);
+      m['total_amount'] = totAmt;
+      m['total_count'] = normalizedItems.isNotEmpty ? normalizedItems.length : 1;
       m['seller_name'] = (m['seller_name'] ?? m['seller_username'] ?? 'Store').toString();
       m['status'] = (m['status'] ?? m['order_status'] ?? m['delivery_status'] ?? 'PENDING').toString().toUpperCase();
       if (m['status'] == 'STATUS') m['status'] = 'PENDING';
 
       final dateStr = (m['date'] ?? m['created_at'] ?? '').toString();
       m['date'] = dateStr;
-      m['timestamp'] = (m['timestamp'] as num?)?.toInt() ?? (DateTime.tryParse(dateStr)?.millisecondsSinceEpoch ?? 0);
+      m['timestamp'] = (m['timestamp'] as num?)?.toInt() ?? (DateTime.tryParse(dateStr)?.millisecondsSinceEpoch ?? (dbId > 0 ? dbId * 1000 : 0));
 
-      mergedMap[orderId] = m;
+      final uniqueKey = '$orderId-${dbId > 0 ? dbId : m['timestamp']}';
+      mergedMap[uniqueKey] = m;
     }
 
     // 1. Load from Local Cache
@@ -4763,12 +4817,7 @@ class AuthService {
                   final Map<String, dynamic> msgMap = Map<String, dynamic>.from(msg);
                   msgMap['seller_username'] = sellerUser;
                   msgMap['seller_name'] = sellerName;
-
-                  final rawItems = (msgMap['items_json'] ?? '').toString();
-                  final rawText = (msgMap['message'] ?? '').toString();
-                  if (rawItems.contains('ORDER PLACED') || rawItems.contains('text') || rawText.contains('ORDER PLACED') || rawText.contains('#DM-')) {
-                    addOrUpdateOrder(msgMap);
-                  }
+                  addOrUpdateOrder(msgMap);
                 }
               }
             }
