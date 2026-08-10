@@ -972,6 +972,61 @@ if ($action == 'get-header-theme') {
         }
     }
 
+    // ALSO fetch orders sent via chat / messages table
+    $msgQuery = "SELECT * FROM messages WHERE (customer_mobile = '$customer_mobile' OR customer_mobile LIKE '$escapedLike') AND items_json IS NOT NULL AND items_json != '' AND items_json != '[]' ORDER BY id DESC";
+    $resMsg = $conn->query($msgQuery);
+    if ($resMsg && $resMsg !== true) {
+        while ($row = $resMsg->fetch_assoc()) {
+            $itemsDecoded = json_decode($row['items_json'], true);
+            if (!is_array($itemsDecoded)) $itemsDecoded = array();
+
+            $orderIdStr = !empty($row['order_id']) ? $row['order_id'] : ("#DM-" . (1000 + (int)$row['id']));
+
+            $alreadyInList = false;
+            foreach ($orders as $o) {
+                if ($o['order_id'] == $orderIdStr || $o['id'] == (int)$row['id']) {
+                    $alreadyInList = true;
+                    break;
+                }
+            }
+
+            if (!$alreadyInList && count($itemsDecoded) > 0) {
+                $sellerU = $row['seller_username'];
+                $sName = $sellerU;
+                $sRes = $conn->query("SELECT name FROM sellers WHERE username = '$sellerU' OR name = '$sellerU' LIMIT 1");
+                if ($sRes && $sRow = $sRes->fetch_assoc()) {
+                    if (!empty($sRow['name'])) $sName = $sRow['name'];
+                }
+
+                $totAmt = isset($row['order_amount']) ? (float)$row['order_amount'] : 0.0;
+                if ($totAmt <= 0) {
+                    foreach ($itemsDecoded as $it) {
+                        $itAmt = isset($it['amount']) ? (float)$it['amount'] : ((isset($it['rate']) ? (float)$it['rate'] : 0.0) * (isset($it['qty']) ? (int)$it['qty'] : 1));
+                        $totAmt += $itAmt;
+                    }
+                }
+
+                $statusStr = !empty($row['order_status']) ? $row['order_status'] : (!empty($row['delivery_status']) ? $row['delivery_status'] : 'Pending');
+
+                $orders[] = array(
+                    "id" => (int)$row['id'],
+                    "order_id" => $orderIdStr,
+                    "order_number" => $orderIdStr,
+                    "seller_username" => $sellerU,
+                    "seller_name" => $sName,
+                    "customer_mobile" => $row['customer_mobile'],
+                    "customer_name" => "Customer",
+                    "items" => $itemsDecoded,
+                    "total_amount" => $totAmt,
+                    "total_count" => count($itemsDecoded),
+                    "status" => strtoupper($statusStr),
+                    "date" => isset($row['created_at']) ? date('d/m/Y H:i', strtotime($row['created_at'])) : date('d/m/Y H:i'),
+                    "timestamp" => isset($row['created_at']) ? strtotime($row['created_at']) * 1000 : time() * 1000
+                );
+            }
+        }
+    }
+
     echo json_encode(["success" => true, "orders" => $orders]);
     exit();
 } elseif ($action == 'get-customer-conversations') {

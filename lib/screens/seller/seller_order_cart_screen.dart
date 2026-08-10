@@ -44,11 +44,19 @@ class _SellerOrderCartScreenState extends State<SellerOrderCartScreen> {
   }
 
   String get _sellerUsername => (widget.seller.username ?? widget.seller.mobile ?? '').trim();
-  String get _customerMobile => (widget.customer?.mobile ?? '').trim();
+
+  Future<String> _getEffectiveCustomerMobile() async {
+    final argMobile = (widget.customer?.mobile ?? '').trim();
+    if (argMobile.isNotEmpty) return argMobile;
+
+    final currentUser = await AuthService.getCurrentUser();
+    return (currentUser?.mobile ?? '').trim();
+  }
 
   Future<void> _loadCart() async {
     final items = await CartService.getCartItems(_sellerUsername);
-    final history = await AuthService.getCustomerPlacedOrders(_customerMobile);
+    final custMobile = await _getEffectiveCustomerMobile();
+    final history = await AuthService.getCustomerPlacedOrders(custMobile);
     
     if (mounted) {
       final newCartJson = jsonEncode(items);
@@ -162,11 +170,14 @@ class _SellerOrderCartScreenState extends State<SellerOrderCartScreen> {
     final now = DateTime.now();
     final formattedDate = '${now.day}/${now.month}/${now.year} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
-    final customer = widget.customer ??
+    final custMobile = await _getEffectiveCustomerMobile();
+    final currentUser = await AuthService.getCurrentUser();
+
+    final customer = widget.customer ?? currentUser ??
         UserModel(
           id: 'cust_default',
           name: 'Customer',
-          mobile: '9999999999',
+          mobile: custMobile.isNotEmpty ? custMobile : '9999999999',
           role: UserRole.customer,
         );
 
@@ -179,7 +190,7 @@ class _SellerOrderCartScreenState extends State<SellerOrderCartScreen> {
       'seller_name': widget.seller.name ?? 'Store',
       'seller_mobile': widget.seller.mobile ?? '',
       'customer_name': customer.name ?? 'Customer',
-      'customer_mobile': _customerMobile,
+      'customer_mobile': custMobile.isNotEmpty ? custMobile : (customer.mobile ?? '').trim(),
       'items': List.from(_cartItems),
       'total_amount': totalAmount,
       'total_count': totalCount,
