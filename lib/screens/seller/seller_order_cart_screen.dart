@@ -77,6 +77,9 @@ class _SellerOrderCartScreenState extends State<SellerOrderCartScreen> {
           _cartItems = items;
           _placedOrders = history;
           _isLoading = false;
+          if (items.isEmpty && history.isNotEmpty && !_showHistoryTab) {
+            _showHistoryTab = true;
+          }
         });
       }
     }
