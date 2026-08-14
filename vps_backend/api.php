@@ -1419,6 +1419,7 @@ if ($action == 'get-header-theme') {
     $escapedName = $conn->real_escape_string($name);
     $chk = $conn->query("SELECT id, image_url, color FROM seller_categories WHERE seller_username = '$escapedSeller' AND name = '$escapedName' LIMIT 1");
     if ($chk && $row = $chk->fetch_assoc()) {
+        $cId = (int)$row['id'];
         if (!empty($image_url)) {
             $upStmt = $conn->prepare("UPDATE seller_categories SET color = ?, image_url = ? WHERE id = ?");
             if ($upStmt) {
