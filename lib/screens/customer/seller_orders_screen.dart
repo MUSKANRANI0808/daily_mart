@@ -1764,7 +1764,15 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
               final cName = (cat['name'] ?? cat['category_name'] ?? '').toString().trim();
               final cImg = (cat['image'] ?? cat['image_url'] ?? '').toString().trim();
               final isSel = _selectedCategory.toLowerCase() == cName.toLowerCase();
-              final ringColor = isSel ? const Color(0xFF8B5CF6) : const Color(0xFFE2E8F0);
+
+              final String rawColor = (cat['color'] ?? '#8B5CF6').toString().trim();
+              Color catColor = const Color(0xFF8B5CF6);
+              if (rawColor.isNotEmpty) {
+                String hex = rawColor.replaceAll('#', '');
+                if (hex.length == 6) hex = 'FF$hex';
+                final val = int.tryParse(hex, radix: 16);
+                if (val != null) catColor = Color(val);
+              }
 
               return GestureDetector(
                 onTap: () {
@@ -1777,9 +1785,10 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                   margin: const EdgeInsets.symmetric(horizontal: 6),
                   child: Column(
                     children: [
-                      // Round Avatar Circle Container with Continuous Rotating Ring Animation
+                      // Round Avatar Circle Container with Database Color Rotating Ring Animation
                       RotatingCategoryAvatarRingWidget(
                         isSelected: isSel,
+                        ringColor: catColor,
                         child: _buildCategoryImageWidget(cImg, emojiSize: 26),
                       ),
                       const SizedBox(height: 6),
@@ -1789,7 +1798,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: isSel ? FontWeight.bold : FontWeight.w600,
-                          color: isSel ? const Color(0xFF8B5CF6) : const Color(0xFF334155),
+                          color: isSel ? catColor : const Color(0xFF334155),
                         ),
                         textAlign: TextAlign.center,
                         maxLines: 1,
@@ -2047,11 +2056,13 @@ class _GroceryFloatingBackgroundParticlesState extends State<GroceryFloatingBack
 /// Animated Continuous Rotating Gradient Ring Widget for Category Avatars
 class RotatingCategoryAvatarRingWidget extends StatefulWidget {
   final bool isSelected;
+  final Color ringColor;
   final Widget child;
 
   const RotatingCategoryAvatarRingWidget({
     super.key,
     required this.isSelected,
+    required this.ringColor,
     required this.child,
   });
 
@@ -2080,6 +2091,10 @@ class _RotatingCategoryAvatarRingWidgetState extends State<RotatingCategoryAvata
 
   @override
   Widget build(BuildContext context) {
+    final baseColor = widget.ringColor;
+    final lightColor = Color.alphaBlend(Colors.white.withOpacity(0.5), baseColor);
+    final darkColor = Color.alphaBlend(Colors.black.withOpacity(0.25), baseColor);
+
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
@@ -2093,15 +2108,15 @@ class _RotatingCategoryAvatarRingWidgetState extends State<RotatingCategoryAvata
             boxShadow: widget.isSelected
                 ? [
                     BoxShadow(
-                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.35),
+                      color: baseColor.withValues(alpha: 0.4),
                       blurRadius: 10,
-                      spreadRadius: 1,
+                      spreadRadius: 1.5,
                       offset: const Offset(0, 3),
                     ),
                   ]
                 : [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
+                      color: baseColor.withValues(alpha: 0.15),
                       blurRadius: 5,
                       offset: const Offset(0, 2),
                     ),
@@ -2110,7 +2125,7 @@ class _RotatingCategoryAvatarRingWidgetState extends State<RotatingCategoryAvata
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // Spinning Metallic Gradient Ring Background
+              // Spinning Metallic Gradient Ring Background using Category's exact Saved Database Color!
               Transform.rotate(
                 angle: angle,
                 child: Container(
@@ -2119,22 +2134,22 @@ class _RotatingCategoryAvatarRingWidgetState extends State<RotatingCategoryAvata
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: widget.isSelected
-                        ? const SweepGradient(
+                        ? SweepGradient(
                             colors: [
-                              Color(0xFF8B5CF6),
-                              Color(0xFFEC4899),
-                              Color(0xFF3B82F6),
-                              Color(0xFF10B981),
-                              Color(0xFFF59E0B),
-                              Color(0xFF8B5CF6),
+                              baseColor,
+                              lightColor,
+                              darkColor,
+                              baseColor,
+                              lightColor,
+                              baseColor,
                             ],
                           )
                         : SweepGradient(
                             colors: [
-                              const Color(0xFF8B5CF6).withValues(alpha: 0.7),
-                              const Color(0xFF3B82F6).withValues(alpha: 0.4),
-                              const Color(0xFF8B5CF6).withValues(alpha: 0.7),
-                              const Color(0xFF3B82F6).withValues(alpha: 0.4),
+                              baseColor.withValues(alpha: 0.8),
+                              lightColor.withValues(alpha: 0.4),
+                              baseColor.withValues(alpha: 0.8),
+                              lightColor.withValues(alpha: 0.4),
                             ],
                           ),
                   ),
@@ -2143,8 +2158,8 @@ class _RotatingCategoryAvatarRingWidgetState extends State<RotatingCategoryAvata
 
               // Inner Solid Circle Mask so ring forms a sleek 3px rotating border
               Container(
-                width: widget.isSelected ? 52.5 : 53.5,
-                height: widget.isSelected ? 52.5 : 53.5,
+                width: widget.isSelected ? 52.0 : 53.5,
+                height: widget.isSelected ? 52.0 : 53.5,
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
                   color: Colors.white,
