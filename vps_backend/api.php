@@ -1419,15 +1419,30 @@ if ($action == 'get-header-theme') {
     $escapedName = $conn->real_escape_string($name);
     $chk = $conn->query("SELECT id, image_url, color FROM seller_categories WHERE seller_username = '$escapedSeller' AND name = '$escapedName' LIMIT 1");
     if ($chk && $row = $chk->fetch_assoc()) {
+        $cId = (int)$row['id'];
+        $upStmt = $conn->prepare("UPDATE seller_categories SET color = ? WHERE id = ?");
+        if (!empty($image_url)) {
+            $upStmt = $conn->prepare("UPDATE seller_categories SET color = ?, image_url = ? WHERE id = ?");
+            if ($upStmt) {
+                $upStmt->bind_param("ssi", $color, $image_url, $cId);
+                $upStmt->execute();
+            }
+        } else {
+            if ($upStmt) {
+                $upStmt->bind_param("si", $color, $cId);
+                $upStmt->execute();
+            }
+        }
+
         echo json_encode([
             "success" => true,
-            "message" => "Category already exists",
+            "message" => "Category color updated in database",
             "category" => [
-                "id" => (int)$row['id'],
+                "id" => $cId,
                 "seller_username" => $seller_username,
                 "name" => $name,
-                "image_url" => $row['image_url'],
-                "color" => !empty($row['color']) ? $row['color'] : '#8B5CF6'
+                "image_url" => !empty($image_url) ? $image_url : $row['image_url'],
+                "color" => $color
             ]
         ]);
         exit();
@@ -1479,7 +1494,7 @@ if ($action == 'get-header-theme') {
             $stmt->execute();
         }
     }
-    echo json_encode(["success" => true, "message" => "Category updated"]);
+    echo json_encode(["success" => true, "message" => "Category updated in database", "color" => $color]);
     exit();
 } elseif ($action == 'delete-seller-category') {
     $id = isset($input['id']) ? (int)$input['id'] : (isset($_GET['id']) ? (int)$_GET['id'] : 0);

@@ -180,14 +180,49 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                   const Text('Category Name & Image *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
                   const SizedBox(height: 8),
 
+                  // Ring Accent Color Picker (Placed at top for easy color selection)
                   Row(
                     children: [
-                      // Thumbnail Image Picker Button
-                      InkWell(
+                      const Text('Ring Color: ', style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              '#8B5CF6', '#10B981', '#F97316', '#0284C7', '#EC4899', '#F59E0B', '#EF4444', '#06B6D4'
+                            ].map((hex) {
+                              final isSel = selectedRingColor.toLowerCase() == hex.toLowerCase();
+                              final c = Color(int.parse(hex.replaceFirst('#', '0xFF')));
+                              return InkWell(
+                                onTap: () => setModalState(() => selectedRingColor = hex),
+                                child: Container(
+                                  width: 24,
+                                  height: 24,
+                                  margin: const EdgeInsets.only(right: 6),
+                                  decoration: BoxDecoration(
+                                    color: c,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: isSel ? Colors.black : Colors.white, width: isSel ? 2.5 : 1),
+                                    boxShadow: isSel ? [BoxShadow(color: c.withValues(alpha: 0.6), blurRadius: 6)] : null,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  Row(
+                    children: [
+                      // Image Selector Box
+                      GestureDetector(
                         onTap: _pickCategoryImage,
                         child: Container(
-                          width: 46,
-                          height: 46,
+                          width: 44,
+                          height: 44,
                           decoration: BoxDecoration(
                             color: const Color(0xFFF1F5F9),
                             borderRadius: BorderRadius.circular(12),
@@ -261,41 +296,6 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                       ),
                     ],
                   ),
-
-                  const SizedBox(height: 10),
-                  // Ring Accent Color Picker
-                  Row(
-                    children: [
-                      const Text('Ring Color: ', style: TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
-                      Expanded(
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              '#8B5CF6', '#10B981', '#F97316', '#0284C7', '#EC4899', '#F59E0B', '#EF4444', '#06B6D4'
-                            ].map((hex) {
-                              final isSel = selectedRingColor.toLowerCase() == hex.toLowerCase();
-                              final c = Color(int.parse(hex.replaceFirst('#', '0xFF')));
-                              return InkWell(
-                                onTap: () => setModalState(() => selectedRingColor = hex),
-                                child: Container(
-                                  width: 22,
-                                  height: 22,
-                                  margin: const EdgeInsets.only(right: 6),
-                                  decoration: BoxDecoration(
-                                    color: c,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: isSel ? Colors.black : Colors.white, width: isSel ? 2 : 1),
-                                    boxShadow: isSel ? [BoxShadow(color: c.withValues(alpha: 0.5), blurRadius: 4)] : null,
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
                   const SizedBox(height: 16),
 
                   // Saved Store Categories List
@@ -309,13 +309,12 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                             decoration: BoxDecoration(
                               color: const Color(0xFFF8FAFC),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFE2E8F0)),
                             ),
                             child: const Center(
                               child: Text(
-                                'No categories created yet. Type above and click "Add"!',
+                                'No store categories yet.\nAdd custom categories above.',
                                 textAlign: TextAlign.center,
-                                style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                                style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
                               ),
                             ),
                           )
@@ -327,6 +326,14 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                               final cId = safeInt(cMap['id']);
                               final cName = safeString(cMap['name']);
                               final cImg = safeString(cMap['image_url'], '🏷️');
+                              final cColorStr = safeString(cMap['color'], '#8B5CF6');
+                              Color cRingColor = const Color(0xFF8B5CF6);
+                              if (cColorStr.isNotEmpty) {
+                                String hex = cColorStr.replaceAll('#', '');
+                                if (hex.length == 6) hex = 'FF$hex';
+                                final val = int.tryParse(hex, radix: 16);
+                                if (val != null) cRingColor = Color(val);
+                              }
 
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 6),
@@ -338,18 +345,18 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                                 child: ListTile(
                                   dense: true,
                                   leading: Container(
-                                    width: 34,
-                                    height: 34,
+                                    width: 36,
+                                    height: 36,
+                                    padding: const EdgeInsets.all(2),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFFE0F2FE),
-                                      borderRadius: BorderRadius.circular(8),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: cRingColor, width: 2.5),
                                     ),
-                                    child: cImg.startsWith('data:image')
-                                        ? ClipRRect(
-                                            borderRadius: BorderRadius.circular(8),
-                                            child: Image.memory(base64Decode(cImg.split(',').last), fit: BoxFit.cover),
-                                          )
-                                        : Center(child: Text(cImg, style: const TextStyle(fontSize: 16))),
+                                    child: ClipOval(
+                                      child: cImg.startsWith('data:image')
+                                          ? Image.memory(base64Decode(cImg.split(',').last), fit: BoxFit.cover)
+                                          : Center(child: Text(cImg, style: const TextStyle(fontSize: 16))),
+                                    ),
                                   ),
                                   title: Text(cName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Color(0xFF0F172A))),
                                   trailing: Row(
@@ -358,7 +365,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                                       IconButton(
                                         icon: const Icon(Icons.edit_rounded, color: Color(0xFF3B82F6), size: 18),
                                         onPressed: () {
-                                          _showEditCategoryPrompt(ctx, cId, cName, cImg, safeString(cMap['color'], '#8B5CF6'), setModalState);
+                                          _showEditCategoryPrompt(ctx, cId, cName, cImg, cColorStr, setModalState);
                                         },
                                       ),
                                       IconButton(
