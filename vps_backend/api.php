@@ -1419,8 +1419,6 @@ if ($action == 'get-header-theme') {
     $escapedName = $conn->real_escape_string($name);
     $chk = $conn->query("SELECT id, image_url, color FROM seller_categories WHERE seller_username = '$escapedSeller' AND name = '$escapedName' LIMIT 1");
     if ($chk && $row = $chk->fetch_assoc()) {
-        $cId = (int)$row['id'];
-        $upStmt = $conn->prepare("UPDATE seller_categories SET color = ? WHERE id = ?");
         if (!empty($image_url)) {
             $upStmt = $conn->prepare("UPDATE seller_categories SET color = ?, image_url = ? WHERE id = ?");
             if ($upStmt) {
@@ -1428,6 +1426,7 @@ if ($action == 'get-header-theme') {
                 $upStmt->execute();
             }
         } else {
+            $upStmt = $conn->prepare("UPDATE seller_categories SET color = ? WHERE id = ?");
             if ($upStmt) {
                 $upStmt->bind_param("si", $color, $cId);
                 $upStmt->execute();
@@ -1470,31 +1469,69 @@ if ($action == 'get-header-theme') {
     echo json_encode(["success" => false, "message" => "Failed to add category"]);
     exit();
 } elseif ($action == 'update-seller-category') {
-    $id = isset($input['id']) ? (int)$input['id'] : 0;
-    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : '';
-    $name = isset($input['name']) ? trim($input['name']) : '';
+    $id = isset($input['id']) ? (int)$input['id'] : (isset($_GET['id']) ? (int)$_GET['id'] : 0);
+    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : (isset($_GET['seller_username']) ? trim($_GET['seller_username']) : '');
+    $name = isset($input['name']) ? trim($input['name']) : (isset($_GET['name']) ? trim($_GET['name']) : '');
     $image_url = isset($input['image_url']) ? trim($input['image_url']) : '';
     $color = isset($input['color']) ? trim($input['color']) : '#8B5CF6';
 
-    if ($id <= 0 || empty($name)) {
-        echo json_encode(["success" => false, "message" => "Category ID and name required"]);
+    if (empty($name)) {
+        echo json_encode(["success" => false, "message" => "Category name required"]);
         exit();
     }
 
-    if (!empty($image_url)) {
-        $stmt = $conn->prepare("UPDATE seller_categories SET name = ?, image_url = ?, color = ? WHERE id = ?");
-        if ($stmt) {
-            $stmt->bind_param("sssi", $name, $image_url, $color, $id);
-            $stmt->execute();
-        }
-    } else {
-        $stmt = $conn->prepare("UPDATE seller_categories SET name = ?, color = ? WHERE id = ?");
-        if ($stmt) {
-            $stmt->bind_param("ssi", $name, $color, $id);
-            $stmt->execute();
+    $updated = false;
+
+    // 1. Update by ID if ID > 0
+    if ($id > 0) {
+        if (!empty($image_url)) {
+            $stmt = $conn->prepare("UPDATE seller_categories SET name = ?, image_url = ?, color = ? WHERE id = ?");
+            if ($stmt) {
+                $stmt->bind_param("sssi", $name, $image_url, $color, $id);
+                if ($stmt->execute() && $stmt->affected_rows > 0) $updated = true;
+            }
+        } else {
+            $stmt = $conn->prepare("UPDATE seller_categories SET name = ?, color = ? WHERE id = ?");
+            if ($stmt) {
+                $stmt->bind_param("ssi", $name, $color, $id);
+                if ($stmt->execute() && $stmt->affected_rows > 0) $updated = true;
+            }
         }
     }
-    echo json_encode(["success" => true, "message" => "Category updated in database", "color" => $color]);
+
+    // 2. Fallback update by seller_username & name
+    if (!empty($seller_username)) {
+        if (!empty($image_url)) {
+            $stmt2 = $conn->prepare("UPDATE seller_categories SET color = ?, image_url = ? WHERE seller_username = ? AND name = ?");
+            if ($stmt2) {
+                $stmt2->bind_param("ssss", $color, $image_url, $seller_username, $name);
+                if ($stmt2->execute() && $stmt2->affected_rows > 0) $updated = true;
+            }
+        } else {
+            $stmt2 = $conn->prepare("UPDATE seller_categories SET color = ? WHERE seller_username = ? AND name = ?");
+            if ($stmt2) {
+                $stmt2->bind_param("sss", $color, $seller_username, $name);
+                if ($stmt2->execute() && $stmt2->affected_rows > 0) $updated = true;
+            }
+        }
+    } else {
+        // Fallback update by name only
+        if (!empty($image_url)) {
+            $stmt3 = $conn->prepare("UPDATE seller_categories SET color = ?, image_url = ? WHERE name = ?");
+            if ($stmt3) {
+                $stmt3->bind_param("sss", $color, $image_url, $name);
+                if ($stmt3->execute() && $stmt3->affected_rows > 0) $updated = true;
+            }
+        } else {
+            $stmt3 = $conn->prepare("UPDATE seller_categories SET color = ? WHERE name = ?");
+            if ($stmt3) {
+                $stmt3->bind_param("ss", $color, $name);
+                if ($stmt3->execute() && $stmt3->affected_rows > 0) $updated = true;
+            }
+        }
+    }
+
+    echo json_encode(["success" => true, "message" => "Category color updated in database", "color" => $color, "updated" => $updated]);
     exit();
 } elseif ($action == 'delete-seller-category') {
     $id = isset($input['id']) ? (int)$input['id'] : (isset($_GET['id']) ? (int)$_GET['id'] : 0);

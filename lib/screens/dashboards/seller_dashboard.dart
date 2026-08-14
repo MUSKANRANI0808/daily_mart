@@ -122,12 +122,10 @@ class _SellerDashboardState extends State<SellerDashboard> {
 
   Future<void> _loadSellerCategories() async {
     final list = await AuthService.getSellerCategories(_sellerUsername);
-    if (mounted) {
-      if (jsonEncode(list) != jsonEncode(_sellerCategories)) {
-        setState(() {
-          _sellerCategories = list;
-        });
-      }
+    if (mounted && list.isNotEmpty) {
+      setState(() {
+        _sellerCategories = list;
+      });
     }
   }
 
