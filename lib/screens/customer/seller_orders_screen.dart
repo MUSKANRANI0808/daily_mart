@@ -1118,20 +1118,6 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
         body: SizedBox.expand(
           child: Stack(
             children: [
-              // Original Delivery Boy Background Image
-              Positioned(
-                right: -10,
-                bottom: 26,
-                top: 130,
-                width: 260,
-                child: Image.asset(
-                  'assets/images/delivery_boy.png',
-                  fit: BoxFit.contain,
-                  alignment: Alignment.bottomRight,
-                  errorBuilder: (ctx, err, stack) => const SizedBox.shrink(),
-                ),
-              ),
-
               // Main Content Layout - Fixed Top Header + Scrollable Slider & List
               Positioned.fill(
                 child: Column(
