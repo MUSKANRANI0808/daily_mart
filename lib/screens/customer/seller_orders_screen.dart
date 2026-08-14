@@ -1777,38 +1777,10 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                   margin: const EdgeInsets.symmetric(horizontal: 6),
                   child: Column(
                     children: [
-                      // Round Avatar Circle Container
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        width: 58,
-                        height: 58,
-                        padding: const EdgeInsets.all(2.5),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white,
-                          border: Border.all(color: ringColor, width: isSel ? 2.5 : 1.2),
-                          boxShadow: isSel
-                              ? [
-                                  BoxShadow(
-                                    color: const Color(0xFF8B5CF6).withValues(alpha: 0.25),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ]
-                              : [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.03),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                        ),
-                        child: ClipOval(
-                          child: Container(
-                            color: const Color(0xFFF8FAFC),
-                            child: _buildCategoryImageWidget(cImg, emojiSize: 26),
-                          ),
-                        ),
+                      // Round Avatar Circle Container with Continuous Rotating Ring Animation
+                      RotatingCategoryAvatarRingWidget(
+                        isSelected: isSel,
+                        child: _buildCategoryImageWidget(cImg, emojiSize: 26),
                       ),
                       const SizedBox(height: 6),
                       // Category Name Text Below Round Circle
@@ -2066,6 +2038,126 @@ class _GroceryFloatingBackgroundParticlesState extends State<GroceryFloatingBack
               ),
             );
           }).toList(),
+        );
+      },
+    );
+  }
+}
+
+/// Animated Continuous Rotating Gradient Ring Widget for Category Avatars
+class RotatingCategoryAvatarRingWidget extends StatefulWidget {
+  final bool isSelected;
+  final Widget child;
+
+  const RotatingCategoryAvatarRingWidget({
+    super.key,
+    required this.isSelected,
+    required this.child,
+  });
+
+  @override
+  State<RotatingCategoryAvatarRingWidget> createState() => _RotatingCategoryAvatarRingWidgetState();
+}
+
+class _RotatingCategoryAvatarRingWidgetState extends State<RotatingCategoryAvatarRingWidget>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 4),
+      vsync: this,
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final angle = _controller.value * 2 * math.pi;
+
+        return Container(
+          width: 58,
+          height: 58,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: widget.isSelected
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.35),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 5,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Spinning Metallic Gradient Ring Background
+              Transform.rotate(
+                angle: angle,
+                child: Container(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: widget.isSelected
+                        ? const SweepGradient(
+                            colors: [
+                              Color(0xFF8B5CF6),
+                              Color(0xFFEC4899),
+                              Color(0xFF3B82F6),
+                              Color(0xFF10B981),
+                              Color(0xFFF59E0B),
+                              Color(0xFF8B5CF6),
+                            ],
+                          )
+                        : SweepGradient(
+                            colors: [
+                              const Color(0xFF8B5CF6).withValues(alpha: 0.7),
+                              const Color(0xFF3B82F6).withValues(alpha: 0.4),
+                              const Color(0xFF8B5CF6).withValues(alpha: 0.7),
+                              const Color(0xFF3B82F6).withValues(alpha: 0.4),
+                            ],
+                          ),
+                  ),
+                ),
+              ),
+
+              // Inner Solid Circle Mask so ring forms a sleek 3px rotating border
+              Container(
+                width: widget.isSelected ? 52.5 : 53.5,
+                height: widget.isSelected ? 52.5 : 53.5,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white,
+                ),
+                child: ClipOval(
+                  child: Container(
+                    color: const Color(0xFFF8FAFC),
+                    child: widget.child,
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
