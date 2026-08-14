@@ -64,7 +64,7 @@ class _SellerOrderCartScreenState extends State<SellerOrderCartScreen> {
   Future<void> _loadCart() async {
     final items = await CartService.getCartItems(_sellerUsername);
     final custMobile = await _getEffectiveCustomerMobile();
-    final history = await AuthService.getCustomerPlacedOrders(custMobile);
+    final history = await AuthService.getCustomerPlacedOrders(custMobile, sellerUsername: _sellerUsername);
     
     if (mounted) {
       final newCartJson = jsonEncode(items);
@@ -177,11 +177,11 @@ class _SellerOrderCartScreenState extends State<SellerOrderCartScreen> {
   void _placeBillOrder() async {
     if (_cartItems.isEmpty) return;
 
-    final nextOrderId = await AuthService.generateNextOrderId();
+    final custMobile = await _getEffectiveCustomerMobile();
+    final nextOrderId = await AuthService.getNextGlobalOrderId(_sellerUsername, customerMobile: custMobile);
     final now = DateTime.now();
     final formattedDate = '${now.day}/${now.month}/${now.year} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
-    final custMobile = await _getEffectiveCustomerMobile();
     final currentUser = await AuthService.getCurrentUser();
 
     final customer = widget.customer ?? currentUser ??

@@ -609,11 +609,37 @@ if ($action == 'get-header-theme') {
         }
     }
     echo json_encode(["success" => true, "sellers" => $sellers]);
+} elseif ($action == 'get-next-order-id') {
+    $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
+    $escapedSeller = $conn->real_escape_string($seller_username);
+
+    $orderCount = 0;
+    $cntQuery = !empty($seller_username)
+        ? "SELECT COUNT(*) as total_orders FROM messages WHERE (seller_username = '$escapedSeller' OR seller_username LIKE '%$escapedSeller%') AND (items_json IS NOT NULL AND items_json != '' OR message LIKE '%ORDER%')"
+        : "SELECT COUNT(*) as total_orders FROM messages WHERE items_json IS NOT NULL AND items_json != '' OR message LIKE '%ORDER%'";
+
+    $cntRes = $conn->query($cntQuery);
+    if ($cntRes && $cRow = $cntRes->fetch_assoc()) {
+        $orderCount = (int)$cRow['total_orders'];
+    }
+
+    $nextNum = 1001 + $orderCount;
+    $nextOrderId = "#DM-" . $nextNum;
+
+    echo json_encode([
+        "success" => true,
+        "next_order_id" => $nextOrderId,
+        "order_number" => $nextOrderId,
+        "sequence" => $nextNum,
+        "total_orders" => $orderCount
+    ]);
+    exit();
 } elseif ($action == 'send-message') {
     $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : '';
     $customer_mobile = isset($input['customer_mobile']) ? trim($input['customer_mobile']) : '';
     $message = isset($input['message']) ? trim($input['message']) : '';
     $sender_type = isset($input['sender_type']) ? trim($input['sender_type']) : 'customer';
+    $custom_order_id = isset($input['order_id']) ? trim($input['order_id']) : '';
 
     if (empty($seller_username) || empty($customer_mobile) || empty($message)) {
         echo json_encode(["success" => false, "message" => "Required fields missing"]);
@@ -633,15 +659,25 @@ if ($action == 'get-header-theme') {
     $digits = preg_replace('/[^0-9]/', '', $customer_mobile);
     $last10 = (strlen($digits) >= 10) ? substr($digits, -10) : $digits;
     $escapedSeller = $conn->real_escape_string($seller_username);
-    $escapedLike = "%" . $conn->real_escape_string($last10) . "%";
 
-    $seqCount = 1;
-    $numRes = $conn->query("SELECT COUNT(*) as total FROM messages WHERE seller_username = '$escapedSeller' AND customer_mobile LIKE '$escapedLike'");
-    if ($numRes && $nRow = $numRes->fetch_assoc()) {
-        $seqCount = (int)$nRow['total'] + 1;
+    // Dynamic deletion-proof order ID calculation
+    if (!empty($custom_order_id) && $custom_order_id !== 'Status' && $custom_order_id !== 'null') {
+        $order_id = $custom_order_id;
+    } else {
+        $orderCount = 0;
+        $cntRes = $conn->query("SELECT COUNT(*) as total_orders FROM messages WHERE (seller_username = '$escapedSeller' OR seller_username LIKE '%$escapedSeller%') AND (items_json IS NOT NULL AND items_json != '' OR message LIKE '%ORDER%')");
+        if ($cntRes && $cRow = $cntRes->fetch_assoc()) {
+            $orderCount = (int)$cRow['total_orders'];
+        }
+        $order_id = "#DM-" . (1001 + $orderCount);
     }
-    $order_id = "Order #" . $seqCount;
-    $order_status = "Status";
+
+    // Replace #DM-1001 in message text if dynamic order_id is higher
+    if (strpos($message, '#DM-1001') !== false && $order_id !== '#DM-1001') {
+        $message = str_replace('#DM-1001', $order_id, $message);
+    }
+
+    $order_status = "Pending";
     $logs_json = json_encode(array());
 
     $colCheck = $conn->query("SHOW COLUMNS FROM messages LIKE 'logs_json'");
@@ -653,7 +689,26 @@ if ($action == 'get-header-theme') {
     if ($stmt) {
         $stmt->bind_param("ssssssss", $seller_username, $customer_mobile, $message, $items_json, $order_id, $order_status, $logs_json, $sender_type);
         if ($stmt->execute()) {
-            echo json_encode(["success" => true, "message" => "Message sent"]);
+            // Also write backup row into customer_orders table for Seller & Customer dashboards
+            @$conn->query("CREATE TABLE IF NOT EXISTS customer_orders (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                order_number VARCHAR(50) NOT NULL,
+                seller_username VARCHAR(100) NOT NULL,
+                seller_name VARCHAR(255) DEFAULT NULL,
+                customer_mobile VARCHAR(20) NOT NULL,
+                customer_name VARCHAR(255) DEFAULT NULL,
+                items_json LONGTEXT NOT NULL,
+                total_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                total_count INT NOT NULL DEFAULT 0,
+                order_status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX(customer_mobile),
+                INDEX(seller_username)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+            @$conn->query("INSERT INTO customer_orders (order_number, seller_username, customer_mobile, customer_name, items_json, total_amount, total_count, order_status) VALUES ('$order_id', '$escapedSeller', '$customer_mobile', 'Customer', '" . $conn->real_escape_string($items_json) . "', 0.00, 1, 'PENDING')");
+
+            echo json_encode(["success" => true, "message" => "Message sent", "order_id" => $order_id]);
             exit();
         }
     }
@@ -662,12 +717,13 @@ if ($action == 'get-header-theme') {
     if ($stmtFallback) {
         $stmtFallback->bind_param("ssss", $seller_username, $customer_mobile, $message, $sender_type);
         if ($stmtFallback->execute()) {
-            echo json_encode(["success" => true, "message" => "Message sent (fallback)"]);
+            echo json_encode(["success" => true, "message" => "Message sent (fallback)", "order_id" => $order_id]);
             exit();
         }
     }
 
     echo json_encode(["success" => false, "message" => "SQL Error"]);
+    exit();
 } elseif ($action == 'update-item-status') {
     $msg_id = isset($input['message_id']) ? (int)$input['message_id'] : 0;
     $items = isset($input['items']) ? $input['items'] : array();

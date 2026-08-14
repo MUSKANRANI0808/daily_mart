@@ -467,8 +467,22 @@ class AuthService {
   }) async {
     final cleanSeller = sellerUsername.trim();
     final cleanCust = customerMobile.trim();
-    final prefs = await SharedPreferences.getInstance();
 
+    // 1. Fetch deletion-proof sequential Order ID directly from MySQL Database
+    try {
+      final encSeller = Uri.encodeComponent(cleanSeller);
+      final encCust = Uri.encodeComponent(cleanCust);
+      final res = await VpsApiService.get('get-next-order-id&seller_username=$encSeller&customer_mobile=$encCust');
+      if (res != null && res['success'] == true && res['next_order_id'] != null) {
+        final serverOrdId = res['next_order_id'].toString().trim();
+        if (serverOrdId.isNotEmpty) {
+          return serverOrdId;
+        }
+      }
+    } catch (_) {}
+
+    // 2. Local Fallback Counter
+    final prefs = await SharedPreferences.getInstance();
     final globalKey = 'lifetime_global_counter_$cleanSeller';
     final custKey = 'lifetime_cust_counter_${cleanSeller}_$cleanCust';
 
@@ -481,27 +495,6 @@ class AuthService {
     int maxGlobal = storedGlobal > memGlobal ? storedGlobal : memGlobal;
     int maxCust = storedCust > memCust ? storedCust : memCust;
 
-    if (activeMessages != null && activeMessages.isNotEmpty) {
-      for (var m in activeMessages) {
-        final rawOrd = (m['order_id'] ?? '').toString().trim();
-        if (rawOrd.contains('/')) {
-          final parts = rawOrd.replaceAll('Order', '').trim().split('/');
-          if (parts.length == 2) {
-            final cVal = int.tryParse(parts[0].trim()) ?? 0;
-            final gVal = int.tryParse(parts[1].trim()) ?? 0;
-            if (cVal > maxCust) maxCust = cVal;
-            if (gVal > maxGlobal) maxGlobal = gVal;
-          }
-        } else {
-          final numMatch = RegExp(r'\d+').firstMatch(rawOrd);
-          if (numMatch != null) {
-            final val = int.tryParse(numMatch.group(0)!) ?? 0;
-            if (val > maxCust) maxCust = val;
-          }
-        }
-      }
-    }
-
     int nextCust = maxCust + 1;
     int nextGlobal = maxGlobal + 1;
 
@@ -511,7 +504,7 @@ class AuthService {
     await prefs.setInt(globalKey, nextGlobal);
     await prefs.setInt(custKey, nextCust);
 
-    return 'Order $nextCust/$nextGlobal';
+    return '#DM-${1000 + nextGlobal}';
   }
 
   /// Annotate messages with deletion-proof lifetime hierarchical dual order numbers (CustomerSeq/GlobalSeq)
@@ -4600,10 +4593,11 @@ class AuthService {
     }
   }
 
-  /// Fetch Customer Placed Orders History (Merges MySQL VPS Database & Local Cache)
-  static Future<List<Map<String, dynamic>>> getCustomerPlacedOrders(String customerMobile) async {
+  /// Fetch Customer/Seller Placed Orders History (Merges MySQL VPS Database & Local Cache)
+  static Future<List<Map<String, dynamic>>> getCustomerPlacedOrders(String customerMobile, {String sellerUsername = ''}) async {
     final prefs = await SharedPreferences.getInstance();
     String custMobile = customerMobile.trim();
+    final cleanSeller = sellerUsername.trim();
     
     if (custMobile.isEmpty) {
       final currentUser = await getCurrentUser();
@@ -4794,7 +4788,11 @@ class AuthService {
 
     // 2. Fetch from VPS MySQL Database action=get-customer-orders
     try {
-      final queryParam = last10.isNotEmpty ? 'customer_mobile=$last10' : '';
+      final List<String> queryParts = [];
+      if (last10.isNotEmpty) queryParts.add('customer_mobile=$last10');
+      if (cleanSeller.isNotEmpty) queryParts.add('seller_username=${Uri.encodeComponent(cleanSeller)}');
+      final queryParam = queryParts.join('&');
+      
       final res = await VpsApiService.get('get-customer-orders&$queryParam');
       if (res != null && res['success'] == true && res['orders'] != null) {
         final List rawOrders = res['orders'];
@@ -4808,9 +4806,13 @@ class AuthService {
       debugPrint('Error fetching customer orders from VPS Database: $e');
     }
 
-    // 3. Direct Query messages table by customer_mobile
+    // 3. Direct Query messages table by customer_mobile / seller_username
     try {
-      final mobParam = last10.isNotEmpty ? 'customer_mobile=$last10' : '';
+      final List<String> msgParts = [];
+      if (last10.isNotEmpty) msgParts.add('customer_mobile=$last10');
+      if (cleanSeller.isNotEmpty) msgParts.add('seller_username=${Uri.encodeComponent(cleanSeller)}');
+      final mobParam = msgParts.join('&');
+      
       final resDirect = await VpsApiService.get('get-messages&$mobParam');
       if (resDirect != null && resDirect['success'] == true && resDirect['messages'] != null) {
         final List msgs = resDirect['messages'];
