@@ -124,6 +124,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
   String _selectedOrderFilter = 'All';
   String _searchQuery = '';
   int _cartBadgeCount = 0;
+  double _cartTotalAmount = 0.0;
   String _sellerLocation = '';
   final PageController _sliderController = PageController();
 
@@ -464,6 +465,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
     }
     final cartItems = await CartService.getCartItems(widget.sellerUsername);
     final cartCount = CartService.getTotalCount(cartItems);
+    final cartTotalAmount = CartService.getTotalAmount(cartItems);
 
     if (mounted) {
       setState(() {
@@ -473,6 +475,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
         _rawCategories = parsedRawCats;
         _categories = parsedCats;
         _cartBadgeCount = cartCount;
+        _cartTotalAmount = cartTotalAmount;
         _isLoading = false;
         _hasDraft = hasDraft;
         _draftSnippet = draftSnippet;
@@ -1460,21 +1463,27 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
               label: 'Home',
             ),
             BottomNavigationBarItem(
-              icon: _cartBadgeCount > 0
+              icon: _cartTotalAmount > 0
                   ? Badge(
-                      label: Text('$_cartBadgeCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                      label: Text(
+                        '₹${_cartTotalAmount % 1 == 0 ? _cartTotalAmount.toInt() : _cartTotalAmount.toStringAsFixed(1)}',
+                        style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w900),
+                      ),
                       backgroundColor: const Color(0xFF10B981),
                       child: const Icon(Icons.receipt_long_rounded),
                     )
                   : const Icon(Icons.receipt_long_rounded),
-              activeIcon: _cartBadgeCount > 0
+              activeIcon: _cartTotalAmount > 0
                   ? Badge(
-                      label: Text('$_cartBadgeCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                      label: Text(
+                        '₹${_cartTotalAmount % 1 == 0 ? _cartTotalAmount.toInt() : _cartTotalAmount.toStringAsFixed(1)}',
+                        style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w900),
+                      ),
                       backgroundColor: const Color(0xFF10B981),
                       child: const Icon(Icons.receipt_long_rounded, size: 26),
                     )
                   : const Icon(Icons.receipt_long_rounded, size: 26),
-              label: 'Order',
+              label: 'My Order',
             ),
             const BottomNavigationBarItem(
               icon: Icon(Icons.person_rounded),
