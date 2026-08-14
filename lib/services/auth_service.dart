@@ -4289,8 +4289,13 @@ class AuthService {
   static List<Map<String, dynamic>> get defaultStoreCategories => [];
 
   /// Get Custom Categories for Seller (from VPS Database with local cache fallback)
+  /// Get Custom Categories for Seller (from VPS Database with local cache fallback)
   static Future<List<Map<String, dynamic>>> getSellerCategories(String sellerUsername) async {
-    final cleanSeller = sellerUsername.trim();
+    String cleanSeller = sellerUsername.trim();
+    if (cleanSeller.isEmpty) {
+      final currentUser = await getCurrentUser();
+      cleanSeller = (currentUser?.username ?? currentUser?.mobile ?? currentUser?.name ?? '').trim();
+    }
     if (cleanSeller.isEmpty) return [];
 
     final prefs = await SharedPreferences.getInstance();
@@ -4298,7 +4303,7 @@ class AuthService {
 
     // 1. Fetch from VPS API
     try {
-      final res = await VpsApiService.get('get-seller-categories&seller_username=$cleanSeller');
+      final res = await VpsApiService.get('get-seller-categories&seller_username=${Uri.encodeComponent(cleanSeller)}');
       if (res != null && res['success'] == true && res['categories'] is List) {
         final List<dynamic> rawList = res['categories'];
         final List<Map<String, dynamic>> categories = rawList.map((e) => Map<String, dynamic>.from(e)).toList();
@@ -4321,7 +4326,11 @@ class AuthService {
 
   /// Add Custom Category for Seller
   static Future<bool> addSellerCategory(String sellerUsername, String categoryName, String imageUrl, {String color = '#8B5CF6'}) async {
-    final cleanSeller = sellerUsername.trim();
+    String cleanSeller = sellerUsername.trim();
+    if (cleanSeller.isEmpty) {
+      final currentUser = await getCurrentUser();
+      cleanSeller = (currentUser?.username ?? currentUser?.mobile ?? currentUser?.name ?? '').trim();
+    }
     final cleanName = categoryName.trim();
     final cleanImg = imageUrl.trim();
     final cleanColor = color.trim().isEmpty ? '#8B5CF6' : color.trim();
@@ -4361,17 +4370,28 @@ class AuthService {
       }
     } catch (_) {}
 
-    bool exists = categories.any((c) => (c['name'] ?? '').toString().trim().toLowerCase() == cleanName.toLowerCase());
+    bool exists = false;
+    for (var c in categories) {
+      if ((c['name'] ?? '').toString().trim().toLowerCase() == cleanName.toLowerCase()) {
+        c['color'] = cleanColor;
+        if (cleanImg.isNotEmpty) c['image_url'] = cleanImg;
+        exists = true;
+      }
+    }
     if (!exists) {
       categories.add(newCat);
-      await prefs.setString(cacheKey, jsonEncode(categories));
     }
+    await prefs.setString(cacheKey, jsonEncode(categories));
     return true;
   }
 
   /// Update Custom Category
   static Future<bool> updateSellerCategory(int id, String sellerUsername, String categoryName, String imageUrl, {String color = '#8B5CF6'}) async {
-    final cleanSeller = sellerUsername.trim();
+    String cleanSeller = sellerUsername.trim();
+    if (cleanSeller.isEmpty) {
+      final currentUser = await getCurrentUser();
+      cleanSeller = (currentUser?.username ?? currentUser?.mobile ?? currentUser?.name ?? '').trim();
+    }
     final cleanName = categoryName.trim();
     final cleanImg = imageUrl.trim();
     final cleanColor = color.trim().isEmpty ? '#8B5CF6' : color.trim();
@@ -4397,7 +4417,7 @@ class AuthService {
         final List<dynamic> list = jsonDecode(str);
         final categories = list.map((e) => Map<String, dynamic>.from(e)).toList();
         for (var c in categories) {
-          if ((c['id'] as num?)?.toInt() == id) {
+          if ((c['id'] as num?)?.toInt() == id || (c['name'] ?? '').toString().trim().toLowerCase() == cleanName.toLowerCase()) {
             c['name'] = cleanName;
             if (cleanImg.isNotEmpty) c['image_url'] = cleanImg;
             c['color'] = cleanColor;

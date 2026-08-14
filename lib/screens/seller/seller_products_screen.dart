@@ -50,12 +50,20 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     _loadData();
   }
 
+  String get _sellerUsername {
+    final u = (widget.seller.username ?? '').trim();
+    if (u.isNotEmpty) return u;
+    final m = (widget.seller.mobile ?? '').trim();
+    if (m.isNotEmpty) return m;
+    return (widget.seller.name ?? 'seller').trim();
+  }
+
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
     });
 
-    final username = widget.seller.username ?? '';
+    final username = _sellerUsername;
     final products = await AuthService.getSellerProducts(username);
     final units = await AuthService.getSellerUnits(username);
     final categories = await AuthService.getSellerCategories(username);
@@ -100,7 +108,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
-          final username = widget.seller.username ?? '';
+          final username = _sellerUsername;
 
           Future<void> _pickCategoryImage() async {
             try {
@@ -508,7 +516,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                 onPressed: () async {
                   final newName = editController.text.trim();
                   if (newName.isNotEmpty) {
-                    final username = widget.seller.username ?? '';
+                    final username = _sellerUsername;
                     Navigator.pop(ctx);
                     await AuthService.updateSellerCategory(catId, username, newName, editImg, color: editColor);
                     final updatedCats = await AuthService.getSellerCategories(username);
