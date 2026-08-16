@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -114,6 +115,8 @@ class SellerSlidersScreen extends StatefulWidget {
 
 class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
   List<Map<String, dynamic>> _sliders = [];
+  List<String> _availableSections = ['Top Banner'];
+  String _selectedSectionFilter = 'All';
   bool _isLoading = true;
 
   @override
@@ -242,6 +245,8 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
     }
   }
 
+  static final Map<String, Uint8List> _base64BytesCache = {};
+
   static Widget buildBannerBackground({
     required String bg,
     required Widget child,
@@ -298,8 +303,13 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
     if (bg.startsWith('data:image')) {
       try {
         final base64Str = bg.split(',').last;
+        Uint8List? bytes = _base64BytesCache[base64Str];
+        if (bytes == null) {
+          bytes = base64Decode(base64Str);
+          _base64BytesCache[base64Str] = bytes;
+        }
         decImg = DecorationImage(
-          image: MemoryImage(base64Decode(base64Str)),
+          image: MemoryImage(bytes),
           fit: fit,
           colorFilter: filter,
         );
@@ -403,9 +413,23 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
   Future<void> _loadSliders() async {
     setState(() => _isLoading = true);
     final list = await AuthService.getSellerSliders(_sellerUsername);
+    final secList = await AuthService.getSellerSections(_sellerUsername);
+    final catList = await AuthService.getSellerCategories(_sellerUsername);
+
+    final Set<String> secNames = {'Top Banner'};
+    for (var s in secList) {
+      final name = (s['name'] ?? '').toString().trim();
+      if (name.isNotEmpty) secNames.add(name);
+    }
+    for (var c in catList) {
+      final name = (c['name'] ?? c['category_name'] ?? '').toString().trim();
+      if (name.isNotEmpty) secNames.add(name);
+    }
+
     if (mounted) {
       setState(() {
         _sliders = list;
+        _availableSections = secNames.toList();
         _isLoading = false;
       });
     }
@@ -417,6 +441,8 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
     final tagCtrl = TextEditingController(text: existingSlider?['tag'] ?? '');
     final titleCtrl = TextEditingController(text: existingSlider?['title'] ?? '');
     final descCtrl = TextEditingController(text: existingSlider?['description'] ?? '');
+    String selectedSection = existingSlider?['section'] ?? (_availableSections.isNotEmpty ? _availableSections.first : 'Top Banner');
+    String selectedPosition = (existingSlider?['position'] ?? 'internal').toString().trim();
     String selectedImageData = existingSlider?['bg_image_url'] ?? 'none';
     double overlayDim = (existingSlider?['overlay_dim'] as num?)?.toDouble() ?? 0.0;
     bool removeWhiteBg = (existingSlider?['remove_white_bg'] == true || existingSlider?['remove_white_bg'] == 1);
@@ -688,6 +714,73 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                     ],
                                   ),
                                 ),
+
+                                const Text('Target Store Section 🏷️ (Jiss section me slider dikhana hai):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                                const SizedBox(height: 6),
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: _availableSections.map((secName) {
+                                      final isSel = selectedSection.toLowerCase() == secName.toLowerCase();
+                                      return Padding(
+                                        padding: const EdgeInsets.only(right: 6),
+                                        child: ChoiceChip(
+                                          label: Text(secName == 'Top Banner' ? '🖼️ Top Banner' : secName),
+                                          selected: isSel,
+                                          selectedColor: const Color(0xFF059669),
+                                          backgroundColor: const Color(0xFFF1F5F9),
+                                          labelStyle: TextStyle(
+                                            color: isSel ? Colors.white : const Color(0xFF334155),
+                                            fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
+                                            fontSize: 11,
+                                          ),
+                                          onSelected: (val) {
+                                            if (val) setDialogState(() => selectedSection = secName);
+                                          },
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                                if (selectedSection != 'Top Banner') ...[
+                                  const SizedBox(height: 10),
+                                  const Text('Slider Placement / Position (सेक्शन में स्लाइडर की जगह):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    children: [
+                                      ChoiceChip(
+                                        label: const Text('📌 Internal (सेक्शन के अंदर)'),
+                                        selected: selectedPosition == 'internal',
+                                        selectedColor: const Color(0xFF2563EB),
+                                        backgroundColor: const Color(0xFFF1F5F9),
+                                        labelStyle: TextStyle(
+                                          color: selectedPosition == 'internal' ? Colors.white : const Color(0xFF334155),
+                                          fontWeight: selectedPosition == 'internal' ? FontWeight.bold : FontWeight.w500,
+                                          fontSize: 11,
+                                        ),
+                                        onSelected: (val) {
+                                          if (val) setDialogState(() => selectedPosition = 'internal');
+                                        },
+                                      ),
+                                      const SizedBox(width: 8),
+                                      ChoiceChip(
+                                        label: const Text('🚀 External (सेक्शन के ऊपर बाहर)'),
+                                        selected: selectedPosition == 'external',
+                                        selectedColor: const Color(0xFF7C3AED),
+                                        backgroundColor: const Color(0xFFF1F5F9),
+                                        labelStyle: TextStyle(
+                                          color: selectedPosition == 'external' ? Colors.white : const Color(0xFF334155),
+                                          fontWeight: selectedPosition == 'external' ? FontWeight.bold : FontWeight.w500,
+                                          fontSize: 11,
+                                        ),
+                                        onSelected: (val) {
+                                          if (val) setDialogState(() => selectedPosition = 'external');
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                                const SizedBox(height: 12),
 
                                 const Text('Offer Tag Text (Optional)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
                                 const SizedBox(height: 4),
@@ -1168,7 +1261,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                           style: TextStyle(fontSize: 10.5, color: Color(0xFF64748B)),
                                         ),
                                         value: removeWhiteBg,
-                                        activeColor: const Color(0xFF059669),
+                                        activeThumbColor: const Color(0xFF059669),
                                         onChanged: (val) async {
                                           setDialogState(() {
                                             removeWhiteBg = val;
@@ -1276,6 +1369,8 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                 tagShape: selectedTagShape,
                                 titleColor: selectedTitleColor,
                                 descColor: selectedDescColor,
+                                section: selectedSection,
+                                position: selectedPosition,
                                 overlayDim: overlayDim,
                                 removeWhiteBg: removeWhiteBg,
                                 imgFit: imgFit,
@@ -1291,6 +1386,8 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                 tagShape: selectedTagShape,
                                 titleColor: selectedTitleColor,
                                 descColor: selectedDescColor,
+                                section: selectedSection,
+                                position: selectedPosition,
                                 overlayDim: overlayDim,
                                 removeWhiteBg: removeWhiteBg,
                                 imgFit: imgFit,
@@ -1439,48 +1536,89 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                     ],
                   ),
 
+                  const SizedBox(height: 12),
+
+                  // SECTION FILTER CHIPS BAR
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: ['All', ..._availableSections].map((secName) {
+                        final isSel = _selectedSectionFilter.toLowerCase() == secName.toLowerCase();
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: ChoiceChip(
+                            label: Text(secName == 'All' ? '🌟 All Banners' : (secName == 'Top Banner' ? '🖼️ Top Banner' : secName)),
+                            selected: isSel,
+                            selectedColor: const Color(0xFF8B5CF6),
+                            backgroundColor: const Color(0xFFF1F5F9),
+                            labelStyle: TextStyle(
+                              color: isSel ? Colors.white : const Color(0xFF334155),
+                              fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
+                              fontSize: 11.5,
+                            ),
+                            onSelected: (val) {
+                              if (val) setState(() => _selectedSectionFilter = secName);
+                            },
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+
                   const SizedBox(height: 14),
 
-                  _sliders.isEmpty
-                      ? Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(30),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.black12),
-                          ),
-                          child: Column(
-                            children: const [
-                              Icon(Icons.style_outlined, size: 50, color: Colors.grey),
-                              SizedBox(height: 10),
-                              Text('No banners added yet.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black54)),
-                              SizedBox(height: 4),
-                              Text('Tap "+ Add Slider" to choose from 10 abstract design cards or gallery image & create banner!', style: TextStyle(fontSize: 12, color: Colors.grey), textAlign: TextAlign.center),
-                            ],
-                          ),
-                        )
-                      : ListView.separated(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: _sliders.length,
-                          separatorBuilder: (ctx, idx) => const SizedBox(height: 16),
-                          itemBuilder: (ctx, idx) {
-                            final slider = _sliders[idx];
-                            final tag = (slider['tag'] ?? '').toString();
-                            final title = (slider['title'] ?? '').toString();
-                            final desc = (slider['description'] ?? '').toString();
-                            final bg = slider['bg_image_url'] ?? 'preset_1';
-                            final tagBg = hexToColor(slider['tag_bg_color'] ?? '#10B981');
-                            final tagShape = slider['tag_shape'] ?? 'pill';
-                            final titleCol = hexToColor(slider['title_color'] ?? '#FFFFFF');
-                            final descCol = hexToColor(slider['desc_color'] ?? '#E2E8F0');
+                  () {
+                    final displaySliders = _sliders.where((s) {
+                      if (_selectedSectionFilter == 'All') return true;
+                      final sec = (s['section'] ?? 'Top Banner').toString().trim();
+                      return sec.toLowerCase() == _selectedSectionFilter.toLowerCase();
+                    }).toList();
 
-                            final overlayDim = (slider['overlay_dim'] as num?)?.toDouble() ?? 0.0;
-                            final removeWhiteBg = (slider['remove_white_bg'] == true || slider['remove_white_bg'] == 1);
-                            final imgFit = slider['img_fit']?.toString() ?? 'cover';
+                    if (displaySliders.isEmpty) {
+                      return Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(30),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.black12),
+                        ),
+                        child: Column(
+                          children: const [
+                            Icon(Icons.style_outlined, size: 50, color: Colors.grey),
+                            SizedBox(height: 10),
+                            Text('No banners found in this section.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black54)),
+                            SizedBox(height: 4),
+                            Text('Tap "+ Add Slider" or tap a section chip below any banner card to assign it!', style: TextStyle(fontSize: 12, color: Colors.grey), textAlign: TextAlign.center),
+                          ],
+                        ),
+                      );
+                    }
 
-                            return Stack(
+                    return ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: displaySliders.length,
+                      separatorBuilder: (ctx, idx) => const SizedBox(height: 16),
+                      itemBuilder: (ctx, idx) {
+                        final slider = displaySliders[idx];
+                        final tag = (slider['tag'] ?? '').toString();
+                        final title = (slider['title'] ?? '').toString();
+                        final desc = (slider['description'] ?? '').toString();
+                        final bg = slider['bg_image_url'] ?? 'preset_1';
+                        final tagBg = hexToColor(slider['tag_bg_color'] ?? '#10B981');
+                        final tagShape = slider['tag_shape'] ?? 'pill';
+                        final titleCol = hexToColor(slider['title_color'] ?? '#FFFFFF');
+                        final descCol = hexToColor(slider['desc_color'] ?? '#E2E8F0');
+                        final sec = (slider['section'] ?? 'Top Banner').toString().trim();
+
+                        final overlayDim = (slider['overlay_dim'] as num?)?.toDouble() ?? 0.0;
+                        final removeWhiteBg = (slider['remove_white_bg'] == true || slider['remove_white_bg'] == 1);
+                        final imgFit = slider['img_fit']?.toString() ?? 'cover';
+
+                        return Column(
+                          children: [
+                            Stack(
                               children: [
                                 buildBannerBackground(
                                   bg: bg,
@@ -1563,9 +1701,89 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                   ),
                                 ),
                               ],
-                            );
-                          },
-                        ),
+                            ),
+
+                            // FINGER-TAP 1-TOUCH SECTION SWITCHER BAR FOR THIS SLIDER CARD
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: const BorderRadius.only(
+                                  bottomLeft: Radius.circular(16),
+                                  bottomRight: Radius.circular(16),
+                                ),
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.touch_app_rounded, size: 16, color: Color(0xFF8B5CF6)),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Assigned Section: ${sec.isEmpty ? 'Top Banner' : sec}',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A)),
+                                      ),
+                                      const Spacer(),
+                                      const Text(
+                                        '👈 Tap chip to move section',
+                                        style: TextStyle(fontSize: 10.5, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: Row(
+                                      children: _availableSections.map((secName) {
+                                        final isCur = sec.toLowerCase() == secName.toLowerCase() || (sec.isEmpty && secName == 'Top Banner');
+                                        return Padding(
+                                          padding: const EdgeInsets.only(right: 6),
+                                          child: InkWell(
+                                            onTap: () async {
+                                              if (!isCur) {
+                                                final success = await AuthService.updateSellerSliderSection(slider['id'], _sellerUsername, secName);
+                                                if (success) {
+                                                  await _loadSliders();
+                                                  if (mounted) {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      SnackBar(content: Text('Slider banner moved to "$secName" section!')),
+                                                    );
+                                                  }
+                                                }
+                                              }
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                              decoration: BoxDecoration(
+                                                color: isCur ? const Color(0xFF8B5CF6) : const Color(0xFFF1F5F9),
+                                                borderRadius: BorderRadius.circular(20),
+                                                border: Border.all(color: isCur ? const Color(0xFF7C3AED) : const Color(0xFFCBD5E1)),
+                                              ),
+                                              child: Text(
+                                                secName == 'Top Banner' ? '🖼️ Top Banner' : secName,
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: isCur ? FontWeight.bold : FontWeight.w500,
+                                                  color: isCur ? Colors.white : const Color(0xFF334155),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  }(),
                 ],
               ),
             ),

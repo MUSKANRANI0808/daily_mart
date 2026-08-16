@@ -241,253 +241,479 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 25,
+            offset: Offset(0, -5),
+          ),
+        ],
       ),
       padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Handle Bar
-            const SizedBox(height: 12),
-            Center(
-              child: Container(
-                width: 44,
-                height: 4.5,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Big Enlarged Product Image Preview Box
-            Container(
-              height: 200,
-              margin: const EdgeInsets.symmetric(horizontal: 20),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Stack(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Scrollable Body Content
+          Flexible(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Positioned.fill(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: _buildProductImageWidget(img, emojiSize: 64),
-                    ),
-                  ),
+                  // 1. EDGE-TO-EDGE FULL BLEED HERO BANNER IMAGE (Matching Reference Design!)
+                  Stack(
+                    children: [
+                      // Full-width Hero Image
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                        child: Container(
+                          height: 250,
+                          width: double.infinity,
+                          color: const Color(0xFFF1F5F9),
+                          child: _buildProductImageWidget(img, emojiSize: 84),
+                        ),
+                      ),
 
-                  // Category Badge Pill
-                  if (cat.isNotEmpty)
-                    Positioned(
-                      top: 12,
-                      left: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF8B5CF6),
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.15),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
+                      // Gradient Overlay on Image Bottom for text contrast
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: 100,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.transparent,
+                                Colors.black.withValues(alpha: 0.70),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // Handle Bar on Top
+                      Positioned(
+                        top: 10,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: Container(
+                            width: 44,
+                            height: 4.5,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.85),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // Top Navigation Controls (Back/Close Left, Share/Heart Right)
+                      Positioned(
+                        top: 22,
+                        left: 16,
+                        right: 16,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // Back / Close Circle Button
+                            GestureDetector(
+                              onTap: () => Navigator.pop(context),
+                              child: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.15),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A), size: 22),
+                              ),
+                            ),
+
+                            // Category Pill (Center/Right)
+                            if (cat.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
+                                  ),
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.4),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: Text(
+                                  cat.toUpperCase(),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.6,
+                                  ),
+                                ),
+                              ),
+
+                            // Floating Heart / Favorite Button
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.15),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(Icons.favorite_border_rounded, color: Color(0xFFE11D48), size: 20),
                             ),
                           ],
                         ),
-                        child: Text(
-                          cat.toUpperCase(),
+                      ),
+
+                      // Overlaid Price Banner on Image Bottom
+                      Positioned(
+                        bottom: 14,
+                        left: 20,
+                        child: Row(
+                          children: [
+                            Text(
+                              '₹$rateStr',
+                              style: const TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                                shadows: [
+                                  Shadow(color: Colors.black54, blurRadius: 8, offset: Offset(0, 2)),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              ' / $_baseUnit',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white70,
+                                shadows: [
+                                  Shadow(color: Colors.black54, blurRadius: 6, offset: Offset(0, 1)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  // 2. PRODUCT DETAILS SECTION
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 18),
+
+                        // Title
+                        Text(
+                          name,
                           style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A),
+                            height: 1.2,
+                            letterSpacing: -0.3,
                           ),
                         ),
-                      ),
-                    ),
+                        const SizedBox(height: 10),
 
-                  // Close Button
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: InkWell(
-                      onTap: () => Navigator.pop(context),
-                      child: CircleAvatar(
-                        radius: 16,
-                        backgroundColor: Colors.black.withValues(alpha: 0.45),
-                        child: const Icon(Icons.close_rounded, color: Colors.white, size: 18),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
+                        // Highlight Feature Badges Row (Rating | Delivery | Stock)
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              _buildInfoBadge('⭐ 4.8 (120+ Ratings)', const Color(0xFFFEF3C7), const Color(0xFFD97706)),
+                              const SizedBox(width: 8),
+                              _buildInfoBadge('⚡ 15-20 Min Express', const Color(0xFFDCFCE7), const Color(0xFF15803D)),
+                              const SizedBox(width: 8),
+                              _buildInfoBadge('📦 Fresh & Pure', const Color(0xFFE0F2FE), const Color(0xFF0369A1)),
+                            ],
+                          ),
+                        ),
 
-            // Product Name & Seller Base Rate Section
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
-                  if (desc.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      desc,
-                      style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.3),
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Text(
-                        '₹$rateStr',
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF059669),
-                        ),
-                      ),
-                      Text(
-                        ' / $_baseUnit',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF64748B),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFDCFCE7),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          'Seller Unit: $_baseUnit',
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 28, indent: 20, endIndent: 20),
+                        // Description Box
+                        if (desc.isNotEmpty) ...[
+                          const SizedBox(height: 14),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0xFFF1F5F9)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Description',
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  desc,
+                                  style: const TextStyle(fontSize: 13, color: Color(0xFF334155), height: 1.4),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
 
-            // Unit Selection Section (Only Compatible Units Shown!)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: const [
-                      Icon(Icons.straighten_rounded, size: 16, color: Color(0xFF8B5CF6)),
-                      SizedBox(width: 6),
-                      Text(
-                        'Select Unit / Measurement:',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Color(0xFF0F172A)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: _compatibleUnits.map((u) {
-                      final isSelected = _selectedUnit.toLowerCase() == u.toLowerCase();
-                      return ChoiceChip(
-                        label: Text(u),
-                        selected: isSelected,
-                        selectedColor: const Color(0xFF8B5CF6),
-                        backgroundColor: const Color(0xFFF1F5F9),
-                        labelStyle: TextStyle(
-                          color: isSelected ? Colors.white : const Color(0xFF334155),
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                          fontSize: 12,
+                        const SizedBox(height: 20),
+                        const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                        const SizedBox(height: 18),
+
+                        // 3. UNIT MEASUREMENT SELECTION
+                        Row(
+                          children: const [
+                            Icon(Icons.straighten_rounded, size: 18, color: Color(0xFF0F172A)),
+                            SizedBox(width: 6),
+                            Text(
+                              'Select Measurement Unit:',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A)),
+                            ),
+                          ],
                         ),
-                        onSelected: (val) {
-                          if (val) {
-                            _onUnitChanged(u);
-                          }
-                        },
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: _compatibleUnits.map((u) {
+                            final isSelected = _selectedUnit.toLowerCase() == u.toLowerCase();
+                            return GestureDetector(
+                              onTap: () => _onUnitChanged(u),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: isSelected ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: isSelected ? const Color(0xFF0F172A) : const Color(0xFFE2E8F0),
+                                    width: isSelected ? 1.8 : 1,
+                                  ),
+                                  boxShadow: isSelected
+                                      ? [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.25),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 3),
+                                          ),
+                                        ]
+                                      : [],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (isSelected) ...[
+                                      const Icon(Icons.check_circle_rounded, color: Colors.white, size: 16),
+                                      const SizedBox(width: 6),
+                                    ],
+                                    Text(
+                                      u,
+                                      style: TextStyle(
+                                        color: isSelected ? Colors.white : const Color(0xFF334155),
+                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
 
-            // Quantity Selection Counter & Unit-Specific Presets Section
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: const [
-                      Icon(Icons.format_list_numbered_rounded, size: 16, color: Color(0xFF8B5CF6)),
-                      SizedBox(width: 6),
-                      Text(
-                        'Select Quantity:',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Color(0xFF0F172A)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
+                        const SizedBox(height: 20),
 
-                  Row(
-                    children: [
-                      // Minus Button
-                      InkWell(
-                        onTap: () => _updateQty(_quantity - 1),
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          width: 42,
-                          height: 42,
+                        // 4. QUANTITY PRESET CHIPS
+                        Row(
+                          children: const [
+                            Icon(Icons.format_list_numbered_rounded, size: 18, color: Color(0xFF0F172A)),
+                            SizedBox(width: 6),
+                            Text(
+                              'Select Quantity:',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A)),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: _presetQuantities.map((presetQty) {
+                              final isSel = _quantity == presetQty;
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 8.0),
+                                child: GestureDetector(
+                                  onTap: () => _updateQty(presetQty),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 180),
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                                    decoration: BoxDecoration(
+                                      color: isSel ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                        color: isSel ? const Color(0xFF0F172A) : const Color(0xFFE2E8F0),
+                                        width: isSel ? 1.6 : 1,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      '$presetQty $_selectedUnit',
+                                      style: TextStyle(
+                                        color: isSel ? Colors.white : const Color(0xFF475569),
+                                        fontWeight: isSel ? FontWeight.bold : FontWeight.w600,
+                                        fontSize: 12.5,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+
+                        const SizedBox(height: 18),
+
+                        // 5. PRICE BREAKDOWN CARD
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF1F5F9),
-                            borderRadius: BorderRadius.circular(12),
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFECFDF5), Color(0xFFD1FAE5)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0xFFA7F3D0), width: 1.2),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Total Calculated Price:',
+                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF047857)),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      _formulaText,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 12, color: Color(0xFF065F46), fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '₹$totalStr',
+                                style: const TextStyle(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFF059669),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // 6. MODERN STICKY BOTTOM ACTION BAR (Matching Reference Design!)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 15,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Row(
+              children: [
+                // Sleek Pill Counter Control [-] 01 [+]
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(30),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Row(
+                    children: [
+                      // Minus Circle
+                      GestureDetector(
+                        onTap: () => _updateQty(_quantity - 1),
+                        child: Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
                             border: Border.all(color: const Color(0xFFCBD5E1)),
                           ),
-                          child: const Icon(Icons.remove_rounded, color: Color(0xFF0F172A), size: 20),
+                          child: const Icon(Icons.remove_rounded, color: Color(0xFF334155), size: 18),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10),
 
-                      // Quantity Input Field
-                      Expanded(
+                      // Quantity Text / Input
+                      SizedBox(
+                        width: 38,
                         child: TextField(
                           controller: _qtyController,
                           keyboardType: TextInputType.number,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                          decoration: InputDecoration(
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+                          decoration: const InputDecoration(
                             isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 2),
-                            ),
+                            contentPadding: EdgeInsets.zero,
+                            border: InputBorder.none,
                           ),
                           onChanged: (val) {
                             final parsed = int.tryParse(val.trim());
@@ -499,163 +725,121 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                           },
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10),
 
-                      // Plus Button
-                      InkWell(
+                      // Plus Circle
+                      GestureDetector(
                         onTap: () => _updateQty(_quantity + 1),
-                        borderRadius: BorderRadius.circular(12),
                         child: Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF8B5CF6),
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF8B5CF6).withValues(alpha: 0.3),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
+                          width: 34,
+                          height: 34,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF0F172A),
+                            shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
+                          child: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                ),
+                const SizedBox(width: 12),
 
-                  // Unit-Specific Quantity Preset Chips
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: _presetQuantities.map((presetQty) {
-                        final isSel = _quantity == presetQty;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 6.0),
-                          child: ActionChip(
-                            label: Text('$presetQty $_selectedUnit'),
-                            backgroundColor: isSel ? const Color(0xFFEDE9FE) : const Color(0xFFF8FAFC),
-                            side: BorderSide(
-                              color: isSel ? const Color(0xFF8B5CF6) : const Color(0xFFE2E8F0),
-                              width: isSel ? 1.5 : 1,
-                            ),
-                            labelStyle: TextStyle(
-                              color: isSel ? const Color(0xFF8B5CF6) : const Color(0xFF475569),
-                              fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
-                              fontSize: 11.5,
-                            ),
-                            onPressed: () => _updateQty(presetQty),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Live Converted Total Price Calculation Box
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 20),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFECFDF5),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFA7F3D0), width: 1.2),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Total Calculated Price:',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF047857)),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _formulaText,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 11.5, color: Color(0xFF065F46), fontWeight: FontWeight.w500),
+                // Vibrant Gradient Add to Order List Button (Single Line Text)
+                Expanded(
+                  child: Container(
+                    height: 50,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF10B981), Color(0xFF059669)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(25),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF10B981).withValues(alpha: 0.35),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '₹$totalStr',
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF059669),
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        await CartService.addToCart(
+                          sellerUsername: widget.sellerUsername,
+                          product: {
+                            ...widget.product,
+                            'rate': _baseRate,
+                          },
+                          selectedUnit: _selectedUnit,
+                          quantity: _quantity,
+                        );
+
+                        widget.onCartUpdated?.call();
+
+                        if (mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Row(
+                                children: [
+                                  const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      '✓ Added "$name" ($_quantity $_selectedUnit - ₹$totalStr) to Order List!',
+                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              backgroundColor: const Color(0xFF10B981),
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              duration: const Duration(seconds: 3),
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.shopping_bag_rounded, color: Colors.white, size: 18),
+                      label: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          'Add to Cart (₹$totalStr)',
+                          maxLines: 1,
+                          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                      ),
                     ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Add to Order List Button
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: ElevatedButton.icon(
-                onPressed: () async {
-                  await CartService.addToCart(
-                    sellerUsername: widget.sellerUsername,
-                    product: {
-                      ...widget.product,
-                      'rate': _baseRate,
-                    },
-                    selectedUnit: _selectedUnit,
-                    quantity: _quantity,
-                  );
-
-                  widget.onCartUpdated?.call();
-
-                  if (mounted) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Row(
-                          children: [
-                            const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                '✓ Added "$name" ($_quantity $_selectedUnit - ₹$totalStr) to Order List!',
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ],
-                        ),
-                        backgroundColor: const Color(0xFF10B981),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        duration: const Duration(seconds: 3),
-                      ),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.add_shopping_cart_rounded, color: Colors.white),
-                label: Text(
-                  'Add to Order List (₹$totalStr)',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF10B981),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: 2,
-                ),
-              ),
+              ],
             ),
-            const SizedBox(height: 10),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoBadge(String label, Color bg, Color textCol) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: textCol,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
         ),
       ),
     );

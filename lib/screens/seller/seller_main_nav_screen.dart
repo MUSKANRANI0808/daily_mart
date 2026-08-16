@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/user_model.dart';
+import '../../services/auth_service.dart';
 import '../../services/cart_service.dart';
 import '../dashboards/seller_dashboard.dart';
 import 'seller_accounts_screen.dart';
@@ -33,7 +34,7 @@ class _SellerMainNavScreenState extends State<SellerMainNavScreen> {
     super.initState();
     _currentIndex = widget.initialTab;
     _updateCartBadge();
-    _cartPoller = Timer.periodic(const Duration(milliseconds: 1500), (timer) {
+    _cartPoller = Timer.periodic(const Duration(milliseconds: 2000), (timer) {
       _updateCartBadge();
     });
   }
@@ -46,13 +47,29 @@ class _SellerMainNavScreenState extends State<SellerMainNavScreen> {
 
   Future<void> _updateCartBadge() async {
     final sellerUser = (widget.seller.username ?? widget.seller.mobile ?? '').trim();
-    final items = await CartService.getCartItems(sellerUser);
-    final count = CartService.getTotalCount(items);
-    if (mounted && count != _cartBadgeCount) {
-      setState(() {
-        _cartBadgeCount = count;
-      });
-    }
+    if (sellerUser.isEmpty) return;
+
+    try {
+      final orders = await AuthService.getSellerCustomerOrders(sellerUser);
+      int unreadyPendingCount = 0;
+      for (var o in orders) {
+        final st = (o['order_status'] ?? o['status'] ?? 'PENDING').toString().toUpperCase();
+        final delSt = (o['delivery_status'] ?? '').toString().toUpperCase();
+        final isDelivered = st == 'DELIVERED' || delSt == 'DELIVERED';
+        final isCancelled = st == 'CANCELLED' || st == 'DELETED';
+        final isReady = st == 'READY';
+
+        if (!isDelivered && !isCancelled && !isReady) {
+          unreadyPendingCount++;
+        }
+      }
+
+      if (mounted && unreadyPendingCount != _cartBadgeCount) {
+        setState(() {
+          _cartBadgeCount = unreadyPendingCount;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<bool> _showExitConfirmationDialog() async {

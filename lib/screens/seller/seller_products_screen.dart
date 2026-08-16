@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/color_picker_dialog.dart';
 
 int safeInt(dynamic val, [int defaultValue = 0]) {
   if (val == null) return defaultValue;
@@ -41,6 +42,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
   List<Map<String, dynamic>> _filteredProducts = [];
   List<Map<String, dynamic>> _sellerUnits = [];
   List<Map<String, dynamic>> _sellerCategories = [];
+  List<Map<String, dynamic>> _sellerSections = [];
   String _searchQuery = '';
   String _selectedCategoryFilter = 'All';
 
@@ -58,6 +60,17 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     return (widget.seller.name ?? 'seller').trim();
   }
 
+  static Color hexToColor(String code, {Color defaultColor = Colors.white}) {
+    if (code.trim().isEmpty) return defaultColor;
+    String hex = code.replaceAll('#', '').trim();
+    if (hex.length == 6) hex = 'FF$hex';
+    try {
+      return Color(int.parse('0x$hex'));
+    } catch (_) {
+      return defaultColor;
+    }
+  }
+
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
@@ -67,12 +80,14 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     final products = await AuthService.getSellerProducts(username);
     final units = await AuthService.getSellerUnits(username);
     final categories = await AuthService.getSellerCategories(username);
+    final sections = await AuthService.getSellerSections(username);
 
     if (mounted) {
       setState(() {
         _allProducts = products;
         _sellerUnits = units;
         _sellerCategories = categories;
+        _sellerSections = sections;
         _isLoading = false;
       });
       _applyFilter();
@@ -87,9 +102,10 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
         final desc = safeString(p['description']).toLowerCase();
         final unit = safeString(p['unit']).toLowerCase();
         final cat = safeString(p['category']).toLowerCase();
+        final sec = safeString(p['section']).toLowerCase();
 
-        final matchesQuery = query.isEmpty || name.contains(query) || desc.contains(query) || unit.contains(query) || cat.contains(query);
-        final matchesCategory = _selectedCategoryFilter == 'All' || cat == _selectedCategoryFilter.toLowerCase();
+        final matchesQuery = query.isEmpty || name.contains(query) || desc.contains(query) || unit.contains(query) || cat.contains(query) || sec.contains(query);
+        final matchesCategory = _selectedCategoryFilter == 'All' || cat == _selectedCategoryFilter.toLowerCase() || sec == _selectedCategoryFilter.toLowerCase();
 
         return matchesQuery && matchesCategory;
       }).toList();
@@ -537,6 +553,683 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     );
   }
 
+  /// Open Manage Store Sections Dialog
+  void _showManageSectionsDialog({Function(String)? onSectionCreated}) {
+    final secNameController = TextEditingController();
+    String secIcon = '🏷️';
+    String secBgColor = '#FFFFFF';
+    String secTextColor = '#0F172A';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final username = _sellerUsername;
+
+          return Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              left: 20,
+              right: 20,
+              top: 16,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  Row(
+                    children: [
+                      const CircleAvatar(
+                        radius: 18,
+                        backgroundColor: Color(0xFFF3E8FF),
+                        child: Icon(Icons.view_carousel_rounded, color: Color(0xFF8B5CF6), size: 20),
+                      ),
+                      const SizedBox(width: 10),
+                      const Text(
+                        'Manage Store Sections 🏷️',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  Row(
+                    children: [
+                      PopupMenuButton<String>(
+                        icon: Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFCBD5E1)),
+                          ),
+                          child: Center(child: Text(secIcon, style: const TextStyle(fontSize: 22))),
+                        ),
+                        onSelected: (val) {
+                          setModalState(() => secIcon = val);
+                        },
+                        itemBuilder: (ctx) => ['🔥', '🌾', '🌶️', '🍿', '🥤', '🥛', '🍞', '🥩', '🧹', '🍬', '📦', '🏷️', '🍫', '🧼', '⚡', '⭐'].map((emoji) {
+                          return PopupMenuItem(
+                            value: emoji,
+                            child: Text(emoji, style: const TextStyle(fontSize: 22)),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: secNameController,
+                          decoration: InputDecoration(
+                            hintText: 'Enter Section (e.g. Best Sellers, Snacks)',
+                            hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () async {
+                          final sName = secNameController.text.trim();
+                          if (sName.isEmpty) return;
+                          secNameController.clear();
+
+                          await AuthService.addSellerSection(username, sName, secIcon, secBgColor, secTextColor);
+                          final updatedSecs = await AuthService.getSellerSections(username);
+
+                          setModalState(() {
+                            _sellerSections = updatedSecs;
+                            secIcon = '🏷️';
+                            secBgColor = '#FFFFFF';
+                            secTextColor = '#0F172A';
+                          });
+                          setState(() {
+                            _sellerSections = updatedSecs;
+                          });
+
+                          if (onSectionCreated != null) {
+                            onSectionCreated(sName);
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF8B5CF6),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Text('Add', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // 1. Background Color Palette Selector
+                  const Text('Section Card Background Color:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                  const SizedBox(height: 6),
+                  InkWell(
+                    onTap: () {
+                      FullColorPickerDialog.show(
+                        context,
+                        initialHex: secBgColor,
+                        onColorSelected: (newHex) {
+                          setModalState(() => secBgColor = newHex);
+                        },
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: hexToColor(secBgColor),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 4, offset: const Offset(0, 2)),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: hexToColor(secBgColor),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.black26, width: 1.5),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Background: ${secBgColor.toUpperCase()}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: hexToColor(secBgColor).computeLuminance() > 0.5 ? const Color(0xFF0F172A) : Colors.white,
+                                  ),
+                                ),
+                                Text(
+                                  'Tap to choose card background color',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: hexToColor(secBgColor).computeLuminance() > 0.5 ? const Color(0xFF64748B) : Colors.white70,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF8B5CF6),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.palette_rounded, color: Colors.white, size: 14),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Background Color 🎨',
+                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10.5),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // 2. Section Name Text Color Palette Selector
+                  const Text('Section Name Text Color (Default: Black):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                  const SizedBox(height: 6),
+                  InkWell(
+                    onTap: () {
+                      FullColorPickerDialog.show(
+                        context,
+                        initialHex: secTextColor,
+                        onColorSelected: (newHex) {
+                          setModalState(() => secTextColor = newHex);
+                        },
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: hexToColor(secTextColor),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.black26, width: 1.5),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Text Color: ${secTextColor.toUpperCase()}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: hexToColor(secTextColor),
+                                  ),
+                                ),
+                                const Text(
+                                  'Tap to choose text color for title & header',
+                                  style: TextStyle(fontSize: 10, color: Color(0xFF64748B)),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F172A),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.format_color_text_rounded, color: Colors.white, size: 14),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Text Color ✏️',
+                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10.5),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  const Text('Your Saved Sections:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                  const SizedBox(height: 8),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.35),
+                    child: _sellerSections.isEmpty
+                        ? Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Text(
+                              'No custom sections yet. Add your first section above!',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                            ),
+                          )
+                        : ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: _sellerSections.length,
+                            itemBuilder: (context, idx) {
+                              final sMap = _sellerSections[idx];
+                              final sId = safeInt(sMap['id']);
+                              final sName = safeString(sMap['name']);
+                              final sIcon = safeString(sMap['icon'], '🏷️');
+                              final sBgHex = safeString(sMap['bg_color'], '#FFFFFF');
+                              final sTextHex = safeString(sMap['text_color'], '#0F172A');
+                              final sBgCol = hexToColor(sBgHex);
+                              final sTextCol = hexToColor(sTextHex);
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 6),
+                                decoration: BoxDecoration(
+                                  color: sBgCol,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                                ),
+                                child: ListTile(
+                                  dense: true,
+                                  leading: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(sIcon, style: const TextStyle(fontSize: 20)),
+                                      const SizedBox(width: 6),
+                                      // Bg Color Indicator
+                                      Container(
+                                        width: 14,
+                                        height: 14,
+                                        decoration: BoxDecoration(
+                                          color: sBgCol,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: Colors.black26),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      // Text Color Indicator
+                                      Container(
+                                        width: 14,
+                                        height: 14,
+                                        decoration: BoxDecoration(
+                                          color: sTextCol,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: Colors.white, width: 1.2),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  title: Text(
+                                    sName,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                      color: sTextCol,
+                                    ),
+                                  ),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // EDIT SECTION BUTTON
+                                      IconButton(
+                                        icon: const Icon(Icons.edit_rounded, color: Color(0xFF8B5CF6), size: 18),
+                                        onPressed: () {
+                                          _showEditSectionDialog(sMap, () async {
+                                            final updatedSecs = await AuthService.getSellerSections(username);
+                                            setModalState(() {
+                                              _sellerSections = updatedSecs;
+                                            });
+                                            setState(() {
+                                              _sellerSections = updatedSecs;
+                                            });
+                                          });
+                                        },
+                                      ),
+                                      // DELETE SECTION BUTTON
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 18),
+                                        onPressed: () async {
+                                          await AuthService.deleteSellerSection(sId, username, sName);
+                                          final updatedSecs = await AuthService.getSellerSections(username);
+                                          setModalState(() {
+                                            _sellerSections = updatedSecs;
+                                          });
+                                          setState(() {
+                                            _sellerSections = updatedSecs;
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0F172A),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Done', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// Open Edit Section Dialog
+  void _showEditSectionDialog(Map<String, dynamic> section, VoidCallback onUpdated) {
+    final sId = safeInt(section['id']);
+    final sNameCtrl = TextEditingController(text: safeString(section['name']));
+    String editIcon = safeString(section['icon'], '🏷️');
+    String editBgColor = safeString(section['bg_color'], '#FFFFFF');
+    String editTextColor = safeString(section['text_color'], '#0F172A');
+
+    showDialog(
+      context: context,
+      builder: (dlgCtx) => StatefulBuilder(
+        builder: (context, setDlgState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.edit_rounded, color: Color(0xFF8B5CF6), size: 22),
+                SizedBox(width: 8),
+                Text('Edit Section 🏷️', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Section Name *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      PopupMenuButton<String>(
+                        icon: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFCBD5E1)),
+                          ),
+                          child: Center(child: Text(editIcon, style: const TextStyle(fontSize: 20))),
+                        ),
+                        onSelected: (val) {
+                          setDlgState(() => editIcon = val);
+                        },
+                        itemBuilder: (ctx) => ['🔥', '🌾', '🌶️', '🍿', '🥤', '🥛', '🍞', '🥩', '🧹', '🍬', '📦', '🏷️', '🍫', '🧼', '⚡', '⭐'].map((emoji) {
+                          return PopupMenuItem(
+                            value: emoji,
+                            child: Text(emoji, style: const TextStyle(fontSize: 22)),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: sNameCtrl,
+                          decoration: InputDecoration(
+                            hintText: 'Section name',
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // 1. Background Color
+                  const Text('Card Background Color:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                  const SizedBox(height: 6),
+                  InkWell(
+                    onTap: () {
+                      FullColorPickerDialog.show(
+                        context,
+                        initialHex: editBgColor,
+                        onColorSelected: (newHex) {
+                          setDlgState(() => editBgColor = newHex);
+                        },
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: hexToColor(editBgColor),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 4, offset: const Offset(0, 2)),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: hexToColor(editBgColor),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.black26, width: 1.5),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Background: ${editBgColor.toUpperCase()}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: hexToColor(editBgColor).computeLuminance() > 0.5 ? const Color(0xFF0F172A) : Colors.white,
+                                  ),
+                                ),
+                                Text(
+                                  'Tap to choose card background color',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: hexToColor(editBgColor).computeLuminance() > 0.5 ? const Color(0xFF64748B) : Colors.white70,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF8B5CF6),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.palette_rounded, color: Colors.white, size: 14),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Background Color 🎨',
+                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10.5),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // 2. Section Name Text Color
+                  const Text('Section Name Text Color (Default: Black):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                  const SizedBox(height: 6),
+                  InkWell(
+                    onTap: () {
+                      FullColorPickerDialog.show(
+                        context,
+                        initialHex: editTextColor,
+                        onColorSelected: (newHex) {
+                          setDlgState(() => editTextColor = newHex);
+                        },
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: hexToColor(editTextColor),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.black26, width: 1.5),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Text Color: ${editTextColor.toUpperCase()}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: hexToColor(editTextColor),
+                                  ),
+                                ),
+                                const Text(
+                                  'Tap to choose text color for title & header',
+                                  style: TextStyle(fontSize: 10, color: Color(0xFF64748B)),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F172A),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.format_color_text_rounded, color: Colors.white, size: 14),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Text Color ✏️',
+                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10.5),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dlgCtx),
+                child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF8B5CF6),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () async {
+                  final newName = sNameCtrl.text.trim();
+                  if (newName.isEmpty) return;
+                  Navigator.pop(dlgCtx);
+                  await AuthService.updateSellerSection(sId, _sellerUsername, newName, editIcon, editBgColor, editTextColor);
+                  onUpdated();
+                },
+                child: const Text('Save Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   /// Open Manage Custom Units Dialog
   void _showManageUnitsDialog({Function(String)? onUnitCreated}) {
     final unitController = TextEditingController();
@@ -806,6 +1499,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
 
     List<String> availableUnitNames = _sellerUnits.map((u) => safeString(u['unit_name'])).where((s) => s.isNotEmpty).toList();
     List<String> availableCategoryNames = _sellerCategories.map((c) => safeString(c['name'])).where((s) => s.isNotEmpty).toList();
+    List<String> availableSectionNames = _sellerSections.map((s) => safeString(s['name'])).where((s) => s.isNotEmpty).toList();
 
     String selectedUnit = isEditing
         ? safeString(productToEdit['unit'])
@@ -815,6 +1509,18 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
         ? safeString(productToEdit['category'])
         : (availableCategoryNames.isNotEmpty ? availableCategoryNames.first : '');
 
+    String secFromProd = isEditing ? safeString(productToEdit['section']) : '';
+    if (secFromProd.isEmpty && isEditing) {
+      final catFromProd = safeString(productToEdit['category']);
+      if (catFromProd.isNotEmpty && availableSectionNames.contains(catFromProd)) {
+        secFromProd = catFromProd;
+      }
+    }
+
+    String selectedSection = isEditing
+        ? secFromProd
+        : (availableSectionNames.isNotEmpty ? availableSectionNames.first : '');
+
     String prodImageUrl = isEditing ? safeString(productToEdit['image_url'] ?? productToEdit['image'], '📦') : '📦';
 
     if (selectedUnit.isNotEmpty && !availableUnitNames.contains(selectedUnit)) {
@@ -822,6 +1528,9 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     }
     if (selectedCategory.isNotEmpty && !availableCategoryNames.contains(selectedCategory)) {
       availableCategoryNames.insert(0, selectedCategory);
+    }
+    if (selectedSection.isNotEmpty && !availableSectionNames.contains(selectedSection)) {
+      availableSectionNames.insert(0, selectedSection);
     }
 
     showModalBottomSheet(
@@ -1088,6 +1797,86 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                         ),
                   const SizedBox(height: 14),
 
+                  // Store Section Selection Header + Shortcut Button
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Store Section (Optional)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                      InkWell(
+                        onTap: () {
+                          _showManageSectionsDialog(
+                            onSectionCreated: (newSec) {
+                              setModalState(() {
+                                availableSectionNames = _sellerSections.map((s) => safeString(s['name'])).where((s) => s.isNotEmpty).toList();
+                                selectedSection = newSec;
+                              });
+                            },
+                          );
+                        },
+                        child: const Row(
+                          children: [
+                            Icon(Icons.add_circle_outline_rounded, color: Color(0xFF8B5CF6), size: 16),
+                            SizedBox(width: 4),
+                            Text('+ Create Section', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF8B5CF6))),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  availableSectionNames.isEmpty
+                      ? InkWell(
+                          onTap: () {
+                            _showManageSectionsDialog(
+                              onSectionCreated: (newSec) {
+                                setModalState(() {
+                                  availableSectionNames = _sellerSections.map((s) => safeString(s['name'])).where((s) => s.isNotEmpty).toList();
+                                  selectedSection = newSec;
+                                });
+                              },
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3E8FF),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFD8B4FE)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.add_rounded, size: 16, color: Color(0xFF7E22CE)),
+                                SizedBox(width: 4),
+                                Text('No section created yet. Click to create!', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7E22CE))),
+                              ],
+                            ),
+                          ),
+                        )
+                      : Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          children: availableSectionNames.map((sName) {
+                            final isSel = selectedSection == sName;
+                            return ChoiceChip(
+                              label: Text(sName),
+                              selected: isSel,
+                              selectedColor: const Color(0xFF8B5CF6),
+                              backgroundColor: const Color(0xFFF1F5F9),
+                              labelStyle: TextStyle(
+                                color: isSel ? Colors.white : const Color(0xFF334155),
+                                fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
+                                fontSize: 12,
+                              ),
+                              onSelected: (val) {
+                                setModalState(() => selectedSection = val ? sName : '');
+                              },
+                            );
+                          }).toList(),
+                        ),
+                  const SizedBox(height: 14),
+
                   // Unit Selection Header + Shortcut "+ Add Unit" Button
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1124,34 +1913,12 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(color: const Color(0xFFFCA5A5)),
                           ),
-                          child: Row(
+                          child: const Row(
                             children: [
-                              const Icon(Icons.info_outline_rounded, color: Color(0xFFEF4444), size: 20),
-                              const SizedBox(width: 10),
-                              const Expanded(
-                                child: Text(
-                                  'No units created yet. Please tap "+ Create New Unit" above to add your store units.',
-                                  style: TextStyle(fontSize: 12, color: Color(0xFF991B1B), fontWeight: FontWeight.w600),
-                                ),
-                              ),
-                              ElevatedButton(
-                                onPressed: () {
-                                  _showManageUnitsDialog(
-                                    onUnitCreated: (newUnit) {
-                                      setModalState(() {
-                                        availableUnitNames = _sellerUnits.map((u) => safeString(u['unit_name'])).where((s) => s.isNotEmpty).toList();
-                                        selectedUnit = newUnit;
-                                      });
-                                    },
-                                  );
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFEF4444),
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  minimumSize: Size.zero,
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                ),
-                                child: const Text('+ Add', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                              Icon(Icons.info_outline_rounded, color: Color(0xFFEF4444), size: 20),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text('No units available. Please create a unit.', style: TextStyle(fontSize: 12, color: Color(0xFF991B1B))),
                               ),
                             ],
                           ),
@@ -1177,8 +1944,6 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                             );
                           }).toList(),
                         ),
-                  const SizedBox(height: 14),
-
                   // Quantity & Price Row
                   Row(
                     children: [
@@ -1273,6 +2038,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           description: pDesc,
                           unit: selectedUnit,
                           category: selectedCategory,
+                          section: selectedSection,
                           qty: pQty,
                           rate: pRate,
                           imageUrl: prodImageUrl,
@@ -1284,6 +2050,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           description: pDesc,
                           unit: selectedUnit,
                           category: selectedCategory,
+                          section: selectedSection,
                           qty: pQty,
                           rate: pRate,
                           imageUrl: prodImageUrl,
@@ -1418,19 +2185,74 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.category_rounded, color: Colors.white),
-            tooltip: 'Manage Categories',
-            onPressed: () => _showManageCategoriesDialog(),
-          ),
-          IconButton(
-            icon: const Icon(Icons.straighten_rounded, color: Colors.white),
-            tooltip: 'Manage Units',
-            onPressed: () => _showManageUnitsDialog(),
+            icon: const Icon(Icons.add_rounded, color: Colors.white),
+            tooltip: 'Add Product',
+            onPressed: () => _showAddEditProductDialog(),
           ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Colors.white),
             tooltip: 'Refresh Products',
             onPressed: _loadData,
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+            tooltip: 'Masters Menu ⚙️',
+            onSelected: (value) {
+              if (value == 'category') {
+                _showManageCategoriesDialog();
+              } else if (value == 'section') {
+                _showManageSectionsDialog();
+              } else if (value == 'unit') {
+                _showManageUnitsDialog();
+              } else if (value == 'add_product') {
+                _showAddEditProductDialog();
+              } else if (value == 'refresh') {
+                _loadData();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'category',
+                child: Row(
+                  children: [
+                    Icon(Icons.category_rounded, color: Color(0xFF0284C7), size: 20),
+                    SizedBox(width: 10),
+                    Text('Category Master 📁', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'section',
+                child: Row(
+                  children: [
+                    Icon(Icons.view_carousel_rounded, color: Color(0xFF8B5CF6), size: 20),
+                    SizedBox(width: 10),
+                    Text('Section Master 🏷️', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'unit',
+                child: Row(
+                  children: [
+                    Icon(Icons.straighten_rounded, color: Color(0xFF10B981), size: 20),
+                    SizedBox(width: 10),
+                    Text('Unit Master 📏', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'add_product',
+                child: Row(
+                  children: [
+                    Icon(Icons.add_box_rounded, color: Color(0xFFF59E0B), size: 20),
+                    SizedBox(width: 10),
+                    Text('Add New Product 📦', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1645,7 +2467,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                // Row 1: Full-width Product Name & Description at TOP
+                                 // Row 1: Full-width Product Name & Description at TOP
                                 Row(
                                   children: [
                                     Container(
@@ -1675,7 +2497,68 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 6),
+                                const SizedBox(height: 4),
+
+                                // Section / Category Badge
+                                Builder(
+                                  builder: (ctx) {
+                                    final pSec = safeString(p['section']);
+                                    final pCat = safeString(p['category']);
+
+                                    if (pSec.isNotEmpty) {
+                                      return InkWell(
+                                        onTap: () => _showAddEditProductDialog(productToEdit: p),
+                                        child: Container(
+                                          margin: const EdgeInsets.only(bottom: 4),
+                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFF3E8FF),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(color: const Color(0xFFD8B4FE)),
+                                          ),
+                                          child: Text(
+                                            '🏷️ Section: $pSec',
+                                            style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF7E22CE)),
+                                          ),
+                                        ),
+                                      );
+                                    } else if (pCat.isNotEmpty) {
+                                      return InkWell(
+                                        onTap: () => _showAddEditProductDialog(productToEdit: p),
+                                        child: Container(
+                                          margin: const EdgeInsets.only(bottom: 4),
+                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFE0F2FE),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(color: const Color(0xFFBAE6FD)),
+                                          ),
+                                          child: Text(
+                                            '📁 Category: $pCat',
+                                            style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF0369A1)),
+                                          ),
+                                        ),
+                                      );
+                                    } else {
+                                      return InkWell(
+                                        onTap: () => _showAddEditProductDialog(productToEdit: p),
+                                        child: Container(
+                                          margin: const EdgeInsets.only(bottom: 4),
+                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFEF3C7),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(color: const Color(0xFFFDE68A)),
+                                          ),
+                                          child: const Text(
+                                            '🏷️ + Assign Section',
+                                            style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                ),
 
                                 // Row 2: Slim details row [Unit Badge] | [Price] | [Edit & Delete Icons]
                                 Row(

@@ -142,6 +142,18 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
 
   Timer? _ordersPoller;
 
+  bool _messagesChanged(List<Map<String, dynamic>> oldMsgs, List<Map<String, dynamic>> newMsgs) {
+    if (oldMsgs.length != newMsgs.length) return true;
+    for (int i = 0; i < oldMsgs.length; i++) {
+      if (oldMsgs[i]['id'] != newMsgs[i]['id']) return true;
+      if (oldMsgs[i]['order_status'] != newMsgs[i]['order_status']) return true;
+      if (oldMsgs[i]['delivery_status'] != newMsgs[i]['delivery_status']) return true;
+      if (oldMsgs[i]['payment_status'] != newMsgs[i]['payment_status']) return true;
+      if (oldMsgs[i]['items_json'] != newMsgs[i]['items_json']) return true;
+    }
+    return false;
+  }
+
   void _startSellerOrdersPolling() {
     _ordersPoller?.cancel();
     _ordersPoller = Timer.periodic(const Duration(milliseconds: 1500), (timer) async {
@@ -156,7 +168,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
           customerMobile: widget.customer.mobile ?? '',
           messages: msgs,
         );
-        if (mounted) {
+        if (mounted && (_isLoading || _messagesChanged(_messages, msgs))) {
           setState(() {
             _messages = msgs;
             _isLoading = false;
@@ -332,6 +344,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
   bool _isBlockedBySeller = false;
   bool _hasDraft = false;
   String _draftSnippet = '';
+  List<Map<String, dynamic>> _sellerSections = [];
 
   Future<void> _checkBlockedBySeller() async {
     final blocked = await AuthService.isCustomerBlocked(
@@ -348,139 +361,150 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
   Future<void> _loadData() async {
     _checkBlockedBySeller();
 
-    // 1. Instant Cache Load for Location
-    final prefs = await SharedPreferences.getInstance();
-    final cachedLoc = prefs.getString('cached_seller_loc_${widget.sellerUsername}');
-    if (cachedLoc != null && cachedLoc.isNotEmpty && mounted) {
-      setState(() {
-        _sellerLocation = cachedLoc;
-      });
-    }
-
-    // 2. Fetch Sellers List & Location
     try {
-      final sellers = await AuthService.getSellersList();
-      for (var s in sellers) {
-        final u = (s['username'] ?? '').toString().trim().toLowerCase();
-        final m = (s['mobile'] ?? '').toString().trim();
-        final targetU = widget.sellerUsername.trim().toLowerCase();
-        final targetM = widget.sellerMobile.trim();
-        if ((u.isNotEmpty && u == targetU) || (m.isNotEmpty && m == targetM)) {
-          final loc = (s['location'] ?? s['store_location'] ?? s['address'] ?? '').toString().trim();
-          if (loc.isNotEmpty) {
-            await prefs.setString('cached_seller_loc_${widget.sellerUsername}', loc);
-            if (mounted) {
-              setState(() {
-                _sellerLocation = loc;
-              });
-            }
-          }
-          break;
-        }
+      // 1. Instant Cache Load for Location & Header Theme
+      final prefs = await SharedPreferences.getInstance();
+      final cachedLoc = prefs.getString('cached_seller_loc_${widget.sellerUsername}');
+      if (cachedLoc != null && cachedLoc.isNotEmpty && mounted) {
+        setState(() {
+          _sellerLocation = cachedLoc;
+        });
       }
-    } catch (_) {}
 
-    // 3. Instant Cache Load (0 ms perceived latency)
-    final cached = await AuthService.getCachedMessages(
-      sellerUsername: widget.sellerUsername,
-      customerMobile: widget.customer.mobile ?? '',
-    );
-    final headerTheme = await AuthService.getHeaderThemeConfig();
-    if (mounted) {
-      setState(() {
-        _headerThemeConfig = headerTheme;
-      });
-    }
-
-    if (cached.isNotEmpty && mounted) {
-      await AuthService.annotateMessagesWithLifetimeHierarchy(
-        sellerUsername: widget.sellerUsername,
-        customerMobile: widget.customer.mobile ?? '',
-        messages: cached,
-      );
+      final headerTheme = await AuthService.getHeaderThemeConfig();
       if (mounted) {
         setState(() {
-          _messages = cached;
+          _headerThemeConfig = headerTheme;
+        });
+      }
+
+      // 2. Fetch Products, Categories & Sections FIRST (High Priority for Store UI)
+      final results = await Future.wait([
+        AuthService.getSellerProducts(widget.sellerUsername),
+        AuthService.getSellerCategories(widget.sellerUsername),
+        CartService.getCartItems(widget.sellerUsername),
+        AuthService.getSellerSections(widget.sellerUsername),
+      ]);
+
+      final prods = results[0] as List<Map<String, dynamic>>;
+      final rawCats = results[1] as List<Map<String, dynamic>>;
+      final cartItems = results[2] as List<Map<String, dynamic>>;
+      final sections = results[3] as List<Map<String, dynamic>>;
+
+      final List<Map<String, dynamic>> parsedRawCats = [];
+      final List<String> parsedCats = [];
+      for (var c in rawCats) {
+        if (c is Map) {
+          parsedRawCats.add(Map<String, dynamic>.from(c));
+          final name = (c['name'] ?? c['category_name'] ?? '').toString().trim();
+          if (name.isNotEmpty && !parsedCats.contains(name)) parsedCats.add(name);
+        } else {
+          final name = c.toString().trim();
+          if (name.isNotEmpty && !parsedCats.contains(name)) {
+            parsedCats.add(name);
+            parsedRawCats.add({'name': name, 'image': '🏷️'});
+          }
+        }
+      }
+
+      final cartCount = CartService.getTotalCount(cartItems);
+      final cartTotalAmount = CartService.getTotalAmount(cartItems);
+
+      if (mounted) {
+        setState(() {
+          _products = prods;
+          _rawCategories = parsedRawCats;
+          _categories = parsedCats;
+          _sellerSections = sections;
+          _cartBadgeCount = cartCount;
+          _cartTotalAmount = cartTotalAmount;
           _isLoading = false;
         });
       }
-    }
 
-    // 2. Background Revalidation from VPS Server
-    final msgs = await AuthService.getMessages(
-      sellerUsername: widget.sellerUsername,
-      customerMobile: widget.customer.mobile ?? '',
-    );
-    await AuthService.annotateMessagesWithLifetimeHierarchy(
-      sellerUsername: widget.sellerUsername,
-      customerMobile: widget.customer.mobile ?? '',
-      messages: msgs,
-    );
-    final sliders = await AuthService.getSellerSliders(widget.sellerUsername);
-    final cleanCust = (widget.customer.mobile ?? '').trim();
-    final cleanSeller = widget.sellerUsername.trim();
-    final draftKey = 'draft_order_${cleanCust}_$cleanSeller';
-    final draftStr = prefs.getString(draftKey);
-    bool hasDraft = false;
-    String draftSnippet = '';
-    if (draftStr != null && draftStr.isNotEmpty) {
+      // 3. Fetch Sellers List & Location
       try {
-        final Map<String, dynamic> data = jsonDecode(draftStr);
-        final activeMode = (data['activeMode'] ?? 'chat').toString();
-        final chatText = (data['chatText'] ?? data['text'] ?? '').toString().trim();
-        final List rawItems = data['items'] ?? [];
-
-        if (activeMode == 'list' && rawItems.isNotEmpty) {
-          hasDraft = true;
-          final firstItemName = rawItems.first['name'] ?? 'Item';
-          final count = rawItems.length;
-          draftSnippet = count > 1 ? '$firstItemName & ${count - 1} more items (List Mode)' : '$firstItemName (List Mode)';
-        } else if (chatText.isNotEmpty) {
-          hasDraft = true;
-          final lines = chatText.split('\n').where((l) => l.trim().isNotEmpty).toList();
-          draftSnippet = lines.isNotEmpty ? lines.first : chatText;
-        } else if (rawItems.isNotEmpty) {
-          hasDraft = true;
-          draftSnippet = '${rawItems.length} items (List Mode)';
+        final sellers = await AuthService.getSellersList();
+        for (var s in sellers) {
+          final u = (s['username'] ?? '').toString().trim().toLowerCase();
+          final m = (s['mobile'] ?? '').toString().trim();
+          final targetU = widget.sellerUsername.trim().toLowerCase();
+          final targetM = widget.sellerMobile.trim();
+          if ((u.isNotEmpty && u == targetU) || (m.isNotEmpty && m == targetM)) {
+            final loc = (s['location'] ?? s['store_location'] ?? s['address'] ?? '').toString().trim();
+            if (loc.isNotEmpty) {
+              await prefs.setString('cached_seller_loc_${widget.sellerUsername}', loc);
+              if (mounted) {
+                setState(() {
+                  _sellerLocation = loc;
+                });
+              }
+            }
+            break;
+          }
         }
       } catch (_) {}
-    }
 
-    final prods = await AuthService.getSellerProducts(widget.sellerUsername);
-    final rawCats = await AuthService.getSellerCategories(widget.sellerUsername);
-    final List<Map<String, dynamic>> parsedRawCats = [];
-    final List<String> parsedCats = [];
-    for (var c in rawCats) {
-      if (c is Map) {
-        parsedRawCats.add(Map<String, dynamic>.from(c));
-        final name = (c['name'] ?? c['category_name'] ?? '').toString().trim();
-        if (name.isNotEmpty && !parsedCats.contains(name)) parsedCats.add(name);
-      } else {
-        final name = c.toString().trim();
-        if (name.isNotEmpty && !parsedCats.contains(name)) {
-          parsedCats.add(name);
-          parsedRawCats.add({'name': name, 'image': '🏷️'});
+      // 4. Fetch Sliders & Messages in Background
+      try {
+        final sliders = await AuthService.getSellerSliders(widget.sellerUsername);
+        final msgs = await AuthService.getMessages(
+          sellerUsername: widget.sellerUsername,
+          customerMobile: widget.customer.mobile ?? '',
+        );
+        await AuthService.annotateMessagesWithLifetimeHierarchy(
+          sellerUsername: widget.sellerUsername,
+          customerMobile: widget.customer.mobile ?? '',
+          messages: msgs,
+        );
+
+        final cleanCust = (widget.customer.mobile ?? '').trim();
+        final cleanSeller = widget.sellerUsername.trim();
+        final draftKey = 'draft_order_${cleanCust}_$cleanSeller';
+        final draftStr = prefs.getString(draftKey);
+        bool hasDraft = false;
+        String draftSnippet = '';
+        if (draftStr != null && draftStr.isNotEmpty) {
+          try {
+            final Map<String, dynamic> data = jsonDecode(draftStr);
+            final activeMode = (data['activeMode'] ?? 'chat').toString();
+            final chatText = (data['chatText'] ?? data['text'] ?? '').toString().trim();
+            final List rawItems = data['items'] ?? [];
+
+            if (activeMode == 'list' && rawItems.isNotEmpty) {
+              hasDraft = true;
+              final firstItemName = rawItems.first['name'] ?? 'Item';
+              final count = rawItems.length;
+              draftSnippet = count > 1 ? '$firstItemName & ${count - 1} more items (List Mode)' : '$firstItemName (List Mode)';
+            } else if (chatText.isNotEmpty) {
+              hasDraft = true;
+              final lines = chatText.split('\n').where((l) => l.trim().isNotEmpty).toList();
+              draftSnippet = lines.isNotEmpty ? lines.first : chatText;
+            } else if (rawItems.isNotEmpty) {
+              hasDraft = true;
+              draftSnippet = '${rawItems.length} items (List Mode)';
+            }
+          } catch (_) {}
         }
-      }
-    }
-    final cartItems = await CartService.getCartItems(widget.sellerUsername);
-    final cartCount = CartService.getTotalCount(cartItems);
-    final cartTotalAmount = CartService.getTotalAmount(cartItems);
 
-    if (mounted) {
-      setState(() {
-        _messages = msgs;
-        _sliders = sliders;
-        _products = prods;
-        _rawCategories = parsedRawCats;
-        _categories = parsedCats;
-        _cartBadgeCount = cartCount;
-        _cartTotalAmount = cartTotalAmount;
-        _isLoading = false;
-        _hasDraft = hasDraft;
-        _draftSnippet = draftSnippet;
-      });
-      _startAutoSlider();
+        if (mounted) {
+          setState(() {
+            _messages = msgs;
+            _sliders = sliders;
+            _hasDraft = hasDraft;
+            _draftSnippet = draftSnippet;
+          });
+          _startAutoSlider();
+        }
+      } catch (_) {}
+    } catch (e) {
+      debugPrint('Error loading seller orders data: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -518,125 +542,19 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
   }
 
   Widget _buildSliderSection() {
-    if (_sliders.isEmpty) {
+    final topSliders = _sliders.where((s) {
+      final sec = (s['section'] ?? 'Top Banner').toString().trim();
+      return sec.isEmpty || sec.toLowerCase() == 'top banner';
+    }).toList();
+
+    if (topSliders.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    return Column(
-      children: [
-        SizedBox(
-          height: 125,
-          child: PageView.builder(
-            controller: _sliderController,
-            onPageChanged: (idx) {
-              setState(() => _currentSliderPage = idx);
-            },
-            itemCount: _sliders.length,
-            itemBuilder: (ctx, idx) {
-              final item = _sliders[idx];
-              final tag = (item['tag'] ?? item['tagText'] ?? '').toString().trim();
-              final title = (item['title'] ?? item['titleText'] ?? '').toString().trim();
-              final desc = (item['description'] ?? item['subtitle'] ?? item['descText'] ?? '').toString().trim();
-              final bg = (item['bg'] ?? item['bg_image_url'] ?? item['bgImageUrl'] ?? item['image'] ?? item['imageUrl'] ?? 'transparent').toString();
-              final tagBg = hexToColor(item['tag_bg_color']?.toString() ?? '#10B981');
-              final tagShape = item['tag_shape']?.toString() ?? 'pill';
-              final titleCol = hexToColor(item['title_color']?.toString() ?? '#FFFFFF');
-              final descCol = hexToColor(item['desc_color']?.toString() ?? '#E2E8F0');
-              final overlayDim = (item['overlay_dim'] as num?)?.toDouble() ?? 0.0;
-              final removeWhiteBg = (item['remove_white_bg'] == true || item['remove_white_bg'] == 1);
-              final imgFit = item['img_fit']?.toString() ?? 'cover';
-
-              return Container(
-                margin: EdgeInsets.zero,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.zero,
-                  boxShadow: (bg == 'none' || bg == 'transparent' || bg.isEmpty || removeWhiteBg)
-                      ? []
-                      : [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.15),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                ),
-                  clipBehavior: Clip.antiAlias,
-                  child: buildBannerBackground(
-                    bg: bg,
-                    overlayDim: overlayDim,
-                    removeWhiteBg: removeWhiteBg,
-                    imgFit: imgFit,
-                    child: Container(
-                      width: double.infinity,
-                      constraints: const BoxConstraints(minHeight: 115),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (tag.isNotEmpty) ...[
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: buildTagDecoration(tagShape, tagBg),
-                              child: Text(
-                                tag,
-                                style: TextStyle(
-                                  color: tagShape.toLowerCase() == 'outline'
-                                      ? tagBg
-                                      : (tagBg.computeLuminance() > 0.5 ? Colors.black : Colors.white),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                          ],
-                          if (title.isNotEmpty) ...[
-                            Text(
-                              title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: titleCol, fontWeight: FontWeight.bold, fontSize: 16),
-                            ),
-                            const SizedBox(height: 4),
-                          ],
-                          if (desc.isNotEmpty) ...[
-                            Text(
-                              desc,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: descCol, fontSize: 12),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-          ),
-        ),
-
-        if (_sliders.length > 1) ...[
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(
-              _sliders.length,
-              (index) => AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                width: _currentSliderPage == index ? 20 : 7,
-                height: 7,
-                decoration: BoxDecoration(
-                  color: _currentSliderPage == index ? const Color(0xFF8B5CF6) : const Color(0xFFCBD5E1),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ],
+    final String keyStr = topSliders.map((s) => s['id']).join('_');
+    return TopBannerSliderWidget(
+      key: ValueKey(keyStr),
+      sliders: topSliders,
     );
   }
 
@@ -1367,29 +1285,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                              _buildCircularCategorySection(),
                              const SizedBox(height: 8),
 
-                             // Store Products Section Header
-                             Padding(
-                               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-                               child: Row(
-                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                 children: [
-                                   const Text(
-                                     'Store Products 📦',
-                                     style: TextStyle(
-                                       fontSize: 18,
-                                       fontWeight: FontWeight.bold,
-                                       color: Color(0xFF0F172A),
-                                     ),
-                                   ),
-                                   Text(
-                                     '${_filteredProducts.length} Items Available',
-                                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
-                                   ),
-                                 ],
-                               ),
-                             ),
-
-                             // Product Grid Catalog
+                             // Dynamic Section-Based Product Grid Catalog
                              _buildStoreProductsGrid(),
                              const SizedBox(height: 80),
                            ],
@@ -1555,6 +1451,141 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
     return Center(child: Text('📦', style: TextStyle(fontSize: emojiSize)));
   }
 
+  Widget _buildProductCard(Map<String, dynamic> p) {
+    final name = (p['name'] ?? '').toString();
+    final cat = (p['category'] ?? '').toString();
+    final rate = (p['rate'] as num?)?.toDouble() ?? 0.0;
+    final unit = (p['unit'] ?? 'Pcs').toString();
+    final qty = (p['qty'] as num?)?.toInt() ?? 1;
+    final imgUrl = (p['image_url'] ?? '').toString().trim();
+    final imgVal = (p['image'] ?? '').toString().trim();
+    final img = imgUrl.isNotEmpty ? imgUrl : (imgVal.isNotEmpty ? imgVal : '📦');
+
+    return InkWell(
+      onTap: () {
+        showProductDetailBottomSheet(
+          context: context,
+          product: p,
+          sellerUsername: widget.sellerUsername,
+          onCartUpdated: () async {
+            final items = await CartService.getCartItems(widget.sellerUsername);
+            if (mounted) {
+              setState(() {
+                _cartBadgeCount = CartService.getTotalCount(items);
+              });
+            }
+          },
+        );
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Image Box with Stock Badge
+            Expanded(
+              child: Stack(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                      child: _buildProductImageWidget(img, emojiSize: 40),
+                    ),
+                  ),
+                  // Stock Qty Badge
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.65),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '$qty Qty',
+                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Bottom Info Section
+            Padding(
+              padding: const EdgeInsets.all(10.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (cat.isNotEmpty)
+                    Text(
+                      cat.toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF8B5CF6),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  const SizedBox(height: 2),
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13.5,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '₹${rate % 1 == 0 ? rate.toInt() : rate.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 15,
+                          color: Color(0xFF059669),
+                        ),
+                      ),
+                      Text(
+                        '/ $unit',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildStoreProductsGrid() {
     final filtered = _filteredProducts;
 
@@ -1591,152 +1622,272 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
       );
     }
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.74,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      itemCount: filtered.length,
-      itemBuilder: (ctx, idx) {
-        final p = filtered[idx];
-        final name = (p['name'] ?? '').toString();
-        final cat = (p['category'] ?? '').toString();
-        final rate = (p['rate'] as num?)?.toDouble() ?? 0.0;
-        final unit = (p['unit'] ?? 'Pcs').toString();
-        final qty = (p['qty'] as num?)?.toInt() ?? 1;
-        final imgUrl = (p['image_url'] ?? '').toString().trim();
-        final imgVal = (p['image'] ?? '').toString().trim();
-        final img = imgUrl.isNotEmpty ? imgUrl : (imgVal.isNotEmpty ? imgVal : '📦');
-
-        return InkWell(
-          onTap: () {
-            showProductDetailBottomSheet(
-              context: context,
-              product: p,
-              sellerUsername: widget.sellerUsername,
-              onCartUpdated: () async {
-                final items = await CartService.getCartItems(widget.sellerUsername);
-                if (mounted) {
-                  setState(() {
-                    _cartBadgeCount = CartService.getTotalCount(items);
-                  });
-                }
-              },
-            );
-          },
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    // If specific Category filter is selected, render single grid for that category
+    if (_selectedCategory != 'All') {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Top Image Box with Stock Badge
-                Expanded(
-                  child: Stack(
-                    children: [
-                      Container(
-                        width: double.infinity,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                          child: _buildProductImageWidget(img, emojiSize: 40),
-                        ),
-                      ),
-                      // Stock Qty Badge
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.65),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            '$qty Qty',
-                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                Text(
+                  '$_selectedCategory Category 📁',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                 ),
-
-                // Bottom Info Section
-                Padding(
-                  padding: const EdgeInsets.all(10.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (cat.isNotEmpty)
-                        Text(
-                          cat.toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF8B5CF6),
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      const SizedBox(height: 2),
-                      Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13.5,
-                          color: Color(0xFF0F172A),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '₹${rate % 1 == 0 ? rate.toInt() : rate.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 15,
-                              color: Color(0xFF059669),
-                            ),
-                          ),
-                          Text(
-                            '/ $unit',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF64748B),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                Text(
+                  '${filtered.length} Items Available',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
                 ),
               ],
             ),
           ),
-        );
-      },
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 0.74,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+            ),
+            itemCount: filtered.length,
+            itemBuilder: (ctx, idx) => _buildProductCard(filtered[idx]),
+          ),
+        ],
+      );
+    }
+
+    // Default 'All' Home Page View: Render Strictly By Seller Sections! NO DEFAULT "Store Products" HEADER!
+    final List<Widget> sectionWidgets = [];
+    final Set<dynamic> displayedProdIds = {};
+
+    // 1. Build a unified list of unique Section descriptors from Seller Sections, Categories, or Product tags
+    final List<Map<String, String>> effectiveSections = [];
+    final Set<String> addedSecNames = {};
+
+    // Add explicitly created seller_sections
+    for (var sec in _sellerSections) {
+      final sName = (sec['name'] ?? '').toString().trim();
+      final sIcon = (sec['icon'] ?? '🏷️').toString().trim();
+      final sBg = (sec['bg_color'] ?? '#FFFFFF').toString().trim();
+      final sText = (sec['text_color'] ?? '').toString().trim();
+      if (sName.isNotEmpty && !addedSecNames.contains(sName.toLowerCase())) {
+        addedSecNames.add(sName.toLowerCase());
+        effectiveSections.add({
+          'name': sName,
+          'icon': sIcon.isNotEmpty ? sIcon : '🏷️',
+          'bg_color': sBg.isNotEmpty ? sBg : '#FFFFFF',
+          'text_color': sText.isNotEmpty ? sText : '#0F172A',
+        });
+      }
+    }
+
+    // Add seller_categories as sections
+    for (var cat in _rawCategories) {
+      final cName = (cat['name'] ?? cat['category_name'] ?? '').toString().trim();
+      final cIcon = (cat['image'] ?? cat['image_url'] ?? '📁').toString().trim();
+      final cBg = (cat['color'] ?? '#FFFFFF').toString().trim();
+      if (cName.isNotEmpty && !addedSecNames.contains(cName.toLowerCase())) {
+        addedSecNames.add(cName.toLowerCase());
+        effectiveSections.add({
+          'name': cName,
+          'icon': (cIcon.length <= 4 && cIcon.isNotEmpty) ? cIcon : '📁',
+          'bg_color': cBg.isNotEmpty ? cBg : '#FFFFFF',
+          'text_color': '#0F172A',
+        });
+      }
+    }
+
+    // Add any section/category tags present on products that aren't in the list yet
+    for (var p in filtered) {
+      final pSec = (p['section'] ?? '').toString().trim();
+      final pCat = (p['category'] ?? '').toString().trim();
+      final tag = pSec.isNotEmpty ? pSec : pCat;
+      if (tag.isNotEmpty && !addedSecNames.contains(tag.toLowerCase())) {
+        addedSecNames.add(tag.toLowerCase());
+        effectiveSections.add({'name': tag, 'icon': '🏷️', 'bg_color': '#FFFFFF', 'text_color': '#0F172A'});
+      }
+    }
+
+    // If no section created yet, but products exist, create a default fallback section name using first available category or 'Items'
+    if (effectiveSections.isEmpty && filtered.isNotEmpty) {
+      effectiveSections.add({'name': 'Items', 'icon': '🏷️', 'bg_color': '#FFFFFF', 'text_color': '#0F172A'});
+    }
+
+    // 2. Render each section with its matching products
+    for (int i = 0; i < effectiveSections.length; i++) {
+      final sec = effectiveSections[i];
+      final secName = sec['name']!;
+      final secIcon = sec['icon']!;
+
+      final isLastSection = (i == effectiveSections.length - 1);
+
+      final matchingProducts = filtered.where((p) {
+        if (displayedProdIds.contains(p['id'])) return false;
+        final pSec = (p['section'] ?? '').toString().trim();
+        final pCat = (p['category'] ?? '').toString().trim();
+
+        bool isMatch = pSec.toLowerCase() == secName.toLowerCase() || pCat.toLowerCase() == secName.toLowerCase();
+        // If last section, also include any remaining unassigned products into it so NO product is hidden and NO extra Store Products block is created!
+        if (!isMatch && isLastSection && pSec.isEmpty && pCat.isEmpty) {
+          isMatch = true;
+        }
+        return isMatch;
+      }).toList();
+
+      // Skip empty sections
+      if (matchingProducts.isEmpty) {
+        continue;
+      }
+
+      for (var p in matchingProducts) {
+        displayedProdIds.add(p['id']);
+      }
+
+      // Find sliders assigned to this specific section
+      final sectionSliders = _sliders.where((s) {
+        final sSec = (s['section'] ?? '').toString().trim();
+        return sSec.toLowerCase() == secName.toLowerCase();
+      }).toList();
+
+      final externalSliders = sectionSliders.where((s) {
+        final pos = (s['position'] ?? 'internal').toString().trim().toLowerCase();
+        return pos == 'external';
+      }).toList();
+
+      final internalSliders = sectionSliders.where((s) {
+        final pos = (s['position'] ?? 'internal').toString().trim().toLowerCase();
+        return pos != 'external';
+      }).toList();
+
+      // Find custom background color & text color assigned to this section
+      String secBgHex = (sec['bg_color'] ?? '#FFFFFF').toString().trim();
+      String secTextHex = (sec['text_color'] ?? '').toString().trim();
+
+      final secMatch = _sellerSections.firstWhere(
+        (s) => (s['name'] ?? '').toString().trim().toLowerCase() == secName.toLowerCase(),
+        orElse: () => {},
+      );
+
+      if (secMatch.isNotEmpty) {
+        if (secBgHex.isEmpty || secBgHex == '#FFFFFF') {
+          if (secMatch['bg_color'] != null) secBgHex = secMatch['bg_color'].toString().trim();
+        }
+        if (secTextHex.isEmpty || secTextHex == '#0F172A') {
+          if (secMatch['text_color'] != null) secTextHex = secMatch['text_color'].toString().trim();
+        }
+      }
+
+      final secBgColor = hexToColor(secBgHex.isEmpty ? '#FFFFFF' : secBgHex);
+      Color secTextColor;
+      if (secTextHex.isNotEmpty && secTextHex != '#0F172A') {
+        secTextColor = hexToColor(secTextHex);
+      } else {
+        // Smart fallback: if background is dark, use White text for high contrast readability!
+        secTextColor = secBgColor.computeLuminance() < 0.5 ? Colors.white : const Color(0xFF0F172A);
+      }
+
+      // Render External Sliders ABOVE / OUTSIDE the section box
+      if (externalSliders.isNotEmpty) {
+        sectionWidgets.add(_buildSectionSliderBanner(externalSliders));
+      }
+
+      sectionWidgets.add(
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: secBgColor,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: secBgColor.computeLuminance() > 0.85 ? const Color(0xFFCBD5E1) : secBgColor.withValues(alpha: 0.8),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        if (secIcon.isNotEmpty && secIcon != '🏷️') ...[
+                          Text(secIcon, style: const TextStyle(fontSize: 20)),
+                          const SizedBox(width: 8),
+                        ],
+                        Text(
+                          secName,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: secTextColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '${matchingProducts.length} Items',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Render Internal Sliders INSIDE the Section Container!
+              if (internalSliders.isNotEmpty)
+                _buildSectionSliderBanner(internalSliders),
+
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 0.74,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                ),
+                itemCount: matchingProducts.length,
+                itemBuilder: (ctx, idx) => _buildProductCard(matchingProducts[idx]),
+              ),
+              const SizedBox(height: 6),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: sectionWidgets,
+    );
+  }
+
+  Widget _buildSectionSliderBanner(List<Map<String, dynamic>> slidersList) {
+    if (slidersList.isEmpty) return const SizedBox.shrink();
+    final String keyStr = slidersList.map((s) => '${s['id']}_${s['position']}').join('_');
+    return SectionSliderBannerWidget(
+      key: ValueKey(keyStr),
+      slidersList: slidersList,
     );
   }
 
@@ -1752,7 +1903,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
           child: Text(
-            'Categories 🏷️',
+            'Categories',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
@@ -1826,8 +1977,8 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
 
   Widget _buildCategoryImageWidget(String rawImg, {double emojiSize = 26}) {
     final img = rawImg.trim();
-    if (img.isEmpty) {
-      return Center(child: Text('🏷️', style: TextStyle(fontSize: emojiSize)));
+    if (img.isEmpty || img == '🏷️') {
+      return Center(child: Text('📦', style: TextStyle(fontSize: emojiSize)));
     }
 
     if (img.startsWith('http://') || img.startsWith('https://')) {
@@ -1837,7 +1988,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
         gaplessPlayback: true,
         width: double.infinity,
         height: double.infinity,
-        errorBuilder: (_, __, ___) => Center(child: Text('🏷️', style: TextStyle(fontSize: emojiSize))),
+        errorBuilder: (_, __, ___) => Center(child: Text('📦', style: TextStyle(fontSize: emojiSize))),
       );
     }
 
@@ -1858,7 +2009,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
           gaplessPlayback: true,
           width: double.infinity,
           height: double.infinity,
-          errorBuilder: (_, __, ___) => Center(child: Text('🏷️', style: TextStyle(fontSize: emojiSize))),
+          errorBuilder: (_, __, ___) => Center(child: Text('📦', style: TextStyle(fontSize: emojiSize))),
         );
       } catch (_) {}
     }
@@ -1867,7 +2018,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
       return Center(child: Text(img, style: TextStyle(fontSize: emojiSize)));
     }
 
-    return Center(child: Text('🏷️', style: TextStyle(fontSize: emojiSize)));
+    return Center(child: Text('📦', style: TextStyle(fontSize: emojiSize)));
   }
 }
 
@@ -2184,6 +2335,313 @@ class _RotatingCategoryAvatarRingWidgetState extends State<RotatingCategoryAvata
           ),
         );
       },
+    );
+  }
+}
+
+/// Dedicated Stateful Section Slider Banner Widget for 100% Rock Solid Smooth Auto-scroll with Zero Blinking
+class SectionSliderBannerWidget extends StatefulWidget {
+  final List<Map<String, dynamic>> slidersList;
+  const SectionSliderBannerWidget({super.key, required this.slidersList});
+
+  @override
+  State<SectionSliderBannerWidget> createState() => _SectionSliderBannerWidgetState();
+}
+
+class _SectionSliderBannerWidgetState extends State<SectionSliderBannerWidget> {
+  late PageController _controller;
+  Timer? _timer;
+  int _currentPage = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = PageController();
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    if (widget.slidersList.length <= 1) return;
+    _timer = Timer.periodic(const Duration(seconds: 4), (t) {
+      if (!mounted || !_controller.hasClients) return;
+      int next = (_currentPage + 1) % widget.slidersList.length;
+      _controller.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant SectionSliderBannerWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.slidersList.length != widget.slidersList.length) {
+      _startTimer();
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.slidersList.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      child: SizedBox(
+        height: 120,
+        child: PageView.builder(
+          controller: _controller,
+          onPageChanged: (idx) {
+            _currentPage = idx;
+          },
+          itemCount: widget.slidersList.length,
+          itemBuilder: (ctx, sIdx) {
+            final item = widget.slidersList[sIdx];
+            final tag = (item['tag'] ?? '').toString().trim();
+            final title = (item['title'] ?? '').toString().trim();
+            final desc = (item['description'] ?? '').toString().trim();
+            final bg = (item['bg_image_url'] ?? item['bg'] ?? 'preset_1').toString();
+            final tagBg = SellerSlidersScreen.hexToColor(item['tag_bg_color']?.toString() ?? '#10B981');
+            final tagShape = item['tag_shape']?.toString() ?? 'pill';
+            final titleCol = SellerSlidersScreen.hexToColor(item['title_color']?.toString() ?? '#FFFFFF');
+            final descCol = SellerSlidersScreen.hexToColor(item['desc_color']?.toString() ?? '#E2E8F0');
+            final overlayDim = (item['overlay_dim'] as num?)?.toDouble() ?? 0.0;
+            final removeWhiteBg = (item['remove_white_bg'] == true || item['remove_white_bg'] == 1);
+            final imgFit = item['img_fit']?.toString() ?? 'cover';
+
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 14),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: SellerSlidersScreen.buildBannerBackground(
+                  bg: bg,
+                  overlayDim: overlayDim,
+                  removeWhiteBg: removeWhiteBg,
+                  imgFit: imgFit,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (tag.isNotEmpty) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                            decoration: SellerSlidersScreen.buildTagDecoration(tagShape, tagBg),
+                            child: Text(
+                              tag,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: tagBg.computeLuminance() > 0.5 ? Colors.black : Colors.white,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                        ],
+                        if (title.isNotEmpty)
+                          Text(
+                            title,
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: titleCol),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        if (desc.isNotEmpty)
+                          Text(
+                            desc,
+                            style: TextStyle(fontSize: 11, color: descCol),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+/// Dedicated Stateful Top Banner Slider Widget for 100% Smooth Auto-scroll with Zero Blinking & Isolated State
+class TopBannerSliderWidget extends StatefulWidget {
+  final List<Map<String, dynamic>> sliders;
+  const TopBannerSliderWidget({super.key, required this.sliders});
+
+  @override
+  State<TopBannerSliderWidget> createState() => _TopBannerSliderWidgetState();
+}
+
+class _TopBannerSliderWidgetState extends State<TopBannerSliderWidget> {
+  late PageController _controller;
+  Timer? _timer;
+  int _currentPage = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = PageController();
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    if (widget.sliders.length <= 1) return;
+    _timer = Timer.periodic(const Duration(seconds: 3, milliseconds: 500), (t) {
+      if (!mounted || !_controller.hasClients) return;
+      int next = (_currentPage + 1) % widget.sliders.length;
+      _controller.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 650),
+        curve: Curves.easeInOutCubic,
+      );
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant TopBannerSliderWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.sliders.length != widget.sliders.length) {
+      _startTimer();
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.sliders.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      children: [
+        SizedBox(
+          height: 125,
+          child: PageView.builder(
+            controller: _controller,
+            onPageChanged: (idx) {
+              setState(() => _currentPage = idx);
+            },
+            itemCount: widget.sliders.length,
+            itemBuilder: (ctx, idx) {
+              final item = widget.sliders[idx];
+              final tag = (item['tag'] ?? item['tagText'] ?? '').toString().trim();
+              final title = (item['title'] ?? item['titleText'] ?? '').toString().trim();
+              final desc = (item['description'] ?? item['subtitle'] ?? item['descText'] ?? '').toString().trim();
+              final bg = (item['bg'] ?? item['bg_image_url'] ?? item['bgImageUrl'] ?? item['image'] ?? item['imageUrl'] ?? 'transparent').toString();
+              final tagBg = SellerSlidersScreen.hexToColor(item['tag_bg_color']?.toString() ?? '#10B981');
+              final tagShape = item['tag_shape']?.toString() ?? 'pill';
+              final titleCol = SellerSlidersScreen.hexToColor(item['title_color']?.toString() ?? '#FFFFFF');
+              final descCol = SellerSlidersScreen.hexToColor(item['desc_color']?.toString() ?? '#E2E8F0');
+              final overlayDim = (item['overlay_dim'] as num?)?.toDouble() ?? 0.0;
+              final removeWhiteBg = (item['remove_white_bg'] == true || item['remove_white_bg'] == 1);
+              final imgFit = item['img_fit']?.toString() ?? 'cover';
+
+              return Container(
+                margin: EdgeInsets.zero,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.zero,
+                  boxShadow: (bg == 'none' || bg == 'transparent' || bg.isEmpty || removeWhiteBg)
+                      ? []
+                      : [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.15),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: SellerSlidersScreen.buildBannerBackground(
+                  bg: bg,
+                  overlayDim: overlayDim,
+                  removeWhiteBg: removeWhiteBg,
+                  imgFit: imgFit,
+                  child: Container(
+                    width: double.infinity,
+                    constraints: const BoxConstraints(minHeight: 115),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (tag.isNotEmpty) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: SellerSlidersScreen.buildTagDecoration(tagShape, tagBg),
+                            child: Text(
+                              tag,
+                              style: TextStyle(
+                                color: tagShape.toLowerCase() == 'outline'
+                                    ? tagBg
+                                    : (tagBg.computeLuminance() > 0.5 ? Colors.black : Colors.white),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        if (title.isNotEmpty) ...[
+                          Text(
+                            title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: titleCol, fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
+                          const SizedBox(height: 4),
+                        ],
+                        if (desc.isNotEmpty) ...[
+                          Text(
+                            desc,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: descCol, fontSize: 12),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        if (widget.sliders.length > 1) ...[
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(
+              widget.sliders.length,
+              (index) => AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                width: _currentPage == index ? 20 : 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  color: _currentPage == index ? const Color(0xFF8B5CF6) : const Color(0xFFCBD5E1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

@@ -520,8 +520,8 @@ class AuthService {
     messages.sort((a, b) {
       final tA = (a['created_at'] ?? '').toString();
       final tB = (b['created_at'] ?? '').toString();
-      final idA = (a['id'] as num?)?.toInt() ?? 0;
-      final idB = (b['id'] as num?)?.toInt() ?? 0;
+      final idA = int.tryParse((a['id'] ?? '0').toString()) ?? 0;
+      final idB = int.tryParse((b['id'] ?? '0').toString()) ?? 0;
       if (tA != tB && tA.isNotEmpty && tB.isNotEmpty) return tA.compareTo(tB);
       return idA.compareTo(idB);
     });
@@ -1557,7 +1557,7 @@ class AuthService {
       }
     }
 
-    // 3. Try Remote VPS API and merge
+    // 3. Try Remote VPS API and merge with deduplication
     try {
       final res = await VpsApiService.get('get-seller-sliders&seller_username=${Uri.encodeComponent(cleanUsername)}');
       if (res != null && res['success'] == true && res['sliders'] != null) {
@@ -1569,15 +1569,42 @@ class AuthService {
           final idStr = item['id']?.toString() ?? '';
           if (idStr.isNotEmpty) mergedMap[idStr] = item;
         }
+
         for (var item in localList) {
           final idStr = item['id']?.toString() ?? '';
-          if (idStr.isNotEmpty && !mergedMap.containsKey(idStr)) {
-            mergedMap[idStr] = item;
-          } else if (idStr.isNotEmpty && mergedMap.containsKey(idStr)) {
+          if (idStr.isEmpty) continue;
+
+          // If numeric ID already in mergedMap
+          if (mergedMap.containsKey(idStr)) {
             final remoteBg = (mergedMap[idStr]!['bg_image_url'] ?? '').toString().trim();
             final localBg = (item['bg_image_url'] ?? '').toString().trim();
             if ((remoteBg.isEmpty || remoteBg == 'none') && localBg.isNotEmpty && localBg != 'none') {
               mergedMap[idStr]!['bg_image_url'] = localBg;
+            }
+          } else {
+            // Deduplicate local timestamp items against remote VPS items by content (bg, title, section)
+            final lTitle = (item['title'] ?? '').toString().trim();
+            final lSec = (item['section'] ?? '').toString().trim();
+            final lBg = (item['bg_image_url'] ?? '').toString().trim();
+
+            bool isDup = false;
+            for (var rItem in remoteList) {
+              final rTitle = (rItem['title'] ?? '').toString().trim();
+              final rSec = (rItem['section'] ?? '').toString().trim();
+              final rBg = (rItem['bg_image_url'] ?? '').toString().trim();
+
+              final matchSec = lSec.toLowerCase() == rSec.toLowerCase();
+              final matchTitle = lTitle.isNotEmpty && lTitle.toLowerCase() == rTitle.toLowerCase();
+              final matchBg = lBg.isNotEmpty && lBg != 'none' && lBg == rBg;
+
+              if (matchSec && (matchTitle || matchBg)) {
+                isDup = true;
+                break;
+              }
+            }
+
+            if (!isDup) {
+              mergedMap[idStr] = item;
             }
           }
         }
@@ -1606,6 +1633,8 @@ class AuthService {
     String tagShape = 'pill',
     String titleColor = '#FFFFFF',
     String descColor = '#E2E8F0',
+    String section = 'Top Banner',
+    String position = 'internal',
     double overlayDim = 0.0,
     bool removeWhiteBg = false,
     String imgFit = 'cover',
@@ -1625,11 +1654,36 @@ class AuthService {
       'tag_shape': tagShape,
       'title_color': titleColor,
       'desc_color': descColor,
+      'section': section.trim().isEmpty ? 'Top Banner' : section.trim(),
+      'position': position.trim().isEmpty ? 'internal' : position.trim(),
       'overlay_dim': overlayDim,
       'remove_white_bg': removeWhiteBg,
       'img_fit': imgFit,
       'created_at': DateTime.now().toString().substring(0, 16),
     };
+
+    try {
+      final res = await VpsApiService.post('add-seller-slider', {
+        'seller_username': cleanUsername,
+        'tag': tag,
+        'title': title,
+        'description': description,
+        'bg_image_url': bgImageUrl,
+        'tag_bg_color': tagBgColor,
+        'tag_shape': tagShape,
+        'title_color': titleColor,
+        'desc_color': descColor,
+        'section': section.trim().isEmpty ? 'Top Banner' : section.trim(),
+        'position': position.trim().isEmpty ? 'internal' : position.trim(),
+        'overlay_dim': overlayDim,
+        'remove_white_bg': removeWhiteBg ? 1 : 0,
+        'img_fit': imgFit,
+      });
+
+      if (res != null && res['success'] == true && res['slider'] != null && res['slider']['id'] != null) {
+        newSlider['id'] = res['slider']['id'];
+      }
+    } catch (_) {}
 
     Map<String, dynamic> savedGlobalSliders = {};
     try {
@@ -1657,27 +1711,12 @@ class AuthService {
       }
     }
 
+    // Remove any existing slider with same ID or identical image/content
+    sliders.removeWhere((s) => s['id'].toString() == newSlider['id'].toString());
     sliders.insert(0, newSlider);
     savedGlobalSliders[cleanUsername] = sliders;
     await prefs.setString('saved_global_seller_sliders', jsonEncode(savedGlobalSliders));
     await prefs.setString(localKey, jsonEncode(sliders));
-
-    try {
-      await VpsApiService.post('add-seller-slider', {
-        'seller_username': cleanUsername,
-        'tag': tag,
-        'title': title,
-        'description': description,
-        'bg_image_url': bgImageUrl,
-        'tag_bg_color': tagBgColor,
-        'tag_shape': tagShape,
-        'title_color': titleColor,
-        'desc_color': descColor,
-        'overlay_dim': overlayDim,
-        'remove_white_bg': removeWhiteBg ? 1 : 0,
-        'img_fit': imgFit,
-      });
-    } catch (_) {}
 
     return true;
   }
@@ -1694,6 +1733,8 @@ class AuthService {
     required String tagShape,
     required String titleColor,
     required String descColor,
+    String section = 'Top Banner',
+    String position = 'internal',
     double overlayDim = 0.0,
     bool removeWhiteBg = false,
     String imgFit = 'cover',
@@ -1742,6 +1783,8 @@ class AuthService {
       sliders[index]['tag_shape'] = tagShape;
       sliders[index]['title_color'] = titleColor;
       sliders[index]['desc_color'] = descColor;
+      sliders[index]['section'] = section.trim().isEmpty ? 'Top Banner' : section.trim();
+      sliders[index]['position'] = position.trim().isEmpty ? 'internal' : position.trim();
       sliders[index]['overlay_dim'] = overlayDim;
       sliders[index]['remove_white_bg'] = removeWhiteBg;
       sliders[index]['img_fit'] = imgFit;
@@ -1753,6 +1796,7 @@ class AuthService {
 
     try {
       await VpsApiService.post('update-seller-slider', {
+        'id': sliderId,
         'slider_id': sliderId,
         'seller_username': cleanUsername,
         'tag': tag,
@@ -1763,6 +1807,8 @@ class AuthService {
         'tag_shape': tagShape,
         'title_color': titleColor,
         'desc_color': descColor,
+        'section': section.trim().isEmpty ? 'Top Banner' : section.trim(),
+        'position': position.trim().isEmpty ? 'internal' : position.trim(),
         'overlay_dim': overlayDim,
         'remove_white_bg': removeWhiteBg ? 1 : 0,
         'img_fit': imgFit,
@@ -1770,6 +1816,69 @@ class AuthService {
     } catch (_) {}
 
     return true;
+  }
+
+  /// Quick move/assign seller slider to a Section with 1 finger tap
+  static Future<bool> updateSellerSliderSection(dynamic sliderId, String sellerUsername, String newSection) async {
+    final cleanUsername = sellerUsername.trim().toLowerCase();
+    final cleanSec = newSection.trim().isEmpty ? 'Top Banner' : newSection.trim();
+    final prefs = await SharedPreferences.getInstance();
+    final localKey = 'sliders_$cleanUsername';
+
+    Map<String, dynamic> savedGlobalSliders = {};
+    try {
+      final str = prefs.getString('saved_global_seller_sliders');
+      if (str != null && str.isNotEmpty) {
+        savedGlobalSliders = Map<String, dynamic>.from(jsonDecode(str));
+      }
+    } catch (_) {}
+
+    List<Map<String, dynamic>> sliders = [];
+    if (savedGlobalSliders.containsKey(cleanUsername)) {
+      try {
+        final List l = savedGlobalSliders[cleanUsername];
+        sliders = l.map((e) => Map<String, dynamic>.from(e)).toList();
+      } catch (_) {}
+    }
+
+    if (sliders.isEmpty) {
+      final str = prefs.getString(localKey);
+      if (str != null) {
+        try {
+          final List decoded = jsonDecode(str);
+          sliders = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+        } catch (_) {}
+      }
+    }
+
+    final index = sliders.indexWhere((s) => s['id'] == sliderId || s['id'].toString() == sliderId.toString());
+    if (index != -1) {
+      final existing = sliders[index];
+      existing['section'] = cleanSec;
+
+      savedGlobalSliders[cleanUsername] = sliders;
+      await prefs.setString('saved_global_seller_sliders', jsonEncode(savedGlobalSliders));
+      await prefs.setString(localKey, jsonEncode(sliders));
+
+      return updateSellerSlider(
+        sliderId: sliderId,
+        sellerUsername: sellerUsername,
+        tag: (existing['tag'] ?? '').toString(),
+        title: (existing['title'] ?? '').toString(),
+        description: (existing['description'] ?? '').toString(),
+        bgImageUrl: (existing['bg_image_url'] ?? '').toString(),
+        tagBgColor: (existing['tag_bg_color'] ?? '#10B981').toString(),
+        tagShape: (existing['tag_shape'] ?? 'pill').toString(),
+        titleColor: (existing['title_color'] ?? '#FFFFFF').toString(),
+        descColor: (existing['desc_color'] ?? '#E2E8F0').toString(),
+        section: cleanSec,
+        position: (existing['position'] ?? 'internal').toString(),
+        overlayDim: (existing['overlay_dim'] as num?)?.toDouble() ?? 0.0,
+        removeWhiteBg: existing['remove_white_bg'] == true || existing['remove_white_bg'] == 1,
+        imgFit: (existing['img_fit'] ?? 'cover').toString(),
+      );
+    }
+    return false;
   }
 
   /// Delete seller slider
@@ -3441,6 +3550,231 @@ class AuthService {
     return [];
   }
 
+  /// Get Cached Customer Orders for a specific Seller (0 ms Instant Load)
+  static Future<List<Map<String, dynamic>>> getCachedSellerCustomerOrders(String sellerUsername) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'cache_seller_cust_orders_${sellerUsername.trim().toLowerCase()}';
+      final str = prefs.getString(key);
+      if (str != null && str.isNotEmpty) {
+        final List decoded = jsonDecode(str);
+        return decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  /// Get All Customer Orders for a specific Seller (Direct Fast VPS Database Query)
+  static Future<List<Map<String, dynamic>>> getSellerCustomerOrders(String sellerUsername) async {
+    final cleanSeller = sellerUsername.trim();
+    if (cleanSeller.isEmpty) return [];
+
+    // 1. Instant local cache load if available
+    try {
+      final cached = await getCachedSellerCustomerOrders(cleanSeller);
+      if (cached.isNotEmpty) {
+        // Run background fetch asynchronously without blocking
+        _refreshSellerCustomerOrdersInBackground(cleanSeller);
+        return cached;
+      }
+    } catch (_) {}
+
+    return await _refreshSellerCustomerOrdersInBackground(cleanSeller);
+  }
+
+  static Future<List<Map<String, dynamic>>> _refreshSellerCustomerOrdersInBackground(String cleanSeller) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      Map<String, dynamic> savedOrderStatuses = {};
+      Map<String, dynamic> savedDeliveryStatuses = {};
+      Map<String, dynamic> savedCancelReasons = {};
+      Map<String, dynamic> savedCancelTimes = {};
+      Map<String, dynamic> savedPayments = {};
+      try {
+        final sStr = prefs.getString('saved_order_statuses');
+        if (sStr != null && sStr.isNotEmpty) savedOrderStatuses = Map<String, dynamic>.from(jsonDecode(sStr));
+        final dStr = prefs.getString('saved_delivery_statuses');
+        if (dStr != null && dStr.isNotEmpty) savedDeliveryStatuses = Map<String, dynamic>.from(jsonDecode(dStr));
+        final rStr = prefs.getString('saved_cancel_reasons');
+        if (rStr != null && rStr.isNotEmpty) savedCancelReasons = Map<String, dynamic>.from(jsonDecode(rStr));
+        final tStr = prefs.getString('saved_cancel_times');
+        if (tStr != null && tStr.isNotEmpty) savedCancelTimes = Map<String, dynamic>.from(jsonDecode(tStr));
+        final pStr = prefs.getString('saved_order_payments');
+        if (pStr != null && pStr.isNotEmpty) savedPayments = Map<String, dynamic>.from(jsonDecode(pStr));
+      } catch (_) {}
+
+      final convs = await getSellerConversations(cleanSeller);
+      final List<Map<String, dynamic>> allSellerOrders = [];
+      final Set<String> processedIds = {};
+
+      for (var conv in convs) {
+        final custMobile = (conv['customer_mobile'] ?? conv['mobile'] ?? '').toString().trim();
+        final custName = (conv['customer_name'] ?? conv['display_name'] ?? conv['name'] ?? 'Customer').toString().trim();
+
+        if (custMobile.isEmpty) continue;
+
+        final msgs = await getMessages(sellerUsername: cleanSeller, customerMobile: custMobile);
+
+        for (var m in msgs) {
+          final msgId = (m['id'] ?? m['order_id'] ?? '').toString();
+          final isOrderMsg = m['items_json'] != null ||
+              m['order_id'] != null ||
+              m['_calculated_order_id'] != null ||
+              (m['message'] ?? '').toString().toLowerCase().contains('order');
+
+          String orderStatus = (m['order_status'] ?? m['status'] ?? '').toString();
+          if (savedOrderStatuses.containsKey(msgId)) {
+            orderStatus = savedOrderStatuses[msgId].toString();
+          }
+
+          String deliveryStatus = (m['delivery_status'] ?? '').toString();
+          if (savedDeliveryStatuses.containsKey(msgId)) {
+            final val = savedDeliveryStatuses[msgId];
+            if (val is Map) {
+              deliveryStatus = (val['delivery_status'] ?? deliveryStatus).toString();
+            } else {
+              deliveryStatus = val.toString();
+            }
+          }
+
+          String cancelReason = (m['cancel_reason'] ?? m['cancellation_reason'] ?? '').toString();
+          if (savedCancelReasons.containsKey(msgId)) {
+            final rVal = savedCancelReasons[msgId]?.toString() ?? '';
+            if (rVal.isNotEmpty) cancelReason = rVal;
+          }
+
+          String cancelTime = (m['cancelled_at'] ?? m['cancel_time'] ?? m['cancelled_time'] ?? '').toString();
+          if (savedCancelTimes.containsKey(msgId)) {
+            final tVal = savedCancelTimes[msgId]?.toString() ?? '';
+            if (tVal.isNotEmpty) cancelTime = tVal;
+          }
+
+          String paymentUtr = (m['payment_utr'] ?? m['utr'] ?? m['utr_number'] ?? m['txn_id'] ?? m['transaction_id'] ?? m['razorpay_payment_id'] ?? m['payment_id'] ?? '').toString().trim();
+          String paymentStatus = (m['payment_status'] ?? '').toString().trim().toLowerCase();
+          String paymentMode = (m['payment_mode'] ?? m['payment_method'] ?? m['payment_type'] ?? '').toString().trim();
+
+          if (savedPayments.containsKey(msgId)) {
+            final pData = savedPayments[msgId];
+            if (pData is Map) {
+              if (pData['payment_utr'] != null && pData['payment_utr'].toString().isNotEmpty) {
+                paymentUtr = pData['payment_utr'].toString().trim();
+              }
+              if (pData['payment_status'] != null) {
+                paymentStatus = pData['payment_status'].toString().trim().toLowerCase();
+              }
+              if (pData['payment_mode'] != null) {
+                paymentMode = pData['payment_mode'].toString().trim();
+              }
+            }
+          }
+
+          final msgStr = (m['message'] ?? '').toString();
+          if (paymentUtr.isEmpty) {
+            final utrMatch = RegExp(r'(?:UTR|Txn|Transaction ID|Payment ID|Razorpay ID|Ref):\s*([A-Za-z0-9_]+)', caseSensitive: false).firstMatch(msgStr);
+            if (utrMatch != null) {
+              paymentUtr = utrMatch.group(1)!.trim();
+            } else {
+              final payMatch = RegExp(r'\b(pay_[A-Za-z0-9]+)\b').firstMatch(msgStr);
+              if (payMatch != null) {
+                paymentUtr = payMatch.group(1)!.trim();
+              }
+            }
+          }
+
+          if (paymentMode.isEmpty) {
+            final lowerMsg = msgStr.toLowerCase();
+            if (lowerMsg.contains('online') || lowerMsg.contains('upi') || lowerMsg.contains('razorpay') || lowerMsg.contains('paid online')) {
+              paymentMode = 'Online';
+            }
+          }
+
+          final bool isDelivered = deliveryStatus.toLowerCase() == 'delivered' ||
+              orderStatus.toLowerCase() == 'delivered';
+
+          final bool isDeleted = orderStatus.toLowerCase() == 'deleted' ||
+              m['is_deleted'] == true ||
+              m['is_deleted'] == 1 ||
+              m['is_deleted'] == '1';
+
+          if (isOrderMsg && !isDeleted) {
+            if (msgId.isNotEmpty && processedIds.contains(msgId)) continue;
+            if (msgId.isNotEmpty) processedIds.add(msgId);
+
+            List<Map<String, dynamic>> items = [];
+            if (m['items_json'] != null) {
+              try {
+                final decoded = jsonDecode(m['items_json'].toString());
+                if (decoded is List) {
+                  items = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+                }
+              } catch (_) {}
+            }
+
+            double totalAmount = double.tryParse((m['order_amount'] ?? '').toString()) ?? 0.0;
+            if (totalAmount <= 0 && items.isNotEmpty) {
+              for (var it in items) {
+                final rate = (it['rate'] as num?)?.toDouble() ?? (it['amount'] as num?)?.toDouble() ?? 0.0;
+                final qty = (it['qty'] as num?)?.toInt() ?? 1;
+                totalAmount += (rate * qty);
+              }
+            }
+
+            final orderIdStr = (m['order_id'] ?? (msgId.isNotEmpty ? '#DM-$msgId' : '#DM-1001')).toString();
+            final dateStr = (m['created_at'] ?? m['date'] ?? '').toString();
+            final displayStatus = isDelivered ? 'DELIVERED' : (orderStatus.isNotEmpty ? orderStatus : 'Pending');
+
+            allSellerOrders.add({
+              'order_id': orderIdStr,
+              'id': msgId,
+              'seller_username': cleanSeller,
+              'seller_name': cleanSeller,
+              'customer_mobile': custMobile,
+              'customer_name': custName,
+              'order_status': displayStatus,
+              'delivery_status': deliveryStatus.isNotEmpty ? deliveryStatus : (isDelivered ? 'Delivered' : 'Pending'),
+              'status': displayStatus,
+              'cancel_reason': cancelReason.isNotEmpty ? cancelReason : (displayStatus == 'CANCELLED' ? 'Cancelled by seller' : ''),
+              'cancelled_at': cancelTime.isNotEmpty ? cancelTime : (displayStatus == 'CANCELLED' || displayStatus == 'Cancelled' ? dateStr : ''),
+              'picked_up_at': m['picked_up_at'] ?? m['pickup_time'] ?? '',
+              'delivered_at': m['delivered_at'] ?? m['delivered_time'] ?? '',
+              'date': dateStr,
+              'created_at': dateStr,
+              'items': items,
+              'items_json': m['items_json'],
+              'total_amount': totalAmount,
+              'total_count': items.length,
+              'payment_utr': paymentUtr,
+              'utr': paymentUtr,
+              'payment_status': paymentStatus,
+              'payment_mode': paymentMode,
+              'message': msgStr,
+            });
+          }
+        }
+      }
+
+      // Sort by newest order first
+      allSellerOrders.sort((a, b) {
+        final idA = int.tryParse(a['id']?.toString() ?? '0') ?? 0;
+        final idB = int.tryParse(b['id']?.toString() ?? '0') ?? 0;
+        if (idA != 0 && idB != 0) return idB.compareTo(idA);
+        return (b['created_at']?.toString() ?? '').compareTo(a['created_at']?.toString() ?? '');
+      });
+
+      if (allSellerOrders.isNotEmpty) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final key = 'cache_seller_cust_orders_${cleanSeller.toLowerCase()}';
+          await prefs.setString(key, jsonEncode(allSellerOrders));
+        } catch (_) {}
+      }
+
+      return allSellerOrders;
+    } catch (_) {}
+
+    return [];
+  }
+
   static Map<String, dynamic> _parseFlatOrderRow({
     required Map<String, dynamic> msgMap,
     required String sellerName,
@@ -3654,6 +3988,8 @@ class AuthService {
       'raw_pickup_time': rawPickupDt,
       'raw_delivered_time': rawDeliveredDt,
       'customer_name': finalCustName,
+      'delivery_address': (msgMap['delivery_address'] ?? msgMap['address'] ?? msgMap['cust_address'] ?? '').toString().trim(),
+      'address': (msgMap['delivery_address'] ?? msgMap['address'] ?? msgMap['cust_address'] ?? '').toString().trim(),
       'order_no': '#$cleanOrderId',
       'order_send_time': rawCreatedAt.isNotEmpty ? rawCreatedAt : '${parsedDt.day}/${parsedDt.month}/${parsedDt.year}',
       'amount': totalAmt,
@@ -3773,9 +4109,10 @@ class AuthService {
     final now = DateTime.now();
     final formattedTime = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}";
 
-    // 1. Update persistent saved_order_statuses and saved_cancel_reasons
+    // 1. Update persistent saved_order_statuses, saved_cancel_reasons, and saved_cancel_times
     Map<String, dynamic> savedStatuses = {};
     Map<String, dynamic> savedReasons = {};
+    Map<String, dynamic> savedCancelTimes = {};
     try {
       final str = prefs.getString('saved_order_statuses');
       if (str != null && str.isNotEmpty) {
@@ -3785,11 +4122,17 @@ class AuthService {
       if (rStr != null && rStr.isNotEmpty) {
         savedReasons = Map<String, dynamic>.from(jsonDecode(rStr));
       }
+      final tStr = prefs.getString('saved_cancel_times');
+      if (tStr != null && tStr.isNotEmpty) {
+        savedCancelTimes = Map<String, dynamic>.from(jsonDecode(tStr));
+      }
     } catch (_) {}
     savedStatuses[msgIdStr] = 'Cancelled';
     savedReasons[msgIdStr] = reason;
+    savedCancelTimes[msgIdStr] = formattedTime;
     await prefs.setString('saved_order_statuses', jsonEncode(savedStatuses));
     await prefs.setString('saved_cancel_reasons', jsonEncode(savedReasons));
+    await prefs.setString('saved_cancel_times', jsonEncode(savedCancelTimes));
 
     // 2. Update local message keys in SharedPreferences
     final keys = prefs.getKeys().where((k) => k.startsWith('msgs_') || k.startsWith('messages_')).toList();
@@ -3948,29 +4291,57 @@ class AuthService {
       }
     } catch (_) {}
 
-    // 1. Fetch from VPS API
-    try {
-      final res = await VpsApiService.get('get-seller-products&seller_username=$cleanSeller');
-      if (res != null && res['success'] == true && res['products'] is List) {
-        final List<dynamic> rawList = res['products'];
-        final List<Map<String, dynamic>> products = rawList.map((e) => Map<String, dynamic>.from(e)).toList();
+    // 1. Helper function to query VPS API
+    Future<List<Map<String, dynamic>>?> fetchProductsApi(String sName) async {
+      try {
+        final res = await VpsApiService.get('get-seller-products&seller_username=${Uri.encodeComponent(sName)}');
+        if (res != null && res['success'] == true && res['products'] is List) {
+          final List<dynamic> rawList = res['products'];
+          return rawList.map((e) => Map<String, dynamic>.from(e)).toList();
+        }
+      } catch (_) {}
+      return null;
+    }
 
-        // Merge local image if VPS server returned empty image_url
-        for (var p in products) {
-          final pId = (p['id'] as num?)?.toInt() ?? 0;
-          final pImg = (p['image_url'] ?? p['image'] ?? '').toString().trim();
-          if ((pImg.isEmpty || pImg == '📦') && localImageMap.containsKey(pId)) {
-            p['image_url'] = localImageMap[pId];
-            p['image'] = localImageMap[pId];
+    // 1. Fetch from VPS API using cleanSeller
+    List<Map<String, dynamic>>? products = await fetchProductsApi(cleanSeller);
+
+    // 2. If empty or null, try fallback username/mobile lookup from sellers list
+    if (products == null || products.isEmpty) {
+      try {
+        final sellers = await getSellersList();
+        for (var s in sellers) {
+          final u = (s['username'] ?? '').toString().trim();
+          final m = (s['mobile'] ?? '').toString().trim();
+          final name = (s['name'] ?? '').toString().trim();
+          if ((m.isNotEmpty && m == cleanSeller && u.isNotEmpty && u != cleanSeller) ||
+              (name.isNotEmpty && name.toLowerCase() == cleanSeller.toLowerCase() && u.isNotEmpty && u != cleanSeller)) {
+            final fallbackList = await fetchProductsApi(u);
+            if (fallbackList != null && fallbackList.isNotEmpty) {
+              products = fallbackList;
+              break;
+            }
           }
         }
+      } catch (_) {}
+    }
 
-        await prefs.setString(cacheKey, jsonEncode(products));
-        return products;
+    if (products != null && products.isNotEmpty) {
+      // Merge local image if VPS server returned empty image_url
+      for (var p in products) {
+        final pId = (p['id'] as num?)?.toInt() ?? 0;
+        final pImg = (p['image_url'] ?? p['image'] ?? '').toString().trim();
+        if ((pImg.isEmpty || pImg == '📦') && localImageMap.containsKey(pId)) {
+          p['image_url'] = localImageMap[pId];
+          p['image'] = localImageMap[pId];
+        }
       }
-    } catch (_) {}
 
-    // 2. Local Fallback Cache
+      await prefs.setString(cacheKey, jsonEncode(products));
+      return products;
+    }
+
+    // 3. Local Fallback Cache
     try {
       final str = prefs.getString(cacheKey);
       if (str != null && str.isNotEmpty) {
@@ -3989,6 +4360,7 @@ class AuthService {
     String description = '',
     String unit = 'Pcs',
     String category = '',
+    String section = '',
     int qty = 1,
     required double rate,
     String imageUrl = '',
@@ -4008,6 +4380,7 @@ class AuthService {
         'description': description.trim(),
         'unit': unit.trim(),
         'category': category.trim(),
+        'section': section.trim(),
         'qty': qty,
         'rate': rate,
         'image_url': cleanImg,
@@ -4030,6 +4403,7 @@ class AuthService {
       'description': description.trim(),
       'unit': unit.trim(),
       'category': category.trim(),
+      'section': section.trim(),
       'qty': qty,
       'rate': rate,
       'image_url': cleanImg,
@@ -4060,6 +4434,7 @@ class AuthService {
     String description = '',
     String unit = 'Pcs',
     String category = '',
+    String section = '',
     int qty = 1,
     required double rate,
     String imageUrl = '',
@@ -4078,6 +4453,7 @@ class AuthService {
         'description': description.trim(),
         'unit': unit.trim(),
         'category': category.trim(),
+        'section': section.trim(),
         'qty': qty,
         'rate': rate,
         'image_url': cleanImg,
@@ -4099,6 +4475,7 @@ class AuthService {
             p['description'] = description.trim();
             p['unit'] = unit.trim();
             p['category'] = category.trim();
+            p['section'] = section.trim();
             p['qty'] = qty;
             p['rate'] = rate;
             p['image_url'] = cleanImg;
@@ -4564,7 +4941,8 @@ class AuthService {
           final items = List.from(orderPayload['items'] ?? []);
           final totalCount = (orderPayload['total_count'] as num?)?.toInt() ?? items.length;
           final totalAmt = (orderPayload['total_amount'] as num?)?.toDouble() ?? 0.0;
-          final msgText = '🛒 NEW ORDER PLACED ($localOrderId)\nTotal Items: $totalCount\nTotal Amount: ₹$totalAmt';
+          final addrStr = (orderPayload['delivery_address'] ?? orderPayload['address'] ?? '').toString().trim();
+          final msgText = '🛒 NEW ORDER PLACED ($localOrderId)\nTotal Items: $totalCount\nTotal Amount: ₹$totalAmt${addrStr.isNotEmpty ? '\n📍 Address: $addrStr' : ''}';
 
           await VpsApiService.post('send-message', {
             'seller_username': sellerUser,
@@ -4573,6 +4951,8 @@ class AuthService {
             'items_json': jsonEncode(items),
             'order_id': localOrderId,
             'order_amount': totalAmt,
+            'delivery_address': addrStr,
+            'address': addrStr,
             'sender_type': 'customer',
           });
         }
@@ -4627,12 +5007,27 @@ class AuthService {
     final digits = custMobile.replaceAll(RegExp(r'[^0-9]'), '');
     final last10 = digits.length >= 10 ? digits.substring(digits.length - 10) : digits;
 
+    Map<String, dynamic> savedOrderStatuses = {};
+    Map<String, dynamic> savedDeliveryStatuses = {};
+    Map<String, dynamic> savedCancelReasons = {};
+    Map<String, dynamic> savedPayments = {};
+    try {
+      final sStr = prefs.getString('saved_order_statuses');
+      if (sStr != null && sStr.isNotEmpty) savedOrderStatuses = Map<String, dynamic>.from(jsonDecode(sStr));
+      final dStr = prefs.getString('saved_delivery_statuses');
+      if (dStr != null && dStr.isNotEmpty) savedDeliveryStatuses = Map<String, dynamic>.from(jsonDecode(dStr));
+      final rStr = prefs.getString('saved_cancel_reasons');
+      if (rStr != null && rStr.isNotEmpty) savedCancelReasons = Map<String, dynamic>.from(jsonDecode(rStr));
+      final pStr = prefs.getString('saved_order_payments');
+      if (pStr != null && pStr.isNotEmpty) savedPayments = Map<String, dynamic>.from(jsonDecode(pStr));
+    } catch (_) {}
+
     final Map<String, Map<String, dynamic>> mergedMap = {};
 
     void addOrUpdateOrder(Map<String, dynamic> rawOrder) {
       final Map<String, dynamic> m = Map<String, dynamic>.from(rawOrder);
       
-      final dbId = (m['id'] as num?)?.toInt() ?? 0;
+      final dbId = int.tryParse(m['id']?.toString() ?? '0') ?? 0;
       String orderId = (m['order_id'] ?? m['order_number'] ?? '').toString().trim();
       final msgStr = (m['message'] ?? '').toString().trim();
       
@@ -4660,7 +5055,7 @@ class AuthService {
       m['order_number'] = orderId;
 
       // Extract total_amount if 0
-      double totAmt = (m['total_amount'] as num?)?.toDouble() ?? (m['order_amount'] as num?)?.toDouble() ?? 0.0;
+      double totAmt = double.tryParse(m['total_amount']?.toString() ?? '') ?? double.tryParse(m['order_amount']?.toString() ?? '') ?? 0.0;
       if (totAmt <= 0) {
         final matchAmt = RegExp(r'(?:Total Amount|Total):\s*₹?\s*([\d\.]+)', caseSensitive: false).firstMatch(msgStr);
         if (matchAmt != null) {
@@ -4688,8 +5083,8 @@ class AuthService {
           if (rawName.isNotEmpty && !rawName.startsWith('🛒') && !rawName.startsWith('NEW ORDER PLACED')) {
             String cleanName = rawName;
             String unit = (mapIt['unit'] ?? 'Pcs').toString();
-            int qty = (mapIt['qty'] as num?)?.toInt() ?? 1;
-            double itemAmt = (mapIt['amount'] as num?)?.toDouble() ?? (mapIt['rate'] != null ? (mapIt['rate'] as num).toDouble() * qty : 0.0);
+            int qty = int.tryParse(mapIt['qty']?.toString() ?? '1') ?? 1;
+            double itemAmt = double.tryParse(mapIt['amount']?.toString() ?? '') ?? (mapIt['rate'] != null ? (double.tryParse(mapIt['rate'].toString()) ?? 0.0) * qty : 0.0);
 
             final matchLine = RegExp(r'^\d+\.\s*(.*?)(?:\s*\((.*?)\))?(?:\s*-\s*₹\s*([\d\.]+))?$').firstMatch(rawName);
             if (matchLine != null) {
@@ -4756,7 +5151,7 @@ class AuthService {
       // Calculate total amount if still 0
       if (totAmt <= 0) {
         for (final it in normalizedItems) {
-          totAmt += (it['amount'] as num?)?.toDouble() ?? 0.0;
+          totAmt += double.tryParse(it['amount']?.toString() ?? '0') ?? 0.0;
         }
       }
 
@@ -4764,18 +5159,106 @@ class AuthService {
       if (normalizedItems.isEmpty) {
         normalizedItems.add({
           'name': 'Order Receipt ($orderId)',
-          'qty': (m['total_count'] as num?)?.toInt() ?? 1,
+          'qty': int.tryParse(m['total_count']?.toString() ?? '1') ?? 1,
           'unit': 'Item',
           'amount': totAmt,
         });
+      }
+
+      final msgIdStr = (dbId > 0 ? dbId : (m['id'] ?? '')).toString();
+
+      String orderStatus = (m['order_status'] ?? m['status'] ?? '').toString();
+      if (savedOrderStatuses.containsKey(msgIdStr)) {
+        orderStatus = savedOrderStatuses[msgIdStr].toString();
+      }
+
+      String deliveryStatus = (m['delivery_status'] ?? '').toString();
+      if (savedDeliveryStatuses.containsKey(msgIdStr)) {
+        final val = savedDeliveryStatuses[msgIdStr];
+        if (val is Map) {
+          deliveryStatus = (val['delivery_status'] ?? deliveryStatus).toString();
+          if (val['picked_up_at'] != null) m['picked_up_at'] = val['picked_up_at'];
+          if (val['delivered_at'] != null) m['delivered_at'] = val['delivered_at'];
+        } else {
+          deliveryStatus = val.toString();
+        }
+      }
+
+      String cancelReason = (m['cancel_reason'] ?? m['cancellation_reason'] ?? '').toString();
+      if (savedCancelReasons.containsKey(msgIdStr)) {
+        final rVal = savedCancelReasons[msgIdStr]?.toString() ?? '';
+        if (rVal.isNotEmpty) cancelReason = rVal;
+      }
+
+      String paymentUtr = (m['payment_utr'] ?? m['utr'] ?? m['utr_number'] ?? m['txn_id'] ?? m['transaction_id'] ?? m['razorpay_payment_id'] ?? m['payment_id'] ?? '').toString().trim();
+      String paymentStatus = (m['payment_status'] ?? '').toString().trim().toLowerCase();
+      String paymentMode = (m['payment_mode'] ?? m['payment_method'] ?? m['payment_type'] ?? '').toString().trim();
+
+      if (savedPayments.containsKey(msgIdStr)) {
+        final pData = savedPayments[msgIdStr];
+        if (pData is Map) {
+          if (pData['payment_utr'] != null && pData['payment_utr'].toString().isNotEmpty) {
+            paymentUtr = pData['payment_utr'].toString().trim();
+          }
+          if (pData['payment_status'] != null) {
+            paymentStatus = pData['payment_status'].toString().trim().toLowerCase();
+          }
+          if (pData['payment_mode'] != null) {
+            paymentMode = pData['payment_mode'].toString().trim();
+          }
+        }
+      }
+
+      if (paymentUtr.isEmpty) {
+        final utrMatch = RegExp(r'(?:UTR|Txn|Transaction ID|Payment ID|Razorpay ID|Ref):\s*([A-Za-z0-9_]+)', caseSensitive: false).firstMatch(msgStr);
+        if (utrMatch != null) {
+          paymentUtr = utrMatch.group(1)!.trim();
+        } else {
+          final payMatch = RegExp(r'\b(pay_[A-Za-z0-9]+)\b').firstMatch(msgStr);
+          if (payMatch != null) {
+            paymentUtr = payMatch.group(1)!.trim();
+          }
+        }
+      }
+
+      if (paymentMode.isEmpty) {
+        final lowerMsg = msgStr.toLowerCase();
+        if (lowerMsg.contains('online') || lowerMsg.contains('upi') || lowerMsg.contains('razorpay') || lowerMsg.contains('paid online')) {
+          paymentMode = 'Online';
+        }
+      }
+
+      final bool isDelivered = deliveryStatus.toLowerCase() == 'delivered' ||
+          orderStatus.toLowerCase() == 'delivered';
+      final bool isCancelled = deliveryStatus.toLowerCase() == 'cancelled' ||
+          orderStatus.toLowerCase() == 'cancelled' ||
+          orderStatus.toLowerCase() == 'deleted' ||
+          cancelReason.isNotEmpty;
+      final bool isReady = orderStatus.toLowerCase() == 'ready' || orderStatus.toLowerCase() == 'approved';
+
+      String displayStatus = 'PENDING';
+      if (isDelivered) {
+        displayStatus = 'DELIVERED';
+      } else if (isCancelled) {
+        displayStatus = 'CANCELLED';
+      } else if (isReady) {
+        displayStatus = 'READY';
+      } else {
+        displayStatus = 'PENDING';
       }
 
       m['items'] = normalizedItems;
       m['total_amount'] = totAmt;
       m['total_count'] = normalizedItems.isNotEmpty ? normalizedItems.length : 1;
       m['seller_name'] = (m['seller_name'] ?? m['seller_username'] ?? 'Store').toString();
-      m['status'] = (m['status'] ?? m['order_status'] ?? m['delivery_status'] ?? 'PENDING').toString().toUpperCase();
-      if (m['status'] == 'STATUS') m['status'] = 'PENDING';
+      m['status'] = displayStatus;
+      m['order_status'] = displayStatus;
+      m['delivery_status'] = deliveryStatus.isNotEmpty ? deliveryStatus : (isDelivered ? 'Delivered' : 'Pending');
+      m['cancel_reason'] = cancelReason.isNotEmpty ? cancelReason : (isCancelled ? 'Cancelled by seller' : '');
+      m['payment_utr'] = paymentUtr;
+      m['utr'] = paymentUtr;
+      m['payment_status'] = paymentStatus;
+      m['payment_mode'] = paymentMode;
 
       final dateStr = (m['date'] ?? m['created_at'] ?? '').toString();
       m['date'] = dateStr;
@@ -4902,11 +5385,171 @@ class AuthService {
 
     final result = mergedMap.values.toList();
     result.sort((a, b) {
-      final tsA = (a['timestamp'] as num?)?.toInt() ?? 0;
-      final tsB = (b['timestamp'] as num?)?.toInt() ?? 0;
+      final tsA = int.tryParse(a['timestamp']?.toString() ?? '0') ?? 0;
+      final tsB = int.tryParse(b['timestamp']?.toString() ?? '0') ?? 0;
       return tsB.compareTo(tsA);
     });
 
     return result;
+  }
+
+  /// Get Seller Sections (VPS Database API + SharedPreferences Cache)
+  static Future<List<Map<String, dynamic>>> getSellerSections(String sellerUsername) async {
+    final cleanSeller = sellerUsername.trim().toLowerCase();
+    if (cleanSeller.isEmpty) return [];
+
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_sections_$cleanSeller';
+
+    // 1. Fetch fresh from VPS API Database
+    try {
+      final res = await VpsApiService.get('get-seller-sections&seller_username=$cleanSeller');
+      if (res != null && res['success'] == true && res['sections'] is List) {
+        final List<dynamic> rawList = res['sections'];
+        final List<Map<String, dynamic>> sections = rawList.map((e) => Map<String, dynamic>.from(e)).toList();
+        await prefs.setString(cacheKey, jsonEncode(sections));
+        return sections;
+      }
+    } catch (_) {}
+
+    // 2. Fallback to Local Cache if offline
+    try {
+      final str = prefs.getString(cacheKey);
+      if (str != null && str.isNotEmpty) {
+        final List decoded = jsonDecode(str);
+        return decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+    } catch (_) {}
+
+    // NO HARDCODED DEFAULT SECTIONS! Returns empty list until created by seller
+    return [];
+  }
+
+  /// Add Seller Section (VPS API + Local Cache)
+  static Future<bool> addSellerSection(String sellerUsername, String name, [String icon = '🏷️', String bgColor = '#FFFFFF', String textColor = '#0F172A']) async {
+    final cleanSeller = sellerUsername.trim().toLowerCase();
+    final cleanName = name.trim();
+    final cleanIcon = icon.trim().isNotEmpty ? icon.trim() : '🏷️';
+    final cleanBgColor = bgColor.trim().isNotEmpty ? bgColor.trim() : '#FFFFFF';
+    final cleanTextColor = textColor.trim().isNotEmpty ? textColor.trim() : '#0F172A';
+    if (cleanSeller.isEmpty || cleanName.isEmpty) return false;
+
+    Map<String, dynamic>? newSec;
+
+    try {
+      final res = await VpsApiService.post('add-seller-section', {
+        'seller_username': cleanSeller,
+        'name': cleanName,
+        'icon': cleanIcon,
+        'bg_color': cleanBgColor,
+        'text_color': cleanTextColor,
+      });
+      if (res != null && res['success'] == true && res['section'] != null) {
+        newSec = Map<String, dynamic>.from(res['section']);
+      }
+    } catch (_) {}
+
+    newSec ??= {
+      'id': DateTime.now().millisecondsSinceEpoch,
+      'seller_username': cleanSeller,
+      'name': cleanName,
+      'icon': cleanIcon,
+      'bg_color': cleanBgColor,
+      'text_color': cleanTextColor,
+    };
+
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_sections_$cleanSeller';
+    List<Map<String, dynamic>> sections = [];
+    try {
+      final str = prefs.getString(cacheKey);
+      if (str != null && str.isNotEmpty) {
+        sections = (jsonDecode(str) as List).map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+    } catch (_) {}
+
+    int exIdx = sections.indexWhere((s) => (s['name'] ?? '').toString().trim().toLowerCase() == cleanName.toLowerCase());
+    if (exIdx >= 0) {
+      sections[exIdx]['icon'] = cleanIcon;
+      sections[exIdx]['bg_color'] = cleanBgColor;
+      sections[exIdx]['text_color'] = cleanTextColor;
+      if (newSec['id'] != null) sections[exIdx]['id'] = newSec['id'];
+    } else {
+      sections.add(newSec);
+    }
+    await prefs.setString(cacheKey, jsonEncode(sections));
+    return true;
+  }
+
+  /// Update Seller Section
+  static Future<bool> updateSellerSection(int id, String sellerUsername, String newName, [String icon = '🏷️', String bgColor = '#FFFFFF', String textColor = '#0F172A']) async {
+    final cleanSeller = sellerUsername.trim().toLowerCase();
+    final cleanName = newName.trim();
+    final cleanIcon = icon.trim().isNotEmpty ? icon.trim() : '🏷️';
+    final cleanBgColor = bgColor.trim().isNotEmpty ? bgColor.trim() : '#FFFFFF';
+    final cleanTextColor = textColor.trim().isNotEmpty ? textColor.trim() : '#0F172A';
+    if (cleanName.isEmpty) return false;
+
+    try {
+      if (id > 0) {
+        await VpsApiService.post('update-seller-section', {
+          'id': id,
+          'seller_username': cleanSeller,
+          'name': cleanName,
+          'icon': cleanIcon,
+          'bg_color': cleanBgColor,
+          'text_color': cleanTextColor,
+        });
+      }
+    } catch (_) {}
+
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_sections_$cleanSeller';
+    try {
+      final str = prefs.getString(cacheKey);
+      if (str != null && str.isNotEmpty) {
+        final List<dynamic> list = jsonDecode(str);
+        final sections = list.map((e) => Map<String, dynamic>.from(e)).toList();
+        for (var s in sections) {
+          if ((s['id'] as num?)?.toInt() == id || (s['name'] ?? '').toString().trim().toLowerCase() == cleanName.toLowerCase()) {
+            s['name'] = cleanName;
+            s['icon'] = cleanIcon;
+            s['bg_color'] = cleanBgColor;
+            s['text_color'] = cleanTextColor;
+          }
+        }
+        await prefs.setString(cacheKey, jsonEncode(sections));
+      }
+    } catch (_) {}
+
+    return true;
+  }
+
+  /// Delete Seller Section
+  static Future<bool> deleteSellerSection(int id, String sellerUsername, String name) async {
+    final cleanSeller = sellerUsername.trim().toLowerCase();
+
+    try {
+      if (id > 0) {
+        await VpsApiService.post('delete-seller-section', {
+          'id': id,
+          'seller_username': cleanSeller,
+        });
+      }
+    } catch (_) {}
+
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_sections_$cleanSeller';
+    try {
+      final str = prefs.getString(cacheKey);
+      if (str != null && str.isNotEmpty) {
+        final List<dynamic> list = jsonDecode(str);
+        final sections = list.map((e) => Map<String, dynamic>.from(e)).toList();
+        sections.removeWhere((s) => (s['id'] as num?)?.toInt() == id || (s['name'] ?? '').toString().trim().toLowerCase() == name.trim().toLowerCase());
+        await prefs.setString(cacheKey, jsonEncode(sections));
+      }
+    } catch (_) {}
+
+    return true;
   }
 }

@@ -918,10 +918,33 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
           angle: -0.15,
           child: Image.asset(
             'assets/images/VERIFIDE.png',
-            width: 60,
-            height: 60,
+            width: 65,
+            height: 65,
             fit: BoxFit.contain,
-            errorBuilder: (ctx, err, stack) => const SizedBox.shrink(),
+            errorBuilder: (ctx, err, stack) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFDCFCE7),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF16A34A), width: 1.5),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.verified_rounded, color: Color(0xFF15803D), size: 14),
+                  SizedBox(width: 3),
+                  Text(
+                    'VERIFIED',
+                    style: TextStyle(
+                      color: Color(0xFF15803D),
+                      fontWeight: FontWeight.w900,
+                      fontSize: 10,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

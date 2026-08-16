@@ -307,7 +307,12 @@ class _SellerDashboardState extends State<SellerDashboard> {
   }
 
   Widget _buildSliderSection() {
-    if (_sliders.isEmpty) return const SizedBox.shrink();
+    final topSliders = _sliders.where((s) {
+      final sec = (s['section'] ?? 'Top Banner').toString().trim();
+      return sec.isEmpty || sec.toLowerCase() == 'top banner';
+    }).toList();
+
+    if (topSliders.isEmpty) return const SizedBox.shrink();
 
     return Column(
       children: [
@@ -318,9 +323,9 @@ class _SellerDashboardState extends State<SellerDashboard> {
             onPageChanged: (idx) {
               setState(() => _activeSliderPage = idx);
             },
-            itemCount: _sliders.length,
+            itemCount: topSliders.length,
             itemBuilder: (ctx, idx) {
-              final slider = _sliders[idx];
+              final slider = topSliders[idx];
               final title = (slider['title'] ?? slider['titleText'] ?? '').toString();
               final subtitle = (slider['description'] ?? slider['subtitle'] ?? slider['descText'] ?? '').toString();
               final tag = (slider['tag'] ?? slider['tagText'] ?? '').toString();
@@ -419,25 +424,27 @@ class _SellerDashboardState extends State<SellerDashboard> {
           ),
         ),
 
-        const SizedBox(height: 10),
+        if (topSliders.length > 1) ...[
+          const SizedBox(height: 10),
 
-        // Indicator Dots
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(_sliders.length, (index) {
-            final isSelected = _activeSliderPage == index;
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              width: isSelected ? 18 : 6,
-              height: 6,
-              decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF8B5CF6) : const Color(0xFFCBD5E1),
-                borderRadius: BorderRadius.circular(3),
-              ),
-            );
-          }),
-        ),
+          // Indicator Dots
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(topSliders.length, (index) {
+              final isSelected = _activeSliderPage == index;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: isSelected ? 18 : 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: isSelected ? const Color(0xFF10B981) : Colors.grey.shade400,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              );
+            }),
+          ),
+        ],
       ],
     );
   }
