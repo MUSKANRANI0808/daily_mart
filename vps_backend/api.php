@@ -1402,6 +1402,10 @@ if ($action == 'get-header-theme') {
     if (!$colCheckSecTextColor || $colCheckSecTextColor->num_rows == 0) {
         @$conn->query("ALTER TABLE seller_sections ADD COLUMN text_color VARCHAR(50) DEFAULT '#0F172A'");
     }
+    $colCheckSecCols = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'columns'");
+    if (!$colCheckSecCols || $colCheckSecCols->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN columns INT DEFAULT 2");
+    }
 
     $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
     if (empty($seller_username)) {

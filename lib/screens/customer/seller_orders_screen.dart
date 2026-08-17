@@ -1794,6 +1794,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
       final sIcon = (sec['icon'] ?? '🏷️').toString().trim();
       final sBg = (sec['bg_color'] ?? '#FFFFFF').toString().trim();
       final sText = (sec['text_color'] ?? '').toString().trim();
+      final sCols = (sec['columns'] ?? 2).toString().trim();
       if (sName.isNotEmpty && !addedSecNames.contains(sName.toLowerCase())) {
         addedSecNames.add(sName.toLowerCase());
         effectiveSections.add({
@@ -1801,6 +1802,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
           'icon': sIcon.isNotEmpty ? sIcon : '🏷️',
           'bg_color': sBg.isNotEmpty ? sBg : '#FFFFFF',
           'text_color': sText.isNotEmpty ? sText : '#0F172A',
+          'columns': sCols.isNotEmpty ? sCols : '2',
         });
       }
     }
@@ -1817,6 +1819,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
           'icon': (cIcon.length <= 4 && cIcon.isNotEmpty) ? cIcon : '📁',
           'bg_color': cBg.isNotEmpty ? cBg : '#FFFFFF',
           'text_color': '#0F172A',
+          'columns': '2',
         });
       }
     }
@@ -1828,13 +1831,13 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
       final tag = pSec.isNotEmpty ? pSec : pCat;
       if (tag.isNotEmpty && !addedSecNames.contains(tag.toLowerCase())) {
         addedSecNames.add(tag.toLowerCase());
-        effectiveSections.add({'name': tag, 'icon': '🏷️', 'bg_color': '#FFFFFF', 'text_color': '#0F172A'});
+        effectiveSections.add({'name': tag, 'icon': '🏷️', 'bg_color': '#FFFFFF', 'text_color': '#0F172A', 'columns': '2'});
       }
     }
 
     // If no section created yet, but products exist, create a default fallback section name using first available category or 'Items'
     if (effectiveSections.isEmpty && filtered.isNotEmpty) {
-      effectiveSections.add({'name': 'Items', 'icon': '🏷️', 'bg_color': '#FFFFFF', 'text_color': '#0F172A'});
+      effectiveSections.add({'name': 'Items', 'icon': '🏷️', 'bg_color': '#FFFFFF', 'text_color': '#0F172A', 'columns': '2'});
     }
 
     // 2. Render each section with its matching products
@@ -1886,7 +1889,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
       // Find custom background color, text color & columns layout assigned to this section
       String secBgHex = (sec['bg_color'] ?? '#FFFFFF').toString().trim();
       String secTextHex = (sec['text_color'] ?? '').toString().trim();
-      int secCols = 2;
+      int secCols = int.tryParse((sec['columns'] ?? '2').toString()) ?? 2;
 
       final secMatch = _sellerSections.firstWhere(
         (s) => (s['name'] ?? '').toString().trim().toLowerCase() == secName.toLowerCase(),
@@ -1901,7 +1904,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
           if (secMatch['text_color'] != null) secTextHex = secMatch['text_color'].toString().trim();
         }
         if (secMatch['columns'] != null) {
-          secCols = int.tryParse(secMatch['columns'].toString()) ?? 2;
+          secCols = int.tryParse(secMatch['columns'].toString()) ?? secCols;
         }
       }
 
