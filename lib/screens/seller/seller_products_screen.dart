@@ -1720,6 +1720,9 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     final rateController = TextEditingController(
       text: isEditing ? safeDouble(productToEdit['rate'], 0.0).toString() : '',
     );
+    final buttonTextController = TextEditingController(
+      text: isEditing ? safeString(productToEdit['button_text'], 'Buy Now') : 'Buy Now',
+    );
 
     List<String> availableUnitNames = _sellerUnits.map((u) => safeString(u['unit_name'])).where((s) => s.isNotEmpty).toList();
     List<String> availableCategoryNames = _sellerCategories.map((c) => safeString(c['name'])).where((s) => s.isNotEmpty).toList();
@@ -2224,6 +2227,26 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 14),
+
+                  // Custom Action Button Text (e.g. Buy Now, Shop Now, Order Now)
+                  const Text('Card Action Button Text (Optional)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                  const SizedBox(height: 2),
+                  const Text('Customize the action button shown to customer (e.g. Buy Now, Shop Now, Add)', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: buttonTextController,
+                    decoration: InputDecoration(
+                      hintText: 'e.g. Buy Now, Shop Now, Order Now',
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 20),
 
                   // Save Button
@@ -2234,6 +2257,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                       final pQty = int.tryParse(qtyController.text.trim()) ?? 1;
                       final pRateStr = rateController.text.trim();
                       final pRate = double.tryParse(pRateStr) ?? 0.0;
+                      final pBtnText = buttonTextController.text.trim().isNotEmpty ? buttonTextController.text.trim() : 'Buy Now';
 
                       if (pName.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -2266,6 +2290,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           qty: pQty,
                           rate: pRate,
                           imageUrl: prodImageUrl,
+                          buttonText: pBtnText,
                         );
                       } else {
                         await AuthService.addSellerProduct(
@@ -2278,6 +2303,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           qty: pQty,
                           rate: pRate,
                           imageUrl: prodImageUrl,
+                          buttonText: pBtnText,
                         );
                       }
 

@@ -1283,6 +1283,11 @@ if ($action == 'get-header-theme') {
     }
     echo json_encode(["success" => false, "message" => "Invalid credentials"]);
 } elseif ($action == 'add-seller-product') {
+    $colCheckBtnText = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'button_text'");
+    if (!$colCheckBtnText || $colCheckBtnText->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_products ADD COLUMN button_text VARCHAR(100) DEFAULT 'Buy Now'");
+    }
+
     $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : '';
     $name = isset($input['name']) ? trim($input['name']) : '';
     $description = isset($input['description']) ? trim($input['description']) : '';
@@ -1292,6 +1297,7 @@ if ($action == 'get-header-theme') {
     $qty = isset($input['qty']) ? (int)$input['qty'] : 1;
     if ($qty <= 0) $qty = 1;
     $rate = isset($input['rate']) ? (float)$input['rate'] : 0.0;
+    $button_text = isset($input['button_text']) && !empty(trim($input['button_text'])) ? trim($input['button_text']) : 'Buy Now';
 
     if (empty($seller_username) || empty($name)) {
         echo json_encode(["success" => false, "message" => "Seller username and product name are required"]);
@@ -1311,9 +1317,9 @@ if ($action == 'get-header-theme') {
         @$conn->query("ALTER TABLE seller_products ADD COLUMN section VARCHAR(255) DEFAULT NULL");
     }
 
-    $stmt = $conn->prepare("INSERT INTO seller_products (seller_username, name, description, unit, category, section, qty, rate, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt = $conn->prepare("INSERT INTO seller_products (seller_username, name, description, unit, category, section, qty, rate, image_url, button_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     if ($stmt) {
-        $stmt->bind_param("ssssssids", $seller_username, $name, $description, $unit, $category, $section, $qty, $rate, $image_url);
+        $stmt->bind_param("sssssidsss", $seller_username, $name, $description, $unit, $category, $section, $qty, $rate, $image_url, $button_text);
         if ($stmt->execute()) {
             $newId = $stmt->insert_id;
             echo json_encode([
@@ -1329,7 +1335,8 @@ if ($action == 'get-header-theme') {
                     "section" => $section,
                     "qty" => $qty,
                     "rate" => $rate,
-                    "image_url" => $image_url
+                    "image_url" => $image_url,
+                    "button_text" => $button_text
                 ]
             ]);
             exit();
@@ -1338,6 +1345,11 @@ if ($action == 'get-header-theme') {
     echo json_encode(["success" => false, "message" => "Failed to add product"]);
     exit();
 } elseif ($action == 'get-seller-products') {
+    $colCheckBtnText = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'button_text'");
+    if (!$colCheckBtnText || $colCheckBtnText->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_products ADD COLUMN button_text VARCHAR(100) DEFAULT 'Buy Now'");
+    }
+
     $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
     if (empty($seller_username)) {
         echo json_encode(["success" => true, "products" => array()]);
@@ -1354,12 +1366,18 @@ if ($action == 'get-header-theme') {
             $row['rate'] = (float)$row['rate'];
             $row['section'] = isset($row['section']) ? $row['section'] : '';
             $row['image_url'] = isset($row['image_url']) ? $row['image_url'] : (isset($row['image']) ? $row['image'] : '');
+            $row['button_text'] = isset($row['button_text']) && !empty($row['button_text']) ? $row['button_text'] : 'Buy Now';
             $products[] = $row;
         }
     }
     echo json_encode(["success" => true, "products" => $products]);
     exit();
 } elseif ($action == 'update-seller-product') {
+    $colCheckBtnText = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'button_text'");
+    if (!$colCheckBtnText || $colCheckBtnText->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_products ADD COLUMN button_text VARCHAR(100) DEFAULT 'Buy Now'");
+    }
+
     $id = isset($input['id']) ? (int)$input['id'] : 0;
     $name = isset($input['name']) ? trim($input['name']) : '';
     $description = isset($input['description']) ? trim($input['description']) : '';
@@ -1370,15 +1388,16 @@ if ($action == 'get-header-theme') {
     if ($qty <= 0) $qty = 1;
     $rate = isset($input['rate']) ? (float)$input['rate'] : 0.0;
     $image_url = isset($input['image_url']) ? trim($input['image_url']) : (isset($input['image']) ? trim($input['image']) : '');
+    $button_text = isset($input['button_text']) && !empty(trim($input['button_text'])) ? trim($input['button_text']) : 'Buy Now';
 
     if ($id <= 0 || empty($name)) {
         echo json_encode(["success" => false, "message" => "Product ID and name required"]);
         exit();
     }
 
-    $stmt = $conn->prepare("UPDATE seller_products SET name = ?, description = ?, unit = ?, category = ?, section = ?, qty = ?, rate = ?, image_url = ? WHERE id = ?");
+    $stmt = $conn->prepare("UPDATE seller_products SET name = ?, description = ?, unit = ?, category = ?, section = ?, qty = ?, rate = ?, image_url = ?, button_text = ? WHERE id = ?");
     if ($stmt) {
-        $stmt->bind_param("sssssidsi", $name, $description, $unit, $category, $section, $qty, $rate, $image_url, $id);
+        $stmt->bind_param("sssssidssi", $name, $description, $unit, $category, $section, $qty, $rate, $image_url, $button_text, $id);
         if ($stmt->execute()) {
             echo json_encode(["success" => true, "message" => "Product updated successfully"]);
             exit();

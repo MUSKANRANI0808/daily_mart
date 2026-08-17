@@ -1460,6 +1460,9 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
     final imgUrl = (p['image_url'] ?? '').toString().trim();
     final imgVal = (p['image'] ?? '').toString().trim();
     final img = imgUrl.isNotEmpty ? imgUrl : (imgVal.isNotEmpty ? imgVal : '📦');
+    final btnText = (p['button_text'] ?? '').toString().trim().isNotEmpty 
+        ? (p['button_text'] ?? '').toString().trim() 
+        : 'Buy Now';
 
     void handleProductTap() {
       showProductDetailBottomSheet(
@@ -1547,7 +1550,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                       const SizedBox(height: 2),
                       Text(
                         name,
-                        maxLines: 2,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
@@ -1555,29 +1558,42 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                           color: Color(0xFF0F172A),
                         ),
                       ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Text(
-                            '₹${rate % 1 == 0 ? rate.toInt() : rate.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 16,
-                              color: Color(0xFF059669),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '/ $unit',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF64748B),
-                            ),
-                          ),
-                        ],
+                      const SizedBox(height: 4),
+                      Text(
+                        '₹${rate % 1 == 0 ? rate.toInt() : rate.toStringAsFixed(2)} / $unit',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF64748B),
+                        ),
                       ),
                     ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: handleProductTap,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2563EB),
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF2563EB).withValues(alpha: 0.25),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      btnText,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -1644,7 +1660,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
 
             // Bottom Info Section
             Padding(
-              padding: EdgeInsets.all(isCompact ? 6.0 : 10.0),
+              padding: EdgeInsets.all(isCompact ? 6.0 : 8.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1654,7 +1670,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: isCompact ? 8.5 : 9.5,
+                        fontSize: isCompact ? 8.0 : 9.0,
                         fontWeight: FontWeight.bold,
                         color: const Color(0xFF8B5CF6),
                         letterSpacing: 0.3,
@@ -1667,35 +1683,47 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: isCompact ? 11.5 : 13.5,
+                      fontSize: isCompact ? 11 : 13,
                       color: const Color(0xFF0F172A),
                     ),
                   ),
-                  SizedBox(height: isCompact ? 2 : 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '₹${rate % 1 == 0 ? rate.toInt() : rate.toStringAsFixed(2)}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: isCompact ? 13 : 15,
-                          color: const Color(0xFF059669),
+                  SizedBox(height: isCompact ? 1 : 2),
+                  Text(
+                    '₹${rate % 1 == 0 ? rate.toInt() : rate.toStringAsFixed(2)} / $unit',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: isCompact ? 9.5 : 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                  SizedBox(height: isCompact ? 4 : 6),
+                  Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.symmetric(vertical: isCompact ? 5 : 7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2563EB),
+                      borderRadius: BorderRadius.circular(isCompact ? 7 : 9),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF2563EB).withValues(alpha: 0.25),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
                         ),
+                      ],
+                    ),
+                    child: Text(
+                      btnText,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: isCompact ? 9.5 : 11.5,
                       ),
-                      Flexible(
-                        child: Text(
-                          '/ $unit',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: isCompact ? 9.5 : 11,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF64748B),
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ],
               ),
@@ -1769,7 +1797,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              childAspectRatio: 0.74,
+              childAspectRatio: 0.64,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
             ),
@@ -1994,7 +2022,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                 padding: EdgeInsets.symmetric(horizontal: secCols == 3 ? 10 : 16, vertical: 4),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: secCols,
-                  childAspectRatio: secCols == 1 ? 3.0 : (secCols == 3 ? 0.58 : 0.74),
+                  childAspectRatio: secCols == 1 ? 2.6 : (secCols == 3 ? 0.50 : 0.64),
                   crossAxisSpacing: secCols == 3 ? 8 : 12,
                   mainAxisSpacing: secCols == 3 ? 8 : (secCols == 1 ? 8 : 12),
                 ),

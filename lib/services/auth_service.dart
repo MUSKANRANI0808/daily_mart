@@ -4364,10 +4364,12 @@ class AuthService {
     int qty = 1,
     required double rate,
     String imageUrl = '',
+    String buttonText = 'Buy Now',
   }) async {
     final cleanSeller = sellerUsername.trim();
     final cleanName = name.trim();
     final cleanImg = imageUrl.trim();
+    final cleanBtnText = buttonText.trim().isNotEmpty ? buttonText.trim() : 'Buy Now';
     if (cleanSeller.isEmpty || cleanName.isEmpty) return false;
 
     Map<String, dynamic>? newProd;
@@ -4385,6 +4387,7 @@ class AuthService {
         'rate': rate,
         'image_url': cleanImg,
         'image': cleanImg,
+        'button_text': cleanBtnText,
       });
 
       if (res != null && res['success'] == true && res['product'] != null) {
@@ -4408,6 +4411,7 @@ class AuthService {
       'rate': rate,
       'image_url': cleanImg,
       'image': cleanImg,
+      'button_text': cleanBtnText,
     };
 
     // 2. Save/Update Local Cache
@@ -4438,10 +4442,12 @@ class AuthService {
     int qty = 1,
     required double rate,
     String imageUrl = '',
+    String buttonText = 'Buy Now',
   }) async {
     final cleanSeller = sellerUsername.trim();
     final cleanName = name.trim();
     final cleanImg = imageUrl.trim();
+    final cleanBtnText = buttonText.trim().isNotEmpty ? buttonText.trim() : 'Buy Now';
     if (id <= 0 || cleanName.isEmpty) return false;
 
     // 1. VPS API Update
@@ -4458,6 +4464,7 @@ class AuthService {
         'rate': rate,
         'image_url': cleanImg,
         'image': cleanImg,
+        'button_text': cleanBtnText,
       });
     } catch (_) {}
 
@@ -4480,6 +4487,7 @@ class AuthService {
             p['rate'] = rate;
             p['image_url'] = cleanImg;
             p['image'] = cleanImg;
+            p['button_text'] = cleanBtnText;
           }
         }
         await prefs.setString(cacheKey, jsonEncode(products));
