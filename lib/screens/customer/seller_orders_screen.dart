@@ -1451,7 +1451,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
     return Center(child: Text('📦', style: TextStyle(fontSize: emojiSize)));
   }
 
-  Widget _buildProductCard(Map<String, dynamic> p) {
+  Widget _buildProductCard(Map<String, dynamic> p, {int columns = 2}) {
     final name = (p['name'] ?? '').toString();
     final cat = (p['category'] ?? '').toString();
     final rate = (p['rate'] as num?)?.toDouble() ?? 0.0;
@@ -1461,22 +1461,136 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
     final imgVal = (p['image'] ?? '').toString().trim();
     final img = imgUrl.isNotEmpty ? imgUrl : (imgVal.isNotEmpty ? imgVal : '📦');
 
+    void handleProductTap() {
+      showProductDetailBottomSheet(
+        context: context,
+        product: p,
+        sellerUsername: widget.sellerUsername,
+        onCartUpdated: () async {
+          final items = await CartService.getCartItems(widget.sellerUsername);
+          if (mounted) {
+            setState(() {
+              _cartBadgeCount = CartService.getTotalCount(items);
+            });
+          }
+        },
+      );
+    }
+
+    if (columns == 1) {
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: InkWell(
+          onTap: handleProductTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(10.0),
+            child: Row(
+              children: [
+                Stack(
+                  children: [
+                    Container(
+                      width: 80,
+                      height: 80,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.all(Radius.circular(12)),
+                        child: _buildProductImageWidget(img, emojiSize: 34),
+                      ),
+                    ),
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.65),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '$qty Qty',
+                          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (cat.isNotEmpty)
+                        Text(
+                          cat.toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF8B5CF6),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      const SizedBox(height: 2),
+                      Text(
+                        name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Text(
+                            '₹${rate % 1 == 0 ? rate.toInt() : rate.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16,
+                              color: Color(0xFF059669),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '/ $unit',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final bool isCompact = columns == 3;
+
     return InkWell(
-      onTap: () {
-        showProductDetailBottomSheet(
-          context: context,
-          product: p,
-          sellerUsername: widget.sellerUsername,
-          onCartUpdated: () async {
-            final items = await CartService.getCartItems(widget.sellerUsername);
-            if (mounted) {
-              setState(() {
-                _cartBadgeCount = CartService.getTotalCount(items);
-              });
-            }
-          },
-        );
-      },
+      onTap: handleProductTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
@@ -1505,22 +1619,22 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                     ),
                     child: ClipRRect(
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                      child: _buildProductImageWidget(img, emojiSize: 40),
+                      child: _buildProductImageWidget(img, emojiSize: isCompact ? 28 : 40),
                     ),
                   ),
                   // Stock Qty Badge
                   Positioned(
-                    top: 8,
-                    right: 8,
+                    top: isCompact ? 4 : 8,
+                    right: isCompact ? 4 : 8,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                      padding: EdgeInsets.symmetric(horizontal: isCompact ? 5 : 7, vertical: isCompact ? 1.5 : 2.5),
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.65),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         '$qty Qty',
-                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: Colors.white, fontSize: isCompact ? 8.5 : 10, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
@@ -1530,49 +1644,55 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
 
             // Bottom Info Section
             Padding(
-              padding: const EdgeInsets.all(10.0),
+              padding: EdgeInsets.all(isCompact ? 6.0 : 10.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (cat.isNotEmpty)
                     Text(
                       cat.toUpperCase(),
-                      style: const TextStyle(
-                        fontSize: 9.5,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: isCompact ? 8.5 : 9.5,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF8B5CF6),
-                        letterSpacing: 0.5,
+                        color: const Color(0xFF8B5CF6),
+                        letterSpacing: 0.3,
                       ),
                     ),
-                  const SizedBox(height: 2),
+                  SizedBox(height: isCompact ? 1 : 2),
                   Text(
                     name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 13.5,
-                      color: Color(0xFF0F172A),
+                      fontSize: isCompact ? 11.5 : 13.5,
+                      color: const Color(0xFF0F172A),
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: isCompact ? 2 : 4),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         '₹${rate % 1 == 0 ? rate.toInt() : rate.toStringAsFixed(2)}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w900,
-                          fontSize: 15,
-                          color: Color(0xFF059669),
+                          fontSize: isCompact ? 13 : 15,
+                          color: const Color(0xFF059669),
                         ),
                       ),
-                      Text(
-                        '/ $unit',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF64748B),
+                      Flexible(
+                        child: Text(
+                          '/ $unit',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: isCompact ? 9.5 : 11,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF64748B),
+                          ),
                         ),
                       ),
                     ],
@@ -1763,9 +1883,10 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
         return pos != 'external';
       }).toList();
 
-      // Find custom background color & text color assigned to this section
+      // Find custom background color, text color & columns layout assigned to this section
       String secBgHex = (sec['bg_color'] ?? '#FFFFFF').toString().trim();
       String secTextHex = (sec['text_color'] ?? '').toString().trim();
+      int secCols = 2;
 
       final secMatch = _sellerSections.firstWhere(
         (s) => (s['name'] ?? '').toString().trim().toLowerCase() == secName.toLowerCase(),
@@ -1779,6 +1900,13 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
         if (secTextHex.isEmpty || secTextHex == '#0F172A') {
           if (secMatch['text_color'] != null) secTextHex = secMatch['text_color'].toString().trim();
         }
+        if (secMatch['columns'] != null) {
+          secCols = int.tryParse(secMatch['columns'].toString()) ?? 2;
+        }
+      }
+
+      if (secCols != 1 && secCols != 2 && secCols != 3) {
+        secCols = 2;
       }
 
       final secBgColor = hexToColor(secBgHex.isEmpty ? '#FFFFFF' : secBgHex);
@@ -1860,15 +1988,15 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
               GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 0.74,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
+                padding: EdgeInsets.symmetric(horizontal: secCols == 3 ? 10 : 16, vertical: 4),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: secCols,
+                  childAspectRatio: secCols == 1 ? 3.0 : (secCols == 3 ? 0.58 : 0.74),
+                  crossAxisSpacing: secCols == 3 ? 8 : 12,
+                  mainAxisSpacing: secCols == 3 ? 8 : (secCols == 1 ? 8 : 12),
                 ),
                 itemCount: matchingProducts.length,
-                itemBuilder: (ctx, idx) => _buildProductCard(matchingProducts[idx]),
+                itemBuilder: (ctx, idx) => _buildProductCard(matchingProducts[idx], columns: secCols),
               ),
               const SizedBox(height: 6),
             ],

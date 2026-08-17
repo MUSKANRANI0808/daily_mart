@@ -559,6 +559,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     String secIcon = '🏷️';
     String secBgColor = '#FFFFFF';
     String secTextColor = '#0F172A';
+    int secColumns = 2;
 
     showModalBottomSheet(
       context: context,
@@ -655,7 +656,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           if (sName.isEmpty) return;
                           secNameController.clear();
 
-                          await AuthService.addSellerSection(username, sName, secIcon, secBgColor, secTextColor);
+                          await AuthService.addSellerSection(username, sName, secIcon, secBgColor, secTextColor, secColumns);
                           final updatedSecs = await AuthService.getSellerSections(username);
 
                           setModalState(() {
@@ -663,6 +664,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                             secIcon = '🏷️';
                             secBgColor = '#FFFFFF';
                             secTextColor = '#0F172A';
+                            secColumns = 2;
                           });
                           setState(() {
                             _sellerSections = updatedSecs;
@@ -684,7 +686,106 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
 
                   const SizedBox(height: 12),
 
-                  // 1. Background Color Palette Selector
+                  // 1. Products Grid Layout (1, 2 or 3 Columns) Selector
+                  const Text('Section Products Grid Layout (Columns):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setModalState(() => secColumns = 1),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                color: secColumns == 1 ? const Color(0xFF8B5CF6) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.view_agenda_rounded, size: 15, color: secColumns == 1 ? Colors.white : const Color(0xFF64748B)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '1 Column 📱',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: secColumns == 1 ? Colors.white : const Color(0xFF475569),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setModalState(() => secColumns = 2),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                color: secColumns == 2 ? const Color(0xFF8B5CF6) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.grid_view_rounded, size: 15, color: secColumns == 2 ? Colors.white : const Color(0xFF64748B)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '2 Columns 🟩',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: secColumns == 2 ? Colors.white : const Color(0xFF475569),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setModalState(() => secColumns = 3),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                color: secColumns == 3 ? const Color(0xFF8B5CF6) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.apps_rounded, size: 15, color: secColumns == 3 ? Colors.white : const Color(0xFF64748B)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '3 Columns 🧱',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: secColumns == 3 ? Colors.white : const Color(0xFF475569),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // 2. Background Color Palette Selector
                   const Text('Section Card Background Color:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
                   const SizedBox(height: 6),
                   InkWell(
@@ -767,7 +868,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
 
                   const SizedBox(height: 10),
 
-                  // 2. Section Name Text Color Palette Selector
+                  // 3. Section Name Text Color Palette Selector
                   const Text('Section Name Text Color (Default: Black):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
                   const SizedBox(height: 6),
                   InkWell(
@@ -871,6 +972,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                               final sIcon = safeString(sMap['icon'], '🏷️');
                               final sBgHex = safeString(sMap['bg_color'], '#FFFFFF');
                               final sTextHex = safeString(sMap['text_color'], '#0F172A');
+                              final sCols = safeInt(sMap['columns'], 2);
                               final sBgCol = hexToColor(sBgHex);
                               final sTextCol = hexToColor(sTextHex);
 
@@ -911,13 +1013,35 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                                       ),
                                     ],
                                   ),
-                                  title: Text(
-                                    sName,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                      color: sTextCol,
-                                    ),
+                                  title: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          sName,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                            color: sTextCol,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withValues(alpha: 0.08),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          '$sCols Col${sCols > 1 ? 's' : ''}',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: sTextCol.computeLuminance() > 0.5 ? Colors.black87 : Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                   trailing: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -984,6 +1108,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     String editIcon = safeString(section['icon'], '🏷️');
     String editBgColor = safeString(section['bg_color'], '#FFFFFF');
     String editTextColor = safeString(section['text_color'], '#0F172A');
+    int editColumns = safeInt(section['columns'], 2);
 
     showDialog(
       context: context,
@@ -1044,7 +1169,106 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // 1. Background Color
+                  // 1. Grid Layout Columns Selector
+                  const Text('Products Grid Layout (Columns):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setDlgState(() => editColumns = 1),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                color: editColumns == 1 ? const Color(0xFF8B5CF6) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.view_agenda_rounded, size: 14, color: editColumns == 1 ? Colors.white : const Color(0xFF64748B)),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    '1 Col',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: editColumns == 1 ? Colors.white : const Color(0xFF475569),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setDlgState(() => editColumns = 2),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                color: editColumns == 2 ? const Color(0xFF8B5CF6) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.grid_view_rounded, size: 14, color: editColumns == 2 ? Colors.white : const Color(0xFF64748B)),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    '2 Cols',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: editColumns == 2 ? Colors.white : const Color(0xFF475569),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setDlgState(() => editColumns = 3),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                color: editColumns == 3 ? const Color(0xFF8B5CF6) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.apps_rounded, size: 14, color: editColumns == 3 ? Colors.white : const Color(0xFF64748B)),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    '3 Cols',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: editColumns == 3 ? Colors.white : const Color(0xFF475569),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // 2. Background Color
                   const Text('Card Background Color:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
                   const SizedBox(height: 6),
                   InkWell(
@@ -1127,7 +1351,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
 
                   const SizedBox(height: 10),
 
-                  // 2. Section Name Text Color
+                  // 3. Section Name Text Color
                   const Text('Section Name Text Color (Default: Black):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
                   const SizedBox(height: 6),
                   InkWell(
@@ -1218,7 +1442,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                   final newName = sNameCtrl.text.trim();
                   if (newName.isEmpty) return;
                   Navigator.pop(dlgCtx);
-                  await AuthService.updateSellerSection(sId, _sellerUsername, newName, editIcon, editBgColor, editTextColor);
+                  await AuthService.updateSellerSection(sId, _sellerUsername, newName, editIcon, editBgColor, editTextColor, editColumns);
                   onUpdated();
                 },
                 child: const Text('Save Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
