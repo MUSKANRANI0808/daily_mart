@@ -5496,9 +5496,41 @@ class AuthService {
     if (cleanName.isEmpty) return false;
 
     try {
-      if (id > 0) {
-        await VpsApiService.post('update-seller-section', {
-          'id': id,
+      await VpsApiService.post('update-seller-section', {
+        'id': id,
+        'seller_username': cleanSeller,
+        'name': cleanName,
+        'icon': cleanIcon,
+        'bg_color': cleanBgColor,
+        'text_color': cleanTextColor,
+        'columns': cleanCols,
+      });
+    } catch (_) {}
+
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_sections_$cleanSeller';
+    try {
+      final str = prefs.getString(cacheKey);
+      List<Map<String, dynamic>> sections = [];
+      if (str != null && str.isNotEmpty) {
+        final List<dynamic> list = jsonDecode(str);
+        sections = list.map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+
+      bool updatedInCache = false;
+      for (var s in sections) {
+        if ((s['id'] as num?)?.toInt() == id || (s['name'] ?? '').toString().trim().toLowerCase() == cleanName.toLowerCase()) {
+          s['name'] = cleanName;
+          s['icon'] = cleanIcon;
+          s['bg_color'] = cleanBgColor;
+          s['text_color'] = cleanTextColor;
+          s['columns'] = cleanCols;
+          updatedInCache = true;
+        }
+      }
+      if (!updatedInCache) {
+        sections.add({
+          'id': id > 0 ? id : DateTime.now().millisecondsSinceEpoch,
           'seller_username': cleanSeller,
           'name': cleanName,
           'icon': cleanIcon,
@@ -5507,26 +5539,7 @@ class AuthService {
           'columns': cleanCols,
         });
       }
-    } catch (_) {}
-
-    final prefs = await SharedPreferences.getInstance();
-    final cacheKey = 'seller_sections_$cleanSeller';
-    try {
-      final str = prefs.getString(cacheKey);
-      if (str != null && str.isNotEmpty) {
-        final List<dynamic> list = jsonDecode(str);
-        final sections = list.map((e) => Map<String, dynamic>.from(e)).toList();
-        for (var s in sections) {
-          if ((s['id'] as num?)?.toInt() == id || (s['name'] ?? '').toString().trim().toLowerCase() == cleanName.toLowerCase()) {
-            s['name'] = cleanName;
-            s['icon'] = cleanIcon;
-            s['bg_color'] = cleanBgColor;
-            s['text_color'] = cleanTextColor;
-            s['columns'] = cleanCols;
-          }
-        }
-        await prefs.setString(cacheKey, jsonEncode(sections));
-      }
+      await prefs.setString(cacheKey, jsonEncode(sections));
     } catch (_) {}
 
     return true;

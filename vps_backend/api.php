@@ -1508,25 +1508,53 @@ if ($action == 'get-header-theme') {
         @$conn->query("ALTER TABLE seller_sections ADD COLUMN columns INT DEFAULT 2");
     }
 
-    $id = isset($input['id']) ? (int)$input['id'] : 0;
-    $name = isset($input['name']) ? trim($input['name']) : '';
+    $id = isset($input['id']) ? (int)$input['id'] : (isset($_POST['id']) ? (int)$_POST['id'] : 0);
+    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : (isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($_POST['seller_username']) ? trim($_POST['seller_username']) : ''));
+    $name = isset($input['name']) ? trim($input['name']) : (isset($_POST['name']) ? trim($_POST['name']) : '');
     $icon = isset($input['icon']) ? trim($input['icon']) : '🏷️';
     $bg_color = isset($input['bg_color']) ? trim($input['bg_color']) : '#FFFFFF';
     $text_color = isset($input['text_color']) ? trim($input['text_color']) : '#0F172A';
     $columns = isset($input['columns']) ? (int)$input['columns'] : 2;
     if ($columns <= 0 || $columns > 3) $columns = 2;
 
-    if ($id <= 0 || empty($name)) {
-        echo json_encode(["success" => false, "message" => "Section ID and name required"]);
+    if (empty($name)) {
+        echo json_encode(["success" => false, "message" => "Section name required"]);
         exit();
     }
 
-    $stmt = $conn->prepare("UPDATE seller_sections SET name = ?, icon = ?, bg_color = ?, text_color = ?, columns = ? WHERE id = ?");
-    if ($stmt) {
-        $stmt->bind_param("ssssii", $name, $icon, $bg_color, $text_color, $columns, $id);
-        $stmt->execute();
+    $escapedSeller = $conn->real_escape_string($seller_username);
+    $escapedName = $conn->real_escape_string($name);
+
+    $updated = false;
+    if ($id > 0) {
+        $stmt = $conn->prepare("UPDATE seller_sections SET name = ?, icon = ?, bg_color = ?, text_color = ?, columns = ? WHERE id = ?");
+        if ($stmt) {
+            $stmt->bind_param("ssssii", $name, $icon, $bg_color, $text_color, $columns, $id);
+            if ($stmt->execute() && $stmt->affected_rows > 0) {
+                $updated = true;
+            }
+        }
     }
-    echo json_encode(["success" => true, "message" => "Section updated"]);
+
+    if (!$updated && !empty($seller_username)) {
+        $stmt = $conn->prepare("UPDATE seller_sections SET icon = ?, bg_color = ?, text_color = ?, columns = ? WHERE seller_username = ? AND name = ?");
+        if ($stmt) {
+            $stmt->bind_param("sssiss", $icon, $bg_color, $text_color, $columns, $seller_username, $name);
+            if ($stmt->execute() && $stmt->affected_rows > 0) {
+                $updated = true;
+            }
+        }
+    }
+
+    if (!$updated && !empty($seller_username)) {
+        $stmtIns = $conn->prepare("INSERT INTO seller_sections (seller_username, name, icon, bg_color, text_color, columns) VALUES (?, ?, ?, ?, ?, ?)");
+        if ($stmtIns) {
+            $stmtIns->bind_param("sssssi", $seller_username, $name, $icon, $bg_color, $text_color, $columns);
+            $stmtIns->execute();
+        }
+    }
+
+    echo json_encode(["success" => true, "message" => "Section updated", "columns" => $columns]);
     exit();
 } elseif ($action == 'delete-seller-section') {
     $id = isset($input['id']) ? (int)$input['id'] : (isset($_GET['id']) ? (int)$_GET['id'] : 0);
