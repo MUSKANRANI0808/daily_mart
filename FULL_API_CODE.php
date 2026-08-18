@@ -1129,6 +1129,21 @@ if ($action == 'get-header-theme') {
     }
     echo json_encode(["success" => true, "orders" => $orders]);
     exit();
+} elseif ($action == 'get-all-admin-orders') {
+    $query = "SELECT m.*, c.name as customer_name, s.name as seller_name, s.location as seller_location FROM messages m LEFT JOIN customers c ON (m.customer_mobile = c.mobile OR c.mobile LIKE CONCAT('%', RIGHT(m.customer_mobile, 10))) LEFT JOIN sellers s ON (m.seller_username = s.username OR LOWER(m.seller_username) = LOWER(s.username)) WHERE (m.items_json IS NOT NULL OR m.order_id IS NOT NULL OR m.message LIKE '%ORDER%') ORDER BY m.id DESC";
+
+    $res = $conn->query($query);
+    $orders = array();
+    if ($res && $res !== true) {
+        while ($row = $res->fetch_assoc()) {
+            $row['id'] = (int)$row['id'];
+            $row['customer_name'] = !empty($row['customer_name']) ? $row['customer_name'] : "Customer ({$row['customer_mobile']})";
+            $row['seller_name'] = !empty($row['seller_name']) ? $row['seller_name'] : $row['seller_username'];
+            $orders[] = $row;
+        }
+    }
+    echo json_encode(["success" => true, "orders" => $orders]);
+    exit();
 } elseif ($action == 'get-customer-orders') {
     $customer_mobile = isset($_GET['customer_mobile']) ? trim($_GET['customer_mobile']) : (isset($input['customer_mobile']) ? trim($input['customer_mobile']) : '');
 

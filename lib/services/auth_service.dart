@@ -3370,7 +3370,7 @@ class AuthService {
     return result;
   }
 
-  /// Get Flat List of All Orders for Admin Data Table with Date Parsing
+  /// Get Flat List of All Orders for Admin
   static Future<List<Map<String, dynamic>>> getAllOrdersFlatListForAdmin() async {
     final prefs = await SharedPreferences.getInstance();
     final sellers = await getSellersList();
@@ -3400,134 +3400,40 @@ class AuthService {
       }
     }
 
-    // Load persistent saved payments map
-    final String? allSavedPaymentsStr = prefs.getString('saved_order_payments');
-    Map<String, dynamic> savedPayments = {};
-    if (allSavedPaymentsStr != null && allSavedPaymentsStr.isNotEmpty) {
-      try {
-        savedPayments = Map<String, dynamic>.from(jsonDecode(allSavedPaymentsStr));
-      } catch (_) {}
-    }
+    // 1. Direct VPS API Query for All Admin Orders
+    try {
+      final res = await VpsApiService.get('get-all-admin-orders');
+      if (res != null && res['success'] == true && res['orders'] is List) {
+        final List rawOrders = res['orders'];
+        for (var item in rawOrders) {
+          if (item is Map) {
+            final msgMap = Map<String, dynamic>.from(item);
+            final msgId = (msgMap['id'] ?? '').toString();
+            if (msgId.isNotEmpty && !processedKeys.contains(msgId)) {
+              processedKeys.add(msgId);
+              final sellerUsername = (msgMap['seller_username'] ?? '').toString();
+              final sellerName = (msgMap['seller_name'] ?? sellerUsername).toString();
+              final custMobile = (msgMap['customer_mobile'] ?? '').toString();
+              final custName = (msgMap['customer_name'] ?? 'Customer').toString();
 
-    // Load persistent saved order statuses map
-    final String? allSavedOrderStr = prefs.getString('saved_order_statuses');
-    Map<String, dynamic> savedOrderStatuses = {};
-    if (allSavedOrderStr != null && allSavedOrderStr.isNotEmpty) {
-      try {
-        savedOrderStatuses = Map<String, dynamic>.from(jsonDecode(allSavedOrderStr));
-      } catch (_) {}
-    }
-
-    // Load persistent saved delivery statuses map
-    final String? allSavedDeliveryStr = prefs.getString('saved_delivery_statuses');
-    Map<String, dynamic> savedDeliveryStatuses = {};
-    if (allSavedDeliveryStr != null && allSavedDeliveryStr.isNotEmpty) {
-      try {
-        savedDeliveryStatuses = Map<String, dynamic>.from(jsonDecode(allSavedDeliveryStr));
-      } catch (_) {}
-    }
-
-    // 1. Fetch from VPS API for all registered sellers in parallel
-    final sellerFutures = sellers.map((seller) async {
-      final rawSellerUsername = (seller['username'] ?? '').toString().trim();
-      final sellerName = (seller['name'] ?? rawSellerUsername).toString().trim();
-
-      if (rawSellerUsername.isEmpty) return;
-
-      try {
-        final conversations = await getSellerConversations(rawSellerUsername);
-        final convFutures = conversations.map((conv) async {
-          final custMobile = (conv['customer_mobile'] ?? conv['mobile'] ?? '').toString().trim();
-          final custName = (conv['customer_name'] ?? conv['name'] ?? '').toString().trim();
-          if (custMobile.isNotEmpty) {
-            final msgs = await getMessages(sellerUsername: rawSellerUsername, customerMobile: custMobile);
-            for (var msgMap in msgs) {
-              final msgId = (msgMap['id'] ?? '').toString();
-              if (msgId.isNotEmpty && !processedKeys.contains(msgId)) {
-                final isOrderMsg = msgMap['items_json'] != null ||
-                    msgMap['order_id'] != null ||
-                    msgMap['_calculated_order_id'] != null ||
-                    (msgMap['message'] ?? '').toString().toLowerCase().contains('order');
-
-                final isDeleted = msgMap['order_status'].toString().toLowerCase() == 'deleted' ||
-                    msgMap['is_deleted'] == true ||
-                    msgMap['is_deleted'] == 1;
-
-                if (isOrderMsg && !isDeleted) {
-                  processedKeys.add(msgId);
-                  final parsed = _parseFlatOrderRow(
-                    msgMap: msgMap,
-                    sellerName: sellerName,
-                    sellerUsername: rawSellerUsername,
-                    custMobile: custMobile,
-                    custName: custName,
-                    savedOrderStatuses: savedOrderStatuses,
-                    savedDeliveryStatuses: savedDeliveryStatuses,
-                    savedPayments: savedPayments,
-                    sellerLocationMap: sellerLocationMap,
-                    deliveryBoyNameMap: deliveryBoyNameMap,
-                  );
-                  flatOrders.add(parsed);
-                }
-              }
+              final parsed = _parseFlatOrderRow(
+                msgMap: msgMap,
+                sellerName: sellerName,
+                sellerUsername: sellerUsername,
+                custMobile: custMobile,
+                custName: custName,
+                savedOrderStatuses: {},
+                savedDeliveryStatuses: {},
+                savedPayments: {},
+                sellerLocationMap: sellerLocationMap,
+                deliveryBoyNameMap: deliveryBoyNameMap,
+              );
+              flatOrders.add(parsed);
             }
           }
-        });
-        await Future.wait(convFutures);
-      } catch (_) {}
-    });
-
-    await Future.wait(sellerFutures);
-
-    // 2. Fetch from SharedPreferences local keys for offline/cached orders
-    final localKeys = prefs.getKeys();
-    for (var key in localKeys) {
-      if (key.startsWith('msgs_') || key.startsWith('messages_')) {
-        final parts = key.split('_');
-        final sellerUsername = parts.length >= 2 ? parts[1] : 'seller';
-        final custMobile = parts.length >= 3 ? parts[2] : 'customer';
-
-        final raw = prefs.getString(key);
-        if (raw != null && raw.isNotEmpty) {
-          try {
-            final List<dynamic> list = jsonDecode(raw);
-            for (var item in list) {
-              if (item is Map) {
-                final msgMap = Map<String, dynamic>.from(item);
-                final msgId = (msgMap['id'] ?? msgMap['_calculated_order_id'] ?? '').toString();
-                if (msgId.isNotEmpty && !processedKeys.contains(msgId)) {
-                  final isOrderMsg = msgMap['items_json'] != null ||
-                      msgMap['order_id'] != null ||
-                      msgMap['_calculated_order_id'] != null ||
-                      (msgMap['message'] ?? '').toString().toLowerCase().contains('order');
-
-                  final isDeleted = msgMap['order_status'].toString().toLowerCase() == 'deleted' ||
-                      msgMap['is_deleted'] == true ||
-                      msgMap['is_deleted'] == 1;
-
-                  if (isOrderMsg && !isDeleted) {
-                    processedKeys.add(msgId);
-                    final parsed = _parseFlatOrderRow(
-                      msgMap: msgMap,
-                      sellerName: sellerUsername,
-                      sellerUsername: sellerUsername,
-                      custMobile: custMobile,
-                      custName: custMobile,
-                      savedOrderStatuses: savedOrderStatuses,
-                      savedDeliveryStatuses: savedDeliveryStatuses,
-                      savedPayments: savedPayments,
-                      sellerLocationMap: sellerLocationMap,
-                      deliveryBoyNameMap: deliveryBoyNameMap,
-                    );
-                    flatOrders.add(parsed);
-                  }
-                }
-              }
-            }
-          } catch (_) {}
         }
       }
-    }
+    } catch (_) {}
 
     // Sort by Date Descending (Newest first)
     flatOrders.sort((a, b) {
@@ -3549,9 +3455,10 @@ class AuthService {
         }).toList());
         await prefs.setString('cache_admin_flat_orders', encData);
       } catch (_) {}
+      return flatOrders;
     }
 
-    return flatOrders;
+    return await getCachedAllOrdersFlatListForAdmin();
   }
 
   /// Get Cached All Orders Flat List for Admin instantly from SharedPreferences (0 ms delay)

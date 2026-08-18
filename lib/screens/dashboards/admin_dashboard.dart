@@ -2682,8 +2682,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   ),
                 ],
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   // Total Cash Badge
                   Container(
@@ -2703,7 +2705,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
+
                   // Total Online Badge
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -2722,8 +2724,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  // Total Collection Badge (Total Cash + Total Online in BOLD)
+
+                  // Total Collection Badge
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
@@ -2741,7 +2743,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
+
                   // Export Excel Button
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
