@@ -1128,9 +1128,55 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                               bottom: false,
                               child: Column(
                                 children: [
-                                  // Top App Header Bar
+                                  // 1. Search Bar placed at VERY TOP of Header with Seller Custom Styling
                                   Padding(
-                                    padding: const EdgeInsets.fromLTRB(12, 10, 4, 8),
+                                    padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: HeaderThemeHelper.hexToColor(_headerThemeConfig['search_bg_color'] ?? '#FFFFFF').withValues(
+                                          alpha: ((_headerThemeConfig['search_opacity'] as num?)?.toDouble() ?? 1.0).clamp(0.0, 1.0),
+                                        ),
+                                        borderRadius: BorderRadius.circular(30),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.12),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 3),
+                                          ),
+                                        ],
+                                      ),
+                                      child: TextField(
+                                        onChanged: (val) {
+                                          setState(() {
+                                            _searchQuery = val.trim();
+                                          });
+                                        },
+                                        style: TextStyle(
+                                          color: HeaderThemeHelper.hexToColor(_headerThemeConfig['search_text_color'] ?? '#0F172A'),
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        decoration: InputDecoration(
+                                          hintText: 'Search products in ${widget.sellerName}...',
+                                          hintStyle: TextStyle(
+                                            fontSize: 13,
+                                            color: HeaderThemeHelper.hexToColor(_headerThemeConfig['search_text_color'] ?? '#0F172A').withValues(alpha: 0.65),
+                                          ),
+                                          prefixIcon: Icon(
+                                            Icons.search_rounded,
+                                            color: HeaderThemeHelper.hexToColor(_headerThemeConfig['search_text_color'] ?? '#8B5CF6'),
+                                          ),
+                                          isDense: true,
+                                          contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                                          border: InputBorder.none,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+
+                                  // 2. Top App Header Bar (Seller Name & Action Buttons below Search Bar)
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(14, 4, 4, 10),
                                     child: Row(
                                       children: [
                                         Expanded(
@@ -1275,53 +1321,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                                       ],
                                     ),
                                   ),
-
-                                  // Search Bar placed in Header with Seller Custom Styling & Transparency
-                                  Padding(
-                                    padding: const EdgeInsets.fromLTRB(14, 4, 14, 10),
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: HeaderThemeHelper.hexToColor(_headerThemeConfig['search_bg_color'] ?? '#FFFFFF').withValues(
-                                          alpha: ((_headerThemeConfig['search_opacity'] as num?)?.toDouble() ?? 1.0).clamp(0.0, 1.0),
-                                        ),
-                                        borderRadius: BorderRadius.circular(30),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withValues(alpha: 0.12),
-                                            blurRadius: 8,
-                                            offset: const Offset(0, 3),
-                                          ),
-                                        ],
-                                      ),
-                                      child: TextField(
-                                        onChanged: (val) {
-                                          setState(() {
-                                            _searchQuery = val.trim();
-                                          });
-                                        },
-                                        style: TextStyle(
-                                          color: HeaderThemeHelper.hexToColor(_headerThemeConfig['search_text_color'] ?? '#0F172A'),
-                                          fontSize: 13.5,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                        decoration: InputDecoration(
-                                          hintText: 'Search products in ${widget.sellerName}...',
-                                          hintStyle: TextStyle(
-                                            fontSize: 13,
-                                            color: HeaderThemeHelper.hexToColor(_headerThemeConfig['search_text_color'] ?? '#0F172A').withValues(alpha: 0.65),
-                                          ),
-                                          prefixIcon: Icon(
-                                            Icons.search_rounded,
-                                            color: HeaderThemeHelper.hexToColor(_headerThemeConfig['search_text_color'] ?? '#8B5CF6'),
-                                          ),
-                                          isDense: true,
-                                          contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-                                          border: InputBorder.none,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 32),
+                                  const SizedBox(height: 16),
                                 ],
                               ),
                             ),
