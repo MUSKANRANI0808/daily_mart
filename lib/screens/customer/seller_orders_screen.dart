@@ -1773,7 +1773,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              childAspectRatio: 0.64,
+              childAspectRatio: 0.72,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
             ),
@@ -1995,10 +1995,10 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
               GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                padding: EdgeInsets.symmetric(horizontal: secCols == 3 ? 10 : 16, vertical: 4),
+                padding: EdgeInsets.symmetric(horizontal: secCols == 3 ? 8 : 16, vertical: 4),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: secCols,
-                  childAspectRatio: secCols == 1 ? 2.6 : (secCols == 3 ? 0.50 : 0.64),
+                  childAspectRatio: secCols == 1 ? 2.8 : (secCols == 3 ? 0.68 : 0.72),
                   crossAxisSpacing: secCols == 3 ? 8 : 12,
                   mainAxisSpacing: secCols == 3 ? 8 : (secCols == 1 ? 8 : 12),
                 ),
