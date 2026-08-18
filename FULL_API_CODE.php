@@ -1181,8 +1181,8 @@ if ($action == 'get-header-theme') {
 
     // 1. Primary Query directly from messages table (phpMyAdmin database table)
     $msgQuery = !empty($last10)
-        ? "SELECT * FROM messages WHERE (customer_mobile = '$customer_mobile' OR customer_mobile LIKE '$escapedLike') AND items_json IS NOT NULL AND items_json != '' AND items_json != '[]' ORDER BY id DESC"
-        : "SELECT * FROM messages WHERE items_json IS NOT NULL AND items_json != '' AND items_json != '[]' ORDER BY id DESC LIMIT 50";
+        ? "SELECT m.*, c.name as customer_name, s.name as seller_name FROM messages m LEFT JOIN customers c ON (m.customer_mobile = c.mobile OR c.mobile LIKE CONCAT('%', RIGHT(m.customer_mobile, 10))) LEFT JOIN sellers s ON (m.seller_username = s.username OR LOWER(m.seller_username) = LOWER(s.username)) WHERE (m.customer_mobile = '$customer_mobile' OR m.customer_mobile LIKE '$escapedLike' OR m.customer_mobile LIKE '%$last10%') AND (m.items_json IS NOT NULL OR m.order_id IS NOT NULL OR m.message LIKE '%ORDER%') ORDER BY m.id DESC"
+        : "SELECT m.*, c.name as customer_name, s.name as seller_name FROM messages m LEFT JOIN customers c ON (m.customer_mobile = c.mobile OR c.mobile LIKE CONCAT('%', RIGHT(m.customer_mobile, 10))) LEFT JOIN sellers s ON (m.seller_username = s.username OR LOWER(m.seller_username) = LOWER(s.username)) WHERE (m.items_json IS NOT NULL OR m.order_id IS NOT NULL OR m.message LIKE '%ORDER%') ORDER BY m.id DESC LIMIT 50";
 
     $resMsg = $conn->query($msgQuery);
     if ($resMsg && $resMsg !== true) {
