@@ -1,4 +1,5 @@
 <?php
+// Daily Mart VPS Backend API - Updated: 2026-08-18 12:42 PM
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Headers: *");
 header("Access-Control-Allow-Methods: *");
