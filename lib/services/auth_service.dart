@@ -128,57 +128,17 @@ class AuthService {
     return null;
   }
 
-  /// Seller Login Check (Case-Insensitive Username/Mobile/Name & VPS + Local Fallback)
+  /// Seller Login Check (Strict Authentication against Database sellers table)
   static Future<UserModel?> loginSeller(String username, String password) async {
     final cleanInput = username.trim();
     final cleanPass = password.trim();
-    if (cleanInput.isEmpty) return null;
+    if (cleanInput.isEmpty || cleanPass.isEmpty) return null;
 
     final lowerInput = cleanInput.toLowerCase();
     final digitsInput = cleanInput.replaceAll(RegExp(r'\D'), '');
     final last10Input = digitsInput.length >= 10 ? digitsInput.substring(digitsInput.length - 10) : digitsInput;
 
-    // 1. Fetch full sellers list from VPS API / Storage to get EXACT canonical username from DB
-    try {
-      final allSellers = await getSellersList();
-      for (var s in allSellers) {
-        final uName = (s['username'] ?? '').toString().trim();
-        final sName = (s['name'] ?? '').toString().trim();
-        final sMobile = (s['mobile'] ?? '').toString().replaceAll(RegExp(r'\D'), '');
-        final sLast10 = sMobile.length >= 10 ? sMobile.substring(sMobile.length - 10) : sMobile;
-        final sPass = (s['password'] ?? '1234').toString().trim();
-
-        final isUsernameMatch = uName.isNotEmpty && uName.toLowerCase() == lowerInput;
-        final isNameMatch = sName.isNotEmpty && sName.toLowerCase() == lowerInput;
-        final isMobileMatch = last10Input.isNotEmpty && sLast10.isNotEmpty && sLast10 == last10Input;
-
-        final isIdMatch = isUsernameMatch || isNameMatch || isMobileMatch;
-
-        if (isIdMatch) {
-          final isPassMatch = sPass.isEmpty ||
-              sPass == cleanPass ||
-              sPass.toLowerCase() == cleanPass.toLowerCase() ||
-              cleanPass == '1234' ||
-              cleanPass.isEmpty;
-
-          if (isPassMatch) {
-            final canonicalUsername = uName.isNotEmpty ? uName : (sName.isNotEmpty ? sName : cleanInput);
-            final canonicalName = sName.isNotEmpty ? sName : canonicalUsername;
-            final sellerUser = UserModel(
-              id: s['id']?.toString() ?? 'seller_$canonicalUsername',
-              name: canonicalName,
-              username: canonicalUsername,
-              mobile: s['mobile'] ?? digitsInput,
-              role: UserRole.seller,
-            );
-            await saveUserSession(sellerUser);
-            return sellerUser;
-          }
-        }
-      }
-    } catch (_) {}
-
-    // 2. Try VPS seller-login API endpoint
+    // 1. Try VPS seller-login API endpoint
     try {
       final res = await VpsApiService.post('seller-login', {
         'username': cleanInput,
@@ -198,21 +158,48 @@ class AuthService {
       }
     } catch (_) {}
 
-    // 3. Robust Fallback: Capitalize first letter if simple word (e.g. "krishna" -> "Krishna")
-    String formattedUsername = cleanInput;
-    if (cleanInput.length >= 2 && !cleanInput.startsWith(RegExp(r'\d'))) {
-      formattedUsername = cleanInput[0].toUpperCase() + cleanInput.substring(1);
-    }
+    // 2. Strict Verification against Sellers List in Database / Storage
+    try {
+      final allSellers = await getSellersList();
+      for (var s in allSellers) {
+        final uName = (s['username'] ?? '').toString().trim();
+        final sName = (s['name'] ?? '').toString().trim();
+        final sMobile = (s['mobile'] ?? '').toString().replaceAll(RegExp(r'\D'), '');
+        final sLast10 = sMobile.length >= 10 ? sMobile.substring(sMobile.length - 10) : sMobile;
+        final sPass = (s['password'] ?? '').toString().trim();
 
-    final sellerUser = UserModel(
-      id: 'seller_${formattedUsername.toLowerCase()}',
-      name: formattedUsername,
-      username: formattedUsername,
-      mobile: digitsInput.isNotEmpty ? digitsInput : '9123456789',
-      role: UserRole.seller,
-    );
-    await saveUserSession(sellerUser);
-    return sellerUser;
+        final isUsernameMatch = uName.isNotEmpty && uName.toLowerCase() == lowerInput;
+        final isNameMatch = sName.isNotEmpty && sName.toLowerCase() == lowerInput;
+        final isMobileMatch = last10Input.isNotEmpty && sLast10.isNotEmpty && sLast10 == last10Input;
+
+        final isIdMatch = isUsernameMatch || isNameMatch || isMobileMatch;
+
+        if (isIdMatch) {
+          // STRICT Password Verification against Database
+          final isPassMatch = sPass.isNotEmpty &&
+              (sPass == cleanPass ||
+                  sPass.toLowerCase() == cleanPass.toLowerCase() ||
+                  (sPass.isEmpty && cleanPass == '1234'));
+
+          if (isPassMatch) {
+            final canonicalUsername = uName.isNotEmpty ? uName : (sName.isNotEmpty ? sName : cleanInput);
+            final canonicalName = sName.isNotEmpty ? sName : canonicalUsername;
+            final sellerUser = UserModel(
+              id: s['id']?.toString() ?? 'seller_$canonicalUsername',
+              name: canonicalName,
+              username: canonicalUsername,
+              mobile: s['mobile'] ?? digitsInput,
+              role: UserRole.seller,
+            );
+            await saveUserSession(sellerUser);
+            return sellerUser;
+          }
+        }
+      }
+    } catch (_) {}
+
+    // NO dummy fallback! If username or password does not match DB, return null (Invalid Credentials)!
+    return null;
   }
 
   /// Seller Mobile OTP Login Check
