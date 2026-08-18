@@ -889,8 +889,8 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
 
                   const SizedBox(height: 10),
 
-                  // 3. Section Name Text Color Palette Selector
-                  const Text('Section Name Text Color (Default: Black):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                  // 3. Section Name Text / Ribbon Tag Color Palette Selector
+                  const Text('Section Ribbon Tag & Title Color (Default: Red):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
                   const SizedBox(height: 6),
                   InkWell(
                     onTap: () {
@@ -1451,8 +1451,8 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
 
                   const SizedBox(height: 10),
 
-                  // 3. Section Name Text Color
-                  const Text('Section Name Text Color (Default: Black):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                  // 3. Section Name Text / Ribbon Tag Color Palette Selector
+                  const Text('Section Ribbon Tag & Title Color (Default: Red):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
                   const SizedBox(height: 6),
                   InkWell(
                     onTap: () {

@@ -2005,10 +2005,16 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
         sectionWidgets.add(_buildSectionSliderBanner(externalSliders));
       }
 
+      Color ribbonColor = secTextColor;
+      if (secTextHex.isEmpty || secTextHex == '#0F172A') {
+        ribbonColor = const Color(0xFFEF4444); // Default Vibrant Red
+      }
+      final Color ribbonDarkColor = Color.alphaBlend(Colors.black.withValues(alpha: 0.25), ribbonColor);
+      final Color ribbonTextColor = ribbonColor.computeLuminance() > 0.6 ? const Color(0xFF0F172A) : Colors.white;
+
       sectionWidgets.add(
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
             color: secBgColor,
             borderRadius: BorderRadius.circular(18),
@@ -2024,82 +2030,82 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
               ),
             ],
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(0.0, 0.0, 16.0, 10.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // 3D Bookmark Ribbon Label Emerging Directly from Container's Left Edge
-                    Container(
-                      padding: const EdgeInsets.fromLTRB(16, 7, 18, 7),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: secTextColor == Colors.white || secBgColor.computeLuminance() < 0.4
-                              ? [const Color(0xFFEF4444), const Color(0xFFB91C1C)]
-                              : [
-                                  secTextColor.withValues(alpha: 0.95),
-                                  secTextColor.withValues(alpha: 0.80),
-                                ],
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                        ),
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(16),
-                          bottomLeft: Radius.zero,
-                          topRight: Radius.circular(22),
-                          bottomRight: Radius.circular(22),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.20),
-                            blurRadius: 8,
-                            offset: const Offset(3, 3),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(0.0, 0.0, 16.0, 8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // 3D Bookmark Ribbon Tag (Flush to VERY TOP-LEFT Corner of Container!)
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 20, 8),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [ribbonColor, ribbonDarkColor],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
                           ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (secIcon.isNotEmpty && secIcon != '🏷️') ...[
-                            Text(secIcon, style: const TextStyle(fontSize: 17)),
-                            const SizedBox(width: 6),
-                          ],
-                          Text(
-                            secName,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.white,
-                              letterSpacing: 0.5,
-                              shadows: [
-                                Shadow(
-                                  color: Colors.black38,
-                                  blurRadius: 3,
-                                  offset: Offset(1, 1),
-                                ),
-                              ],
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(18),
+                            bottomLeft: Radius.zero,
+                            topRight: Radius.circular(22),
+                            bottomRight: Radius.circular(22),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: ribbonColor.withValues(alpha: 0.3),
+                              blurRadius: 8,
+                              offset: const Offset(2, 3),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (secIcon.isNotEmpty && secIcon != '🏷️') ...[
+                              Text(secIcon, style: const TextStyle(fontSize: 17)),
+                              const SizedBox(width: 6),
+                            ],
+                            Text(
+                              secName,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w900,
+                                color: ribbonTextColor,
+                                letterSpacing: 0.5,
+                                shadows: ribbonTextColor == Colors.white
+                                    ? [
+                                        const Shadow(
+                                          color: Colors.black38,
+                                          blurRadius: 3,
+                                          offset: Offset(1, 1),
+                                        ),
+                                      ]
+                                    : null,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(10),
+                      Container(
+                        margin: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '${matchingProducts.length} Items',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                        ),
                       ),
-                      child: Text(
-                        '${matchingProducts.length} Items',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
 
               // Render Internal Sliders INSIDE the Section Container!
               if (internalSliders.isNotEmpty)
@@ -2171,7 +2177,8 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
             ],
           ),
         ),
-      );
+      ),
+    );
     }
 
     return Column(
