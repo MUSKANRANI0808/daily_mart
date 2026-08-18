@@ -1240,7 +1240,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                                         color: HeaderThemeHelper.hexToColor(_headerThemeConfig['search_bg_color'] ?? '#FFFFFF').withValues(
                                           alpha: ((_headerThemeConfig['search_opacity'] as num?)?.toDouble() ?? 1.0).clamp(0.0, 1.0),
                                         ),
-                                        borderRadius: BorderRadius.circular(16),
+                                        borderRadius: BorderRadius.circular(30),
                                         boxShadow: [
                                           BoxShadow(
                                             color: Colors.black.withValues(alpha: 0.12),
@@ -2119,7 +2119,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       decoration: BoxDecoration(
                         color: previewColor,
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(30),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.15),

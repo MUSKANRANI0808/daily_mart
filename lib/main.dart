@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'models/user_model.dart';
 import 'services/auth_service.dart';
 import 'screens/role_selection_screen.dart';
@@ -13,7 +14,9 @@ import 'services/background_notification_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await NotificationService.initialize();
-  await BackgroundNotificationService.initialize();
+  if (!kIsWeb) {
+    await BackgroundNotificationService.initialize();
+  }
   final currentDeliveryBoy = await AuthService.getDeliveryBoySession();
   final currentUser = await AuthService.getCurrentUser();
   runApp(DailyMartApp(initialUser: currentUser, initialDeliveryBoy: currentDeliveryBoy));
