@@ -51,7 +51,10 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
     });
 
     final String sellerUser = _sellerUsername;
-    if (sellerUser.isEmpty) {
+    final String sellerMobile = (widget.seller.mobile ?? '').trim();
+    final String sellerName = (widget.seller.name ?? '').trim();
+
+    if (sellerUser.isEmpty && sellerMobile.isEmpty && sellerName.isEmpty) {
       if (mounted) {
         setState(() {
           _allOrders = [];
@@ -70,130 +73,127 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
       return;
     }
 
-    List<Map<String, dynamic>> ordersList = [];
-
     try {
-      final convs = await AuthService.getSellerConversations(sellerUser);
+      // 1. Instant 0ms cache load
+      final cachedOrders = await AuthService.getCachedSellerCustomerOrders(sellerUser);
+      if (cachedOrders.isNotEmpty && mounted && _isLoading) {
+        _processRawOrders(cachedOrders);
+      }
 
-      for (var conv in convs) {
-        final rawMobile = (conv['customer_mobile'] ?? conv['mobile'] ?? conv['username'] ?? '').toString();
-        final cleanDigits = rawMobile.replaceAll(RegExp(r'\D'), '');
-        final custMobile = cleanDigits.length >= 10 ? cleanDigits.substring(cleanDigits.length - 10) : rawMobile.trim();
-        if (custMobile.isEmpty) continue;
+      // 2. Fetch fresh orders from VPS
+      List<Map<String, dynamic>> freshOrders = await AuthService.getSellerCustomerOrders(sellerUser);
+      if (freshOrders.isEmpty && sellerMobile.isNotEmpty && sellerMobile != sellerUser) {
+        freshOrders = await AuthService.getSellerCustomerOrders(sellerMobile);
+      }
+      if (freshOrders.isEmpty && sellerName.isNotEmpty && sellerName != sellerUser && sellerName != sellerMobile) {
+        freshOrders = await AuthService.getSellerCustomerOrders(sellerName);
+      }
 
-        // Resolve display name
-        String displayName = (conv['customer_name'] ?? conv['name'] ?? '').toString().trim();
-        if (displayName.isEmpty || displayName.startsWith('Customer')) {
-          final profile = await AuthService.getCustomerProfile(custMobile);
-          if (profile != null && profile['name'] != null) {
-            final pName = profile['name'].toString().trim();
-            if (pName.isNotEmpty && !pName.startsWith('Customer')) displayName = pName;
-          }
-        }
-        if (displayName.isEmpty || displayName.startsWith('Customer')) {
-          displayName = 'Customer (+91 $custMobile)';
-        }
-
-        // Fetch messages (orders) for this customer
-        final msgs = await AuthService.getMessages(sellerUsername: sellerUser, customerMobile: custMobile);
-
-        for (var msg in msgs) {
-          final msgId = (msg['id'] as num?)?.toInt() ?? 0;
-          final rawOrderId = (msg['order_id'] ?? 'Order #$msgId').toString();
-          final rawAmt = msg['order_amount'] ?? msg['amount'] ?? 0.0;
-          double amt = 0.0;
-          if (rawAmt != null) {
-            amt = double.tryParse(rawAmt.toString()) ?? 0.0;
-          }
-
-          final isOrderMsg = msg['items_json'] != null ||
-              msg['order_id'] != null ||
-              msg['_calculated_order_id'] != null ||
-              (msg['message'] ?? '').toString().toLowerCase().contains('order') ||
-              amt > 0;
-
-          if (!isOrderMsg) continue;
-
-          final payStat = (msg['payment_status'] ?? '').toString().toLowerCase();
-          final isPaid = payStat == 'paid' || payStat == 'success';
-          final utr = (msg['payment_utr'] ?? '').toString();
-          final isOnline = utr.isNotEmpty || (isPaid && (msg['payment_mode'] == 'online' || utr.isNotEmpty));
-
-          final ordStat = (msg['order_status'] ?? 'Status').toString();
-          final isDeleted = ordStat.toLowerCase() == 'deleted' || msg['is_deleted'] == true || msg['is_deleted'] == 1;
-
-          String pBadge = 'Unpaid';
-          String pType = 'Unpaid';
-
-          if (isPaid) {
-            if (isOnline) {
-              pBadge = 'Online';
-              pType = 'Online';
-            } else {
-              pBadge = 'Cash';
-              pType = 'Cash';
-            }
-          }
-
-          final createdAtStr = (msg['created_at'] ?? DateTime.now().toString().substring(0, 16)).toString();
-
-          ordersList.add({
-            'msg_id': msgId,
-            'customer_name': displayName,
-            'customer_mobile': custMobile,
-            'order_id': rawOrderId,
-            'order_amount': amt,
-            'payment_status': payStat,
-            'is_paid': isPaid,
-            'payment_badge': pBadge,
-            'payment_type': pType,
-            'order_status': isDeleted ? 'Deleted' : ordStat,
-            'created_at': createdAtStr,
-            'created_date': _parseOrderDate(createdAtStr),
-            'raw_msg': msg,
-          });
-        }
+      if (mounted) {
+        _processRawOrders(freshOrders);
       }
     } catch (e) {
       debugPrint('Error fetching ledger data: $e');
-    }
-
-    // Sort by timestamp newest first
-    ordersList.sort((a, b) => b['created_at'].toString().compareTo(a['created_at'].toString()));
-
-    if (mounted) {
-      setState(() {
-        _allOrders = ordersList;
-        _isLoading = false;
-      });
-      _applyFilter();
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  DateTime? _parseOrderDate(String str) {
-    final cleanStr = str.trim();
-    if (cleanStr.isEmpty) return null;
+  void _processRawOrders(List<Map<String, dynamic>> rawOrders) {
+    List<Map<String, dynamic>> ordersList = [];
+
+    for (var o in rawOrders) {
+      final msgId = (o['id'] ?? o['msg_id'] as num?)?.toInt() ?? 0;
+      final rawOrderId = (o['order_id'] ?? 'Order #$msgId').toString();
+      final custMobile = (o['customer_mobile'] ?? '').toString();
+      final custName = (o['customer_name'] ?? 'Customer').toString();
+
+      final rawAmt = o['total_amount'] ?? o['order_amount'] ?? o['amount'] ?? 0.0;
+      double amt = (rawAmt as num?)?.toDouble() ?? double.tryParse(rawAmt.toString()) ?? 0.0;
+
+      final payStat = (o['payment_status'] ?? '').toString().toLowerCase();
+      final isPaid = payStat == 'paid' || payStat == 'success';
+      final utr = (o['payment_utr'] ?? o['utr'] ?? '').toString();
+      final payMode = (o['payment_mode'] ?? '').toString().toLowerCase();
+      final isOnline = utr.isNotEmpty || (isPaid && (payMode == 'online' || payMode == 'upi' || payMode.contains('online')));
+
+      final ordStat = (o['order_status'] ?? o['status'] ?? 'Pending').toString();
+      final isDeleted = ordStat.toLowerCase() == 'deleted' || o['is_deleted'] == true || o['is_deleted'] == 1 || o['is_deleted'] == '1';
+
+      String pBadge = 'Unpaid';
+      String pType = 'Unpaid';
+
+      if (isPaid) {
+        if (isOnline) {
+          pBadge = 'Online';
+          pType = 'Online';
+        } else {
+          pBadge = 'Cash';
+          pType = 'Cash';
+        }
+      }
+
+      final createdAtStr = (o['created_at'] ?? o['date'] ?? DateTime.now().toString()).toString();
+
+      ordersList.add({
+        'msg_id': msgId,
+        'customer_name': custName,
+        'customer_mobile': custMobile,
+        'order_id': rawOrderId,
+        'order_amount': amt,
+        'payment_status': payStat,
+        'is_paid': isPaid,
+        'payment_badge': pBadge,
+        'payment_type': pType,
+        'order_status': isDeleted ? 'Deleted' : ordStat,
+        'created_at': createdAtStr,
+        'created_date': _parseOrderDate(createdAtStr),
+        'raw_msg': o,
+      });
+    }
+
+    // Sort by timestamp newest first
+    ordersList.sort((a, b) => (b['created_at'] ?? '').toString().compareTo((a['created_at'] ?? '').toString()));
+
+    setState(() {
+      _allOrders = ordersList;
+      _isLoading = false;
+    });
+    _applyFilter();
+  }
+
+  DateTime? _parseOrderDate(dynamic raw) {
+    if (raw == null) return null;
+    final str = raw.toString().trim();
+    if (str.isEmpty) return null;
+
     try {
-      return DateTime.parse(cleanStr);
+      return DateTime.parse(str);
     } catch (_) {}
 
     try {
-      final clean = cleanStr.replaceAll(',', ' ');
-      final datePart = clean.split(' ')[0].trim();
-      final parts = datePart.split(RegExp(r'[/.-]'));
-      if (parts.length == 3) {
-        final p0 = int.parse(parts[0]);
-        final p1 = int.parse(parts[1]);
-        final p2 = int.parse(parts[2]);
-        if (parts[0].length == 4) {
-          return DateTime(p0, p1, p2);
-        } else {
-          return DateTime(p2, p1, p0);
-        }
+      final clean = str.replaceAll(',', ' ');
+      final ymdMatch = RegExp(r'(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})').firstMatch(clean);
+      if (ymdMatch != null) {
+        final year = int.parse(ymdMatch.group(1)!);
+        final month = int.parse(ymdMatch.group(2)!);
+        final day = int.parse(ymdMatch.group(3)!);
+        return DateTime(year, month, day);
+      }
+
+      final dmyMatch = RegExp(r'(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})').firstMatch(clean);
+      if (dmyMatch != null) {
+        final day = int.parse(dmyMatch.group(1)!);
+        final month = int.parse(dmyMatch.group(2)!);
+        final year = int.parse(dmyMatch.group(3)!);
+        return DateTime(year, month, day);
       }
     } catch (_) {}
 
-    return DateTime.now();
+    return null;
   }
 
   void _applyFilter() {
@@ -202,6 +202,7 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
     final yesterdayStart = todayStart.subtract(const Duration(days: 1));
     final weekStart = todayStart.subtract(const Duration(days: 6));
     final monthStart = todayStart.subtract(const Duration(days: 29));
+    final tomorrowStart = todayStart.add(const Duration(days: 1));
 
     // 1. Date Filter First
     List<Map<String, dynamic>> dateFiltered = List.from(_allOrders);
@@ -209,26 +210,28 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
     if (_dateFilter == 'Today') {
       dateFiltered = dateFiltered.where((o) {
         final d = o['created_date'] as DateTime?;
-        if (d == null) return false;
-        return d.isAfter(todayStart) || d.isAtSameMomentAs(todayStart);
+        if (d == null) return true;
+        return (d.year == now.year && d.month == now.month && d.day == now.day) ||
+            (d.isAfter(todayStart) || d.isAtSameMomentAs(todayStart));
       }).toList();
     } else if (_dateFilter == 'Yesterday') {
       dateFiltered = dateFiltered.where((o) {
         final d = o['created_date'] as DateTime?;
         if (d == null) return false;
-        return (d.isAfter(yesterdayStart) || d.isAtSameMomentAs(yesterdayStart)) && d.isBefore(todayStart);
+        return (d.year == yesterdayStart.year && d.month == yesterdayStart.month && d.day == yesterdayStart.day) ||
+            ((d.isAfter(yesterdayStart) || d.isAtSameMomentAs(yesterdayStart)) && d.isBefore(todayStart));
       }).toList();
     } else if (_dateFilter == 'ThisWeek') {
       dateFiltered = dateFiltered.where((o) {
         final d = o['created_date'] as DateTime?;
-        if (d == null) return false;
-        return d.isAfter(weekStart) || d.isAtSameMomentAs(weekStart);
+        if (d == null) return true;
+        return (d.isAfter(weekStart) || d.isAtSameMomentAs(weekStart)) && d.isBefore(tomorrowStart);
       }).toList();
     } else if (_dateFilter == 'ThisMonth') {
       dateFiltered = dateFiltered.where((o) {
         final d = o['created_date'] as DateTime?;
-        if (d == null) return false;
-        return d.isAfter(monthStart) || d.isAtSameMomentAs(monthStart);
+        if (d == null) return true;
+        return (d.isAfter(monthStart) || d.isAtSameMomentAs(monthStart)) && d.isBefore(tomorrowStart);
       }).toList();
     } else if (_dateFilter == 'Custom' && _customStartDate != null && _customEndDate != null) {
       final start = DateTime(_customStartDate!.year, _customStartDate!.month, _customStartDate!.day);
@@ -236,9 +239,11 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
 
       dateFiltered = dateFiltered.where((o) {
         final d = o['created_date'] as DateTime?;
-        if (d == null) return false;
+        if (d == null) return true;
         return (d.isAfter(start) || d.isAtSameMomentAs(start)) && (d.isBefore(end) || d.isAtSameMomentAs(end));
       }).toList();
+    } else if (_dateFilter == 'All') {
+      // Show ALL orders!
     }
 
     // Recalculate summary metrics dynamically for the selected Date Filter
