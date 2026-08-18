@@ -1338,7 +1338,7 @@ if ($action == 'get-header-theme') {
     }
 
     $escapedSeller = $conn->real_escape_string($seller_username);
-    $res = $conn->query("SELECT * FROM seller_products WHERE seller_username = '$escapedSeller' ORDER BY id DESC");
+    $res = $conn->query("SELECT * FROM seller_products WHERE seller_username = '$escapedSeller' OR LOWER(seller_username) = LOWER('$escapedSeller') OR seller_username LIKE '%$escapedSeller%' ORDER BY id DESC");
     $products = array();
     if ($res && $res !== true) {
         while ($row = $res->fetch_assoc()) {

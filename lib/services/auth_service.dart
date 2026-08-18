@@ -4354,7 +4354,23 @@ class AuthService {
     // 1. Fetch from VPS API using cleanSeller
     List<Map<String, dynamic>>? products = await fetchProductsApi(cleanSeller);
 
-    // 2. If empty or null, try fallback username/mobile lookup from sellers list
+    // 2. Try Capitalized version (e.g. "krishna" -> "Krishna")
+    if ((products == null || products.isEmpty) && cleanSeller.length >= 2) {
+      final cap = cleanSeller[0].toUpperCase() + cleanSeller.substring(1);
+      if (cap != cleanSeller) {
+        products = await fetchProductsApi(cap);
+      }
+    }
+
+    // 3. Try lowercase version (e.g. "Krishna" -> "krishna")
+    if (products == null || products.isEmpty) {
+      final lower = cleanSeller.toLowerCase();
+      if (lower != cleanSeller) {
+        products = await fetchProductsApi(lower);
+      }
+    }
+
+    // 4. If still empty, try every registered seller username from DB
     if (products == null || products.isEmpty) {
       try {
         final sellers = await getSellersList();
@@ -4362,8 +4378,12 @@ class AuthService {
           final u = (s['username'] ?? '').toString().trim();
           final m = (s['mobile'] ?? '').toString().trim();
           final name = (s['name'] ?? '').toString().trim();
-          if ((m.isNotEmpty && m == cleanSeller && u.isNotEmpty && u != cleanSeller) ||
-              (name.isNotEmpty && name.toLowerCase() == cleanSeller.toLowerCase() && u.isNotEmpty && u != cleanSeller)) {
+
+          final isMatch = (u.isNotEmpty && u.toLowerCase() == cleanSeller.toLowerCase()) ||
+              (m.isNotEmpty && m == cleanSeller) ||
+              (name.isNotEmpty && name.toLowerCase() == cleanSeller.toLowerCase());
+
+          if (isMatch || u.isNotEmpty) {
             final fallbackList = await fetchProductsApi(u);
             if (fallbackList != null && fallbackList.isNotEmpty) {
               products = fallbackList;
