@@ -1229,16 +1229,6 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                                                   ),
                                                 ),
                                                 const PopupMenuItem(
-                                                  value: 'search_bar_style',
-                                                  child: Row(
-                                                    children: [
-                                                      Icon(Icons.palette_rounded, color: Color(0xFF8B5CF6), size: 20),
-                                                      SizedBox(width: 10),
-                                                      Text('Search Bar Style 🔍', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
-                                                    ],
-                                                  ),
-                                                ),
-                                                const PopupMenuItem(
                                                   value: 'logout',
                                                   child: Row(
                                                     children: [
