@@ -18,7 +18,7 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
   List<Map<String, dynamic>> _filteredOrders = [];
   String _searchQuery = '';
   String _selectedFilter = 'All'; // All, Unpaid, Cash, Online
-  String _dateFilter = 'Today'; // Today (default), All, Yesterday, ThisWeek, ThisMonth, Custom
+  String _dateFilter = 'ThisMonth'; // Default to Last 30 Days to match revenue header
   DateTime? _customStartDate;
   DateTime? _customEndDate;
 
@@ -32,6 +32,12 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
   int _cashCount = 0;
   int _onlineCount = 0;
 
+  String get _sellerUsername {
+    final u = (widget.seller.username ?? '').trim();
+    if (u.isNotEmpty) return u;
+    return (widget.seller.mobile ?? '').trim();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -44,7 +50,7 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
       _isLoading = true;
     });
 
-    final String sellerUser = (widget.seller.username ?? '').trim();
+    final String sellerUser = _sellerUsername;
     if (sellerUser.isEmpty) {
       if (mounted) {
         setState(() {
@@ -70,7 +76,7 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
       final convs = await AuthService.getSellerConversations(sellerUser);
 
       for (var conv in convs) {
-        final rawMobile = (conv['customer_mobile'] ?? '').toString();
+        final rawMobile = (conv['customer_mobile'] ?? conv['mobile'] ?? conv['username'] ?? '').toString();
         final cleanDigits = rawMobile.replaceAll(RegExp(r'\D'), '');
         final custMobile = cleanDigits.length >= 10 ? cleanDigits.substring(cleanDigits.length - 10) : rawMobile.trim();
         if (custMobile.isEmpty) continue;
@@ -99,6 +105,14 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
           if (rawAmt != null) {
             amt = double.tryParse(rawAmt.toString()) ?? 0.0;
           }
+
+          final isOrderMsg = msg['items_json'] != null ||
+              msg['order_id'] != null ||
+              msg['_calculated_order_id'] != null ||
+              (msg['message'] ?? '').toString().toLowerCase().contains('order') ||
+              amt > 0;
+
+          if (!isOrderMsg) continue;
 
           final payStat = (msg['payment_status'] ?? '').toString().toLowerCase();
           final isPaid = payStat == 'paid' || payStat == 'success';
@@ -157,23 +171,29 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
   }
 
   DateTime? _parseOrderDate(String str) {
-    if (str.isEmpty) return null;
+    final cleanStr = str.trim();
+    if (cleanStr.isEmpty) return null;
     try {
-      return DateTime.parse(str);
+      return DateTime.parse(cleanStr);
     } catch (_) {}
 
     try {
-      final clean = str.split(',')[0].trim();
-      final parts = clean.split(RegExp(r'[/.-]'));
+      final clean = cleanStr.replaceAll(',', ' ');
+      final datePart = clean.split(' ')[0].trim();
+      final parts = datePart.split(RegExp(r'[/.-]'));
       if (parts.length == 3) {
+        final p0 = int.parse(parts[0]);
+        final p1 = int.parse(parts[1]);
+        final p2 = int.parse(parts[2]);
         if (parts[0].length == 4) {
-          return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
-        } else if (parts[2].length == 4) {
-          return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+          return DateTime(p0, p1, p2);
+        } else {
+          return DateTime(p2, p1, p0);
         }
       }
     } catch (_) {}
-    return null;
+
+    return DateTime.now();
   }
 
   void _applyFilter() {
