@@ -181,23 +181,34 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
   void _proceedWithLogin(String mobile) async {
     setState(() => _isLoading = true);
 
-    // 1. Sync & Restore customer profile and saved addresses from VPS Server Database for this mobile number
-    await AuthService.fetchAndSyncCustomerProfileFromVps(mobile);
+    final cleanDigits = mobile.replaceAll(RegExp(r'\D'), '');
+    final cleanMobile = cleanDigits.length >= 10 ? cleanDigits.substring(cleanDigits.length - 10) : mobile;
 
-    // 2. Check if customer profile has Name
-    final profile = await AuthService.getCustomerProfile(mobile);
+    // 1. Sync & Restore customer profile and saved addresses from VPS Server Database
+    final profile = await AuthService.getCustomerProfile(cleanMobile) ?? await AuthService.getCustomerProfile(mobile);
+
     final existingName = (profile != null && profile['name'] != null) ? profile['name'].toString().trim() : '';
     final hasValidName = existingName.isNotEmpty && !existingName.startsWith('Customer');
 
-    // 3. Check if customer address exists
-    final prefs = await SharedPreferences.getInstance();
-    final addrJsonStr = prefs.getString('customer_addresses_$mobile');
+    // 2. Check if customer address exists (Directly from VPS Database OR local SharedPreferences)
     bool hasAddress = false;
-    if (addrJsonStr != null && addrJsonStr.isNotEmpty) {
-      try {
-        final List<dynamic> list = jsonDecode(addrJsonStr);
-        hasAddress = list.isNotEmpty;
-      } catch (_) {}
+
+    // Check directly from VPS Database response
+    final vpsAddrStr = (profile != null && profile['address_json'] != null) ? profile['address_json'].toString().trim() : '';
+    if (vpsAddrStr.isNotEmpty && vpsAddrStr != '[]' && vpsAddrStr != 'null') {
+      hasAddress = true;
+    }
+
+    // Fallback to local SharedPreferences keys
+    if (!hasAddress) {
+      final prefs = await SharedPreferences.getInstance();
+      for (var keySuffix in [cleanMobile, mobile, '+91$cleanMobile', '91$cleanMobile']) {
+        final addrJsonStr = prefs.getString('customer_addresses_$keySuffix');
+        if (addrJsonStr != null && addrJsonStr.trim().isNotEmpty && addrJsonStr.trim() != '[]' && addrJsonStr.trim() != 'null') {
+          hasAddress = true;
+          break;
+        }
+      }
     }
 
     setState(() => _isLoading = false);

@@ -264,20 +264,38 @@ class AuthService {
     final trimmedMobile = mobile.trim();
     if (trimmedMobile.isEmpty) return null;
 
+    final cleanDigits = trimmedMobile.replaceAll(RegExp(r'\D'), '');
+    final cleanMobile = cleanDigits.length >= 10 ? cleanDigits.substring(cleanDigits.length - 10) : trimmedMobile;
+
     try {
-      final res = await VpsApiService.get('get-customer-profile&mobile=$trimmedMobile');
+      final res = await VpsApiService.get('get-customer-profile&mobile=$cleanMobile');
       if (res != null && res['success'] == true) {
         final prefs = await SharedPreferences.getInstance();
 
         final String name = (res['name'] ?? '').toString().trim();
+        final keysToSave = {cleanMobile, trimmedMobile, '+91$cleanMobile', '91$cleanMobile'};
+
         if (name.isNotEmpty && !name.startsWith('Customer')) {
-          final profileData = {'mobile': trimmedMobile, 'name': name};
-          await prefs.setString('customer_profile_$trimmedMobile', jsonEncode(profileData));
+          final profileData = {'mobile': cleanMobile, 'name': name};
+          for (var k in keysToSave) {
+            await prefs.setString('customer_profile_$k', jsonEncode(profileData));
+          }
         }
 
-        final String? addrJsonStr = res['address_json'];
-        if (addrJsonStr != null && addrJsonStr.trim().isNotEmpty) {
-          await prefs.setString('customer_addresses_$trimmedMobile', addrJsonStr.trim());
+        final dynamic addrVal = res['address_json'];
+        String addrStr = '';
+        if (addrVal != null) {
+          if (addrVal is String) {
+            addrStr = addrVal.trim();
+          } else if (addrVal is List) {
+            addrStr = jsonEncode(addrVal);
+          }
+        }
+
+        if (addrStr.isNotEmpty && addrStr != '[]' && addrStr != 'null') {
+          for (var k in keysToSave) {
+            await prefs.setString('customer_addresses_$k', addrStr);
+          }
         }
 
         return res;
