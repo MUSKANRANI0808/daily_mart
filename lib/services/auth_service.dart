@@ -1407,10 +1407,26 @@ class AuthService {
     }
     return [
       {
+        'id': '6',
+        'name': 'Krishna',
+        'username': 'Krishna',
+        'password': '1234',
+        'mobile': '8128859990',
+        'location': 'Raniganj',
+      },
+      {
+        'id': '7',
+        'name': 'Daily Mart Ankul',
+        'username': 'Ankul',
+        'password': '1234',
+        'mobile': '7781881211',
+        'location': 'BankeyBazar',
+      },
+      {
         'id': 'seller_1',
         'name': 'Sample Seller',
         'username': 'seller1',
-        'password': '123',
+        'password': '1234',
         'mobile': '9876543210',
       }
     ];
