@@ -1537,17 +1537,6 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      if (cat.isNotEmpty)
-                        Text(
-                          cat.toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF8B5CF6),
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      const SizedBox(height: 2),
                       Text(
                         name,
                         maxLines: 1,
@@ -1664,19 +1653,6 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (cat.isNotEmpty)
-                    Text(
-                      cat.toUpperCase(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: isCompact ? 8.0 : 9.0,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF8B5CF6),
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                  SizedBox(height: isCompact ? 1 : 2),
                   Text(
                     name,
                     maxLines: 1,
