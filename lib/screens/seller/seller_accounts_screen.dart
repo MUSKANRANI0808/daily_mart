@@ -136,7 +136,15 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
         }
       }
 
-      final createdAtStr = (o['created_at'] ?? o['date'] ?? DateTime.now().toString()).toString();
+      final createdAtStr = (o['created_at'] ?? o['date'] ?? '').toString();
+      final deliveredAtStr = (o['delivered_at'] ?? o['delivered_time'] ?? '').toString();
+      final paidAtStr = (o['paid_at'] ?? o['payment_time'] ?? '').toString();
+
+      final createdDate = _parseOrderDate(createdAtStr);
+      final deliveredDate = _parseOrderDate(deliveredAtStr);
+      final paidDate = _parseOrderDate(paidAtStr);
+
+      final primaryDate = deliveredDate ?? paidDate ?? createdDate ?? DateTime.now();
 
       ordersList.add({
         'msg_id': msgId,
@@ -149,14 +157,19 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
         'payment_badge': pBadge,
         'payment_type': pType,
         'order_status': isDeleted ? 'Deleted' : ordStat,
-        'created_at': createdAtStr,
-        'created_date': _parseOrderDate(createdAtStr),
+        'created_at': createdAtStr.isNotEmpty ? createdAtStr : primaryDate.toString().substring(0, 16),
+        'delivered_at': deliveredAtStr,
+        'paid_at': paidAtStr,
+        'created_date': createdDate,
+        'delivered_date': deliveredDate,
+        'paid_date': paidDate,
+        'primary_date': primaryDate,
         'raw_msg': o,
       });
     }
 
-    // Sort by timestamp newest first
-    ordersList.sort((a, b) => (b['created_at'] ?? '').toString().compareTo((a['created_at'] ?? '').toString()));
+    // Sort by primary timestamp newest first
+    ordersList.sort((a, b) => (b['primary_date'] as DateTime).compareTo(a['primary_date'] as DateTime));
 
     setState(() {
       _allOrders = ordersList;
@@ -196,55 +209,53 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
     return null;
   }
 
-  void _applyFilter() {
+  bool _isOrderInDateFilter(Map<String, dynamic> o, String filter) {
+    if (filter == 'All') return true;
+
     final now = DateTime.now();
     final todayStart = DateTime(now.year, now.month, now.day);
+    final todayEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
     final yesterdayStart = todayStart.subtract(const Duration(days: 1));
+    final yesterdayEnd = DateTime(yesterdayStart.year, yesterdayStart.month, yesterdayStart.day, 23, 59, 59);
     final weekStart = todayStart.subtract(const Duration(days: 6));
     final monthStart = todayStart.subtract(const Duration(days: 29));
-    final tomorrowStart = todayStart.add(const Duration(days: 1));
 
-    // 1. Date Filter First
-    List<Map<String, dynamic>> dateFiltered = List.from(_allOrders);
+    final List<DateTime> datesToCheck = [];
+    if (o['delivered_date'] != null) datesToCheck.add(o['delivered_date'] as DateTime);
+    if (o['paid_date'] != null) datesToCheck.add(o['paid_date'] as DateTime);
+    if (o['primary_date'] != null) datesToCheck.add(o['primary_date'] as DateTime);
+    if (o['created_date'] != null) datesToCheck.add(o['created_date'] as DateTime);
 
-    if (_dateFilter == 'Today') {
-      dateFiltered = dateFiltered.where((o) {
-        final d = o['created_date'] as DateTime?;
-        if (d == null) return true;
-        return (d.year == now.year && d.month == now.month && d.day == now.day) ||
-            (d.isAfter(todayStart) || d.isAtSameMomentAs(todayStart));
-      }).toList();
-    } else if (_dateFilter == 'Yesterday') {
-      dateFiltered = dateFiltered.where((o) {
-        final d = o['created_date'] as DateTime?;
-        if (d == null) return false;
-        return (d.year == yesterdayStart.year && d.month == yesterdayStart.month && d.day == yesterdayStart.day) ||
-            ((d.isAfter(yesterdayStart) || d.isAtSameMomentAs(yesterdayStart)) && d.isBefore(todayStart));
-      }).toList();
-    } else if (_dateFilter == 'ThisWeek') {
-      dateFiltered = dateFiltered.where((o) {
-        final d = o['created_date'] as DateTime?;
-        if (d == null) return true;
-        return (d.isAfter(weekStart) || d.isAtSameMomentAs(weekStart)) && d.isBefore(tomorrowStart);
-      }).toList();
-    } else if (_dateFilter == 'ThisMonth') {
-      dateFiltered = dateFiltered.where((o) {
-        final d = o['created_date'] as DateTime?;
-        if (d == null) return true;
-        return (d.isAfter(monthStart) || d.isAtSameMomentAs(monthStart)) && d.isBefore(tomorrowStart);
-      }).toList();
-    } else if (_dateFilter == 'Custom' && _customStartDate != null && _customEndDate != null) {
+    if (datesToCheck.isEmpty) return true;
+
+    if (filter == 'Today') {
+      return datesToCheck.any((d) =>
+          (d.year == now.year && d.month == now.month && d.day == now.day) ||
+          (d.isAfter(todayStart.subtract(const Duration(seconds: 1))) && d.isBefore(todayEnd.add(const Duration(seconds: 1)))));
+    } else if (filter == 'Yesterday') {
+      return datesToCheck.any((d) =>
+          (d.year == yesterdayStart.year && d.month == yesterdayStart.month && d.day == yesterdayStart.day) ||
+          (d.isAfter(yesterdayStart.subtract(const Duration(seconds: 1))) && d.isBefore(yesterdayEnd.add(const Duration(seconds: 1)))));
+    } else if (filter == 'ThisWeek') {
+      return datesToCheck.any((d) =>
+          d.isAfter(weekStart.subtract(const Duration(seconds: 1))) && d.isBefore(todayEnd.add(const Duration(seconds: 1))));
+    } else if (filter == 'ThisMonth') {
+      return datesToCheck.any((d) =>
+          d.isAfter(monthStart.subtract(const Duration(seconds: 1))) && d.isBefore(todayEnd.add(const Duration(seconds: 1))));
+    } else if (filter == 'Custom' && _customStartDate != null && _customEndDate != null) {
       final start = DateTime(_customStartDate!.year, _customStartDate!.month, _customStartDate!.day);
       final end = DateTime(_customEndDate!.year, _customEndDate!.month, _customEndDate!.day, 23, 59, 59);
 
-      dateFiltered = dateFiltered.where((o) {
-        final d = o['created_date'] as DateTime?;
-        if (d == null) return true;
-        return (d.isAfter(start) || d.isAtSameMomentAs(start)) && (d.isBefore(end) || d.isAtSameMomentAs(end));
-      }).toList();
-    } else if (_dateFilter == 'All') {
-      // Show ALL orders!
+      return datesToCheck.any((d) =>
+          d.isAfter(start.subtract(const Duration(seconds: 1))) && d.isBefore(end.add(const Duration(seconds: 1))));
     }
+
+    return true;
+  }
+
+  void _applyFilter() {
+    // 1. Date Filter First
+    List<Map<String, dynamic>> dateFiltered = _allOrders.where((o) => _isOrderInDateFilter(o, _dateFilter)).toList();
 
     // Recalculate summary metrics dynamically for the selected Date Filter
     double totRev = 0.0;
