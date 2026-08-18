@@ -6,6 +6,14 @@ class VpsApiService {
   static String get baseUrl => VpsConfig.apiBaseUrl;
   static String? authToken;
 
+  static List<String> get candidateBaseUrls => [
+        VpsConfig.apiBaseUrl,
+        'http://200.141.4.137/api.php',
+        'http://localhost/api.php',
+        'http://127.0.0.1/api.php',
+        'http://localhost/vps_backend/api.php',
+      ];
+
   static Map<String, String> get _headers => {
         'Content-Type': 'application/json',
         if (authToken != null) 'Authorization': 'Bearer $authToken',
@@ -13,45 +21,55 @@ class VpsApiService {
 
   /// Test connection to VPS server
   static Future<bool> testConnection() async {
-    try {
-      final response = await http.get(Uri.parse('$baseUrl?action=sellers')).timeout(
-            const Duration(seconds: 8),
-          );
-      return response.statusCode == 200;
-    } catch (_) {
-      return false;
+    for (var base in candidateBaseUrls) {
+      try {
+        final String fullUrl = base.contains('?') ? '$base&action=sellers' : '$base?action=sellers';
+        final response = await http.get(Uri.parse(fullUrl)).timeout(const Duration(seconds: 4));
+        if (response.statusCode == 200) return true;
+      } catch (_) {}
     }
+    return false;
   }
 
-  /// Generic GET request
+  /// Generic GET request with multi-URL candidate fallback
   static Future<dynamic> get(String action) async {
-    try {
-      final String fullUrl = '$baseUrl?action=$action';
-      final Uri uri = Uri.parse(Uri.encodeFull(fullUrl));
-      final response = await http.get(
-        uri,
-        headers: _headers,
-      ).timeout(const Duration(seconds: 8));
-      return _handleResponse(response);
-    } catch (e) {
-      return null;
+    for (var base in candidateBaseUrls) {
+      try {
+        final String fullUrl = base.contains('?') ? '$base&$action' : '$base?action=$action';
+        final Uri uri = Uri.parse(Uri.encodeFull(fullUrl));
+        final response = await http.get(
+          uri,
+          headers: _headers,
+        ).timeout(const Duration(seconds: 4));
+
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final resData = _handleResponse(response);
+          if (resData != null) return resData;
+        }
+      } catch (_) {}
     }
+    return null;
   }
 
-  /// Generic POST request
+  /// Generic POST request with multi-URL candidate fallback
   static Future<dynamic> post(String action, Map<String, dynamic> data) async {
-    try {
-      final String fullUrl = '$baseUrl?action=$action';
-      final Uri uri = Uri.parse(Uri.encodeFull(fullUrl));
-      final response = await http.post(
-        uri,
-        headers: _headers,
-        body: jsonEncode(data),
-      ).timeout(const Duration(seconds: 8));
-      return _handleResponse(response);
-    } catch (e) {
-      return null;
+    for (var base in candidateBaseUrls) {
+      try {
+        final String fullUrl = base.contains('?') ? '$base&$action' : '$base?action=$action';
+        final Uri uri = Uri.parse(Uri.encodeFull(fullUrl));
+        final response = await http.post(
+          uri,
+          headers: _headers,
+          body: jsonEncode(data),
+        ).timeout(const Duration(seconds: 4));
+
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final resData = _handleResponse(response);
+          if (resData != null) return resData;
+        }
+      } catch (_) {}
     }
+    return null;
   }
 
   static dynamic _handleResponse(http.Response response) {
