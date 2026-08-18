@@ -658,8 +658,33 @@ if ($action == 'get-header-theme') {
         $res = $conn->query("SELECT name, address_json FROM customers WHERE mobile = '$mobile' OR mobile LIKE '$escapedLike' ORDER BY id DESC LIMIT 1");
         if ($res && $row = $res->fetch_assoc()) {
             $dbName = trim($row['name'] ?? '');
-            if (!empty($dbName)) $cName = $dbName;
-            if (!empty($row['address_json'])) $cAddr = $row['address_json'];
+            if (!empty($dbName) && $dbName !== 'Customer') $cName = $dbName;
+            if (!empty($row['address_json']) && $row['address_json'] !== '[]' && $row['address_json'] !== 'null') {
+                $cAddr = $row['address_json'];
+            }
+        }
+
+        if (empty($cAddr)) {
+            $resMsg = $conn->query("SELECT customer_name, delivery_address FROM messages WHERE (customer_mobile = '$mobile' OR customer_mobile LIKE '$escapedLike') AND delivery_address IS NOT NULL AND delivery_address != '' ORDER BY id DESC LIMIT 1");
+            if ($resMsg && $rowMsg = $resMsg->fetch_assoc()) {
+                if ($cName === 'Customer' && !empty($rowMsg['customer_name'])) {
+                    $cName = trim($rowMsg['customer_name']);
+                }
+                $rawAddr = trim($rowMsg['delivery_address'] ?? '');
+                if (!empty($rawAddr)) {
+                    $cAddr = json_encode([
+                        [
+                            'id' => (string)time(),
+                            'tag' => 'Home',
+                            'houseNo' => $rawAddr,
+                            'locality' => '',
+                            'landmark' => '',
+                            'city' => 'Raniganj',
+                            'pincode' => ''
+                        ]
+                    ]);
+                }
+            }
         }
     }
     echo json_encode(["success" => true, "mobile" => $mobile, "name" => $cName, "address_json" => $cAddr]);

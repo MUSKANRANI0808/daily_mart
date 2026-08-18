@@ -213,18 +213,19 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
 
     setState(() => _isLoading = false);
 
-    if (!hasValidName || !hasAddress) {
-      if (mounted) {
-        _showCompleteProfileDialog(mobile, existingName: hasValidName ? existingName : null);
-      }
-    } else {
-      final user = await AuthService.loginCustomer(mobile, customName: existingName);
+    // Existing registered customer with valid name or address in database logs in directly!
+    if (hasValidName || hasAddress) {
+      final user = await AuthService.loginCustomer(mobile, customName: existingName.isNotEmpty ? existingName : 'Customer');
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => CustomerMainNavScreen(customer: user)),
           (route) => false,
         );
+      }
+    } else {
+      if (mounted) {
+        _showCompleteProfileDialog(mobile, existingName: null);
       }
     }
   }
