@@ -772,6 +772,7 @@ class _SellerDashboardState extends State<SellerDashboard> {
                         context: context,
                         product: p,
                         sellerUsername: _sellerUsername,
+                        allProducts: _sellerProducts,
                         onCartUpdated: () {
                           if (mounted) setState(() {});
                         },

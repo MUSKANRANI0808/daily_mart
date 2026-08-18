@@ -1511,6 +1511,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
         context: context,
         product: p,
         sellerUsername: widget.sellerUsername,
+        allProducts: _products,
         onCartUpdated: () async {
           final items = await CartService.getCartItems(widget.sellerUsername);
           if (mounted) {
