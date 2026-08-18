@@ -1,12 +1,16 @@
 <?php
-// Daily Mart VPS Backend API - Updated: 2026-08-18 03:40 PM (IP 89.116.52.173 Sync)
+// Daily Mart VPS Backend API - Updated: 2026-08-18 (PHP 8.1+ MySQLi Safe Exception Handling)
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Headers: *");
 header("Access-Control-Allow-Methods: *");
 header("Content-Type: application/json");
 
 ini_set('display_errors', 0);
-error_reporting(E_ALL);
+error_reporting(0);
+
+if (function_exists('mysqli_report')) {
+    @mysqli_report(MYSQLI_REPORT_OFF);
+}
 
 date_default_timezone_set('Asia/Kolkata');
 
@@ -15,10 +19,15 @@ $user = "daily_mart";
 $pass = "DWZYHcAxSars3di8";
 $dbname = "daily_mart";
 
-$conn = @new mysqli($host, $user, $pass, $dbname);
+try {
+    $conn = @new mysqli($host, $user, $pass, $dbname);
+} catch (Throwable $e) {
+    echo json_encode(["success" => false, "error" => "DB Connection Failed: " . $e->getMessage()]);
+    exit();
+}
 
-if ($conn->connect_error) {
-    echo json_encode(["success" => false, "error" => "DB Connection Failed"]);
+if (!$conn || $conn->connect_error) {
+    echo json_encode(["success" => false, "error" => "DB Connection Error"]);
     exit();
 }
 
