@@ -1719,7 +1719,7 @@ if ($action == 'get-header-theme') {
         $stmt = $conn->prepare("UPDATE seller_sections SET name = ?, icon = ?, bg_color = ?, text_color = ?, columns = ?, max_items = ? WHERE id = ?");
         if ($stmt) {
             $stmt->bind_param("ssssiii", $name, $icon, $bg_color, $text_color, $columns, $max_items, $id);
-            if ($stmt->execute() && $stmt->affected_rows > 0) {
+            if ($stmt->execute()) {
                 $updated = true;
             }
         }
@@ -1729,7 +1729,7 @@ if ($action == 'get-header-theme') {
         $stmt = $conn->prepare("UPDATE seller_sections SET icon = ?, bg_color = ?, text_color = ?, columns = ?, max_items = ? WHERE seller_username = ? AND name = ?");
         if ($stmt) {
             $stmt->bind_param("sssissi", $icon, $bg_color, $text_color, $columns, $max_items, $seller_username, $name);
-            if ($stmt->execute() && $stmt->affected_rows > 0) {
+            if ($stmt->execute()) {
                 $updated = true;
             }
         }
