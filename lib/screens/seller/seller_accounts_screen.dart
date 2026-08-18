@@ -18,7 +18,7 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
   List<Map<String, dynamic>> _filteredOrders = [];
   String _searchQuery = '';
   String _selectedFilter = 'All'; // All, Unpaid, Cash, Online
-  String _dateFilter = 'ThisMonth'; // Default to Last 30 Days to match revenue header
+  String _dateFilter = 'All'; // Default to All Time so ALL seller orders load instantly like user reference photo!
   DateTime? _customStartDate;
   DateTime? _customEndDate;
 
@@ -669,7 +669,7 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Accounts & Orders Ledger',
+              'Accounts & Orders Ledger 👛',
               style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17),
             ),
             Text(
@@ -795,7 +795,7 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            const Text('Cash', style: TextStyle(color: Color(0xFFD1FAE5), fontSize: 10, fontWeight: FontWeight.w600)),
+                                            const Text('Cash 💵', style: TextStyle(color: Color(0xFFD1FAE5), fontSize: 10, fontWeight: FontWeight.w600)),
                                             Text(
                                               '₹${_cashRevenue % 1 == 0 ? _cashRevenue.toInt() : _cashRevenue.toStringAsFixed(2)}',
                                               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
@@ -833,7 +833,7 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            const Text('Online', style: TextStyle(color: Color(0xFFD1FAE5), fontSize: 10, fontWeight: FontWeight.w600)),
+                                            const Text('Online 💳', style: TextStyle(color: Color(0xFFD1FAE5), fontSize: 10, fontWeight: FontWeight.w600)),
                                             Text(
                                               '₹${_onlineRevenue % 1 == 0 ? _onlineRevenue.toInt() : _onlineRevenue.toStringAsFixed(2)}',
                                               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
