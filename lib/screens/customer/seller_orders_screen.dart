@@ -1026,9 +1026,28 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: widget.hideBottomNav,
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
-        if (didPop || widget.hideBottomNav) return;
+        if (didPop) return;
+
+        // 1. If inside a Category or Search filter, return to Home Page view first!
+        if (_selectedCategory != 'All' || _searchQuery.isNotEmpty) {
+          setState(() {
+            _selectedCategory = 'All';
+            _searchQuery = '';
+          });
+          return;
+        }
+
+        // 2. If sub-page without bottom nav, navigate back normally
+        if (widget.hideBottomNav) {
+          if (Navigator.of(context).canPop()) {
+            Navigator.of(context).pop();
+          }
+          return;
+        }
+
+        // 3. If on main Home Page, show Exit App confirmation dialog
         final exit = await _showExitDialog();
         if (exit) {
           SystemNavigator.pop();
