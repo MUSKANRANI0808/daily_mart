@@ -2027,10 +2027,8 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
   }
 
   Widget _buildCircularCategorySection() {
-    final List<Map<String, dynamic>> allCatItems = [
-      {'name': 'All', 'image': '🏪'},
-      ..._rawCategories,
-    ];
+    final List<Map<String, dynamic>> allCatItems = List.from(_rawCategories);
+    if (allCatItems.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2072,7 +2070,11 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
               return GestureDetector(
                 onTap: () {
                   setState(() {
-                    _selectedCategory = cName;
+                    if (_selectedCategory.toLowerCase() == cName.toLowerCase()) {
+                      _selectedCategory = 'All';
+                    } else {
+                      _selectedCategory = cName;
+                    }
                   });
                 },
                 child: Container(
