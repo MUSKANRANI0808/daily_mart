@@ -2028,25 +2028,57 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+                padding: const EdgeInsets.fromLTRB(6.0, 6.0, 16.0, 10.0),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        if (secIcon.isNotEmpty && secIcon != '🏷️') ...[
-                          Text(secIcon, style: const TextStyle(fontSize: 20)),
-                          const SizedBox(width: 8),
-                        ],
-                        Text(
-                          secName,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: secTextColor,
-                          ),
+                    // 3D Ribbon / Curved Pill-Badge Shape Container for Section Title
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: secTextColor == Colors.white
+                              ? [const Color(0xFFEF4444), const Color(0xFFDC2626)]
+                              : [secTextColor.withValues(alpha: 0.12), secTextColor.withValues(alpha: 0.05)],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
                         ),
-                      ],
+                        borderRadius: const BorderRadius.only(
+                          topRight: Radius.circular(20),
+                          bottomRight: Radius.circular(20),
+                          topLeft: Radius.circular(10),
+                          bottomLeft: Radius.circular(10),
+                        ),
+                        border: Border.all(
+                          color: secTextColor.withValues(alpha: 0.25),
+                          width: 1.2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: secTextColor.withValues(alpha: 0.15),
+                            blurRadius: 6,
+                            offset: const Offset(2, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (secIcon.isNotEmpty && secIcon != '🏷️') ...[
+                            Text(secIcon, style: const TextStyle(fontSize: 18)),
+                            const SizedBox(width: 6),
+                          ],
+                          Text(
+                            secName,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              color: secTextColor,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
@@ -2750,16 +2782,16 @@ class _RotatingCategoryAvatarRingWidgetState extends State<RotatingCategoryAvata
             boxShadow: widget.isSelected
                 ? [
                     BoxShadow(
-                      color: baseColor.withValues(alpha: 0.4),
+                      color: baseColor.withValues(alpha: 0.5),
                       blurRadius: 10,
-                      spreadRadius: 1.5,
+                      spreadRadius: 2,
                       offset: const Offset(0, 3),
                     ),
                   ]
                 : [
                     BoxShadow(
-                      color: baseColor.withValues(alpha: 0.15),
-                      blurRadius: 5,
+                      color: baseColor.withValues(alpha: 0.25),
+                      blurRadius: 6,
                       offset: const Offset(0, 2),
                     ),
                   ],
@@ -2771,37 +2803,29 @@ class _RotatingCategoryAvatarRingWidgetState extends State<RotatingCategoryAvata
               Transform.rotate(
                 angle: angle,
                 child: Container(
-                  width: 58,
-                  height: 58,
+                  width: 50,
+                  height: 50,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: widget.isSelected
-                        ? SweepGradient(
-                            colors: [
-                              baseColor,
-                              lightColor,
-                              darkColor,
-                              baseColor,
-                              lightColor,
-                              baseColor,
-                            ],
-                          )
-                        : SweepGradient(
-                            colors: [
-                              baseColor.withValues(alpha: 0.8),
-                              lightColor.withValues(alpha: 0.4),
-                              baseColor.withValues(alpha: 0.8),
-                              lightColor.withValues(alpha: 0.4),
-                            ],
-                          ),
+                    gradient: SweepGradient(
+                      colors: [
+                        baseColor,
+                        Colors.white.withValues(alpha: 0.95),
+                        darkColor,
+                        baseColor,
+                        lightColor,
+                        Colors.white.withValues(alpha: 0.95),
+                        baseColor,
+                      ],
+                    ),
                   ),
                 ),
               ),
 
-              // Inner Solid Circle Mask so ring forms a sleek 3px rotating border
+              // Inner Solid Circle Mask so ring forms a sleek 3.5px rotating border
               Container(
-                width: widget.isSelected ? 52.0 : 53.5,
-                height: widget.isSelected ? 52.0 : 53.5,
+                width: widget.isSelected ? 42.0 : 43.5,
+                height: widget.isSelected ? 42.0 : 43.5,
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
                   color: Colors.white,
