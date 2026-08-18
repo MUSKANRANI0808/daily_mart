@@ -111,12 +111,10 @@ class _SellerOrderCartScreenState extends State<SellerOrderCartScreen> {
           _cartItems = items;
           _placedOrders = history;
           _isLoading = false;
-          if (!_hasUserToggledTab) {
-            if (_isSellerMode) {
-              _showHistoryTab = true; // Always default to Customer Orders tab for Sellers!
-            } else if (items.isEmpty && history.isNotEmpty) {
-              _showHistoryTab = true;
-            }
+          if (_isSellerMode) {
+            _showHistoryTab = true;
+          } else if (!_hasUserToggledTab && items.isEmpty && history.isNotEmpty) {
+            _showHistoryTab = true;
           }
         });
       }
@@ -987,94 +985,99 @@ class _SellerOrderCartScreenState extends State<SellerOrderCartScreen> {
       ),
       body: Column(
         children: [
-          // Top View Switcher Segment Tabs (Draft Bill vs Order History)
+          // Top View Switcher Segment Header (Seller: Customer Orders only | Customer: Draft Bill vs History)
           Container(
             color: const Color(0xFF0F172A),
             padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
-            child: Container(
-              height: 44,
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: () {
-                        setState(() {
-                          _showHistoryTab = _isSellerMode ? true : false;
-                          _hasUserToggledTab = true;
-                        });
-                      },
+            child: _isSellerMode
+                ? Container(
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981),
                       borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: (_isSellerMode ? _showHistoryTab : !_showHistoryTab)
-                              ? const Color(0xFF10B981)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        alignment: Alignment.center,
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            _isSellerMode
-                                ? 'Customer Orders (${_placedOrders.length})'
-                                : 'Current Draft Bill (${_cartItems.length})',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12.5,
-                              color: (_isSellerMode ? _showHistoryTab : !_showHistoryTab)
-                                  ? Colors.white
-                                  : Colors.white70,
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      'Customer Orders (${_placedOrders.length})',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13.5,
+                        color: Colors.white,
+                      ),
+                    ),
+                  )
+                : Container(
+                    height: 44,
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () {
+                              setState(() {
+                                _showHistoryTab = false;
+                                _hasUserToggledTab = true;
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: !_showHistoryTab ? const Color(0xFF10B981) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              alignment: Alignment.center,
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  'Current Draft Bill (${_cartItems.length})',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12.5,
+                                    color: !_showHistoryTab ? Colors.white : Colors.white70,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: InkWell(
-                      onTap: () {
-                        setState(() {
-                          _showHistoryTab = _isSellerMode ? false : true;
-                          _hasUserToggledTab = true;
-                        });
-                      },
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: (_isSellerMode ? !_showHistoryTab : _showHistoryTab)
-                              ? const Color(0xFF10B981)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        alignment: Alignment.center,
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            _isSellerMode
-                                ? 'My Draft Bill (${_cartItems.length})'
-                                : 'Order History (${_placedOrders.length})',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12.5,
-                              color: (_isSellerMode ? !_showHistoryTab : _showHistoryTab)
-                                  ? Colors.white
-                                  : Colors.white70,
+                        Expanded(
+                          child: InkWell(
+                            onTap: () {
+                              setState(() {
+                                _showHistoryTab = true;
+                                _hasUserToggledTab = true;
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: _showHistoryTab ? const Color(0xFF10B981) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              alignment: Alignment.center,
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  'Order History (${_placedOrders.length})',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12.5,
+                                    color: _showHistoryTab ? Colors.white : Colors.white70,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
           ),
 
           // Filter Chips (All, Pending, Delivered, Cancelled) when viewing Order History
