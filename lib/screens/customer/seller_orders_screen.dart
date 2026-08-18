@@ -1023,38 +1023,43 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
     );
   }
 
+  bool get hasActiveFilter => _selectedCategory != 'All' || _searchQuery.isNotEmpty;
+
+  void clearFilters() {
+    setState(() {
+      _selectedCategory = 'All';
+      _searchQuery = '';
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.hideBottomNav) {
+      return _buildMainScaffold(context);
+    }
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
 
-        // 1. If inside a Category or Search filter, return to Home Page view first!
-        if (_selectedCategory != 'All' || _searchQuery.isNotEmpty) {
-          setState(() {
-            _selectedCategory = 'All';
-            _searchQuery = '';
-          });
+        if (hasActiveFilter) {
+          clearFilters();
           return;
         }
 
-        // 2. If sub-page without bottom nav, navigate back normally
-        if (widget.hideBottomNav) {
-          if (Navigator.of(context).canPop()) {
-            Navigator.of(context).pop();
-          }
-          return;
-        }
-
-        // 3. If on main Home Page, show Exit App confirmation dialog
         final exit = await _showExitDialog();
         if (exit) {
           SystemNavigator.pop();
         }
       },
-      child: Scaffold(
-        backgroundColor: Colors.white,
+      child: _buildMainScaffold(context),
+    );
+  }
+
+  Widget _buildMainScaffold(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
         body: SizedBox.expand(
           child: Stack(
             children: [
@@ -1427,9 +1432,8 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
           ],
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   List<Map<String, dynamic>> get _filteredProducts {
     return _products.where((p) {

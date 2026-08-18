@@ -25,6 +25,7 @@ class CustomerMainNavScreen extends StatefulWidget {
 }
 
 class _CustomerMainNavScreenState extends State<CustomerMainNavScreen> {
+  final GlobalKey _sellerOrdersKey = GlobalKey();
   late int _currentIndex;
   Map<String, String>? _lastSeller;
   bool _isLoadingSeller = true;
@@ -160,6 +161,7 @@ class _CustomerMainNavScreenState extends State<CustomerMainNavScreen> {
 
     final List<Widget> pages = [
       CustomerSellerOrdersScreen(
+        key: _sellerOrdersKey,
         customer: widget.customer,
         sellerUsername: _lastSeller!['username']!,
         sellerName: _lastSeller!['name']!,
@@ -178,15 +180,26 @@ class _CustomerMainNavScreenState extends State<CustomerMainNavScreen> {
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
 
-        // If user is not on Home tab (index 0), navigate to Home tab first!
-        if (_currentIndex != 0) {
+        // 1. If user is on Home tab (index 0), check if Category or Search filter is active!
+        if (_currentIndex == 0) {
+          final dynamic ordersState = _sellerOrdersKey.currentState;
+          if (ordersState != null) {
+            try {
+              if (ordersState.hasActiveFilter == true) {
+                ordersState.clearFilters();
+                return;
+              }
+            } catch (_) {}
+          }
+        } else {
+          // If user is on My Order tab (index 1) or Profile tab (index 2), go to Home tab first!
           setState(() {
             _currentIndex = 0;
           });
           return;
         }
 
-        // If user is already on Home tab, show Exit Confirmation Dialog!
+        // 2. On Home tab AND no category/search filter active -> show Exit App Confirmation Dialog ONLY NOW!
         final shouldExit = await _showExitConfirmationDialog();
         if (shouldExit) {
           SystemNavigator.pop();
