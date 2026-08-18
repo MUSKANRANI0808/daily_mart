@@ -185,26 +185,49 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
     final cleanMobile = cleanDigits.length >= 10 ? cleanDigits.substring(cleanDigits.length - 10) : mobile;
 
     // 1. Sync & Restore customer profile and saved addresses from VPS Server Database
-    Map<String, dynamic>? profile;
-    try {
-      profile = await AuthService.getCustomerProfile(cleanMobile) ?? await AuthService.getCustomerProfile(mobile);
-    } catch (_) {}
+    final profile = await AuthService.getCustomerProfile(cleanMobile) ?? await AuthService.getCustomerProfile(mobile);
 
-    final existingName = (profile != null && profile['name'] != null && profile['name'].toString().trim().isNotEmpty && !profile['name'].toString().trim().startsWith('Customer'))
-        ? profile['name'].toString().trim()
-        : '';
+    final existingName = (profile != null && profile['name'] != null) ? profile['name'].toString().trim() : '';
+    final hasValidName = existingName.isNotEmpty && !existingName.startsWith('Customer');
 
-    // 2. Log in Customer immediately with database profile
-    final user = await AuthService.loginCustomer(mobile, customName: existingName.isNotEmpty ? existingName : null);
+    // 2. Check if customer address exists (Directly from VPS Database OR local SharedPreferences)
+    bool hasAddress = false;
+
+    // Check directly from VPS Database response
+    final vpsAddrStr = (profile != null && profile['address_json'] != null) ? profile['address_json'].toString().trim() : '';
+    if (vpsAddrStr.isNotEmpty && vpsAddrStr != '[]' && vpsAddrStr != 'null') {
+      hasAddress = true;
+    }
+
+    // Fallback to local SharedPreferences keys
+    if (!hasAddress) {
+      final prefs = await SharedPreferences.getInstance();
+      for (var keySuffix in [cleanMobile, mobile, '+91$cleanMobile', '91$cleanMobile']) {
+        final addrJsonStr = prefs.getString('customer_addresses_$keySuffix');
+        if (addrJsonStr != null && addrJsonStr.trim().isNotEmpty && addrJsonStr.trim() != '[]' && addrJsonStr.trim() != 'null') {
+          hasAddress = true;
+          break;
+        }
+      }
+    }
 
     setState(() => _isLoading = false);
 
-    if (mounted) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => CustomerMainNavScreen(customer: user)),
-        (route) => false,
-      );
+    // Existing registered customer with valid name or address in database logs in directly!
+    // New customer without saved details gets profile setup dialog.
+    if (hasValidName || hasAddress) {
+      final user = await AuthService.loginCustomer(mobile, customName: existingName.isNotEmpty ? existingName : 'Customer');
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => CustomerMainNavScreen(customer: user)),
+          (route) => false,
+        );
+      }
+    } else {
+      if (mounted) {
+        _showCompleteProfileDialog(mobile, existingName: existingName.isNotEmpty ? existingName : null);
+      }
     }
   }
 
