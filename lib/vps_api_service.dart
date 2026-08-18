@@ -33,9 +33,19 @@ class VpsApiService {
 
   /// Generic GET request with multi-URL candidate fallback
   static Future<dynamic> get(String action) async {
+    String formattedAction = action.trim();
+    if (!formattedAction.startsWith('action=') && !formattedAction.contains('action=')) {
+      if (formattedAction.contains('&')) {
+        final parts = formattedAction.split('&');
+        formattedAction = 'action=${parts[0]}&${parts.sublist(1).join('&')}';
+      } else {
+        formattedAction = 'action=$formattedAction';
+      }
+    }
+
     for (var base in candidateBaseUrls) {
       try {
-        final String fullUrl = base.contains('?') ? '$base&$action' : '$base?action=$action';
+        final String fullUrl = base.contains('?') ? '$base&$formattedAction' : '$base?$formattedAction';
         final Uri uri = Uri.parse(Uri.encodeFull(fullUrl));
         final response = await http.get(
           uri,
@@ -53,9 +63,17 @@ class VpsApiService {
 
   /// Generic POST request with multi-URL candidate fallback
   static Future<dynamic> post(String action, Map<String, dynamic> data) async {
+    String formattedAction = action.trim();
+    if (!formattedAction.startsWith('action=') && !formattedAction.contains('action=')) {
+      formattedAction = 'action=$formattedAction';
+    }
+    if (!data.containsKey('action')) {
+      data['action'] = action;
+    }
+
     for (var base in candidateBaseUrls) {
       try {
-        final String fullUrl = base.contains('?') ? '$base&$action' : '$base?action=$action';
+        final String fullUrl = base.contains('?') ? '$base&$formattedAction' : '$base?$formattedAction';
         final Uri uri = Uri.parse(Uri.encodeFull(fullUrl));
         final response = await http.post(
           uri,

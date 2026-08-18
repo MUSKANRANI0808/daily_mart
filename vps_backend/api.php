@@ -22,10 +22,22 @@ if ($conn->connect_error) {
     exit();
 }
 
-$action = isset($_GET['action']) ? $_GET['action'] : '';
 $rawInput = @file_get_contents('php://input');
 $input = json_decode($rawInput, true);
 if (!is_array($input)) $input = array();
+
+$action = isset($_GET['action']) ? $_GET['action'] : '';
+if (empty($action) && isset($input['action'])) $action = $input['action'];
+if (empty($action) && isset($_POST['action'])) $action = $_POST['action'];
+
+if (empty($action)) {
+    foreach ($_GET as $k => $v) {
+        if ($k != 'seller_username' && $k != 'customer_mobile' && $k != 'mobile' && $k != 'id' && $k != 'username') {
+            $action = $k;
+            break;
+        }
+    }
+}
 
 // 1. Auto-check & create address_json column in customers table if missing
 $colCheckAddr = $conn->query("SHOW COLUMNS FROM customers LIKE 'address_json'");
