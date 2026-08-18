@@ -1155,6 +1155,8 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                                                   _disconnectAndDeleteSeller();
                                                 } else if (val == 'call_seller') {
                                                   _callSeller();
+                                                } else if (val == 'search_bar_style') {
+                                                  _showManageSearchBarDialog();
                                                 } else if (val == 'logout') {
                                                   _logout();
                                                 } else if (val == 'refresh') {
@@ -1203,6 +1205,16 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                                                   ),
                                                 ),
                                                 const PopupMenuItem(
+                                                  value: 'search_bar_style',
+                                                  child: Row(
+                                                    children: [
+                                                      Icon(Icons.palette_rounded, color: Color(0xFF8B5CF6), size: 20),
+                                                      SizedBox(width: 10),
+                                                      Text('Search Bar Style 🔍', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const PopupMenuItem(
                                                   value: 'logout',
                                                   child: Row(
                                                     children: [
@@ -1220,40 +1232,52 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                                     ),
                                   ),
 
-                                  // Search Bar placed in Header
+                                  // Search Bar placed in Header with Seller Custom Styling & Transparency
                                   Padding(
-                                    padding: const EdgeInsets.fromLTRB(14, 2, 14, 12),
-                                    child: TextField(
-                                      onChanged: (val) {
-                                        setState(() {
-                                          _searchQuery = val.trim();
-                                        });
-                                      },
-                                      style: const TextStyle(color: Color(0xFF0F172A), fontSize: 13.5),
-                                      decoration: InputDecoration(
-                                        hintText: 'Search products in ${widget.sellerName}... 🔍',
-                                        hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-                                        prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF8B5CF6)),
-                                        isDense: true,
-                                        contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-                                        filled: true,
-                                        fillColor: Colors.white,
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(16),
-                                          borderSide: BorderSide.none,
+                                    padding: const EdgeInsets.fromLTRB(14, 4, 14, 10),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: HeaderThemeHelper.hexToColor(_headerThemeConfig['search_bg_color'] ?? '#FFFFFF').withValues(
+                                          alpha: ((_headerThemeConfig['search_opacity'] as num?)?.toDouble() ?? 1.0).clamp(0.0, 1.0),
                                         ),
-                                        enabledBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(16),
-                                          borderSide: BorderSide.none,
+                                        borderRadius: BorderRadius.circular(16),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.12),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 3),
+                                          ),
+                                        ],
+                                      ),
+                                      child: TextField(
+                                        onChanged: (val) {
+                                          setState(() {
+                                            _searchQuery = val.trim();
+                                          });
+                                        },
+                                        style: TextStyle(
+                                          color: HeaderThemeHelper.hexToColor(_headerThemeConfig['search_text_color'] ?? '#0F172A'),
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w600,
                                         ),
-                                        focusedBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(16),
-                                          borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 1.8),
+                                        decoration: InputDecoration(
+                                          hintText: 'Search products in ${widget.sellerName}... 🔍',
+                                          hintStyle: TextStyle(
+                                            fontSize: 13,
+                                            color: HeaderThemeHelper.hexToColor(_headerThemeConfig['search_text_color'] ?? '#0F172A').withValues(alpha: 0.65),
+                                          ),
+                                          prefixIcon: Icon(
+                                            Icons.search_rounded,
+                                            color: HeaderThemeHelper.hexToColor(_headerThemeConfig['search_text_color'] ?? '#8B5CF6'),
+                                          ),
+                                          isDense: true,
+                                          contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                                          border: InputBorder.none,
                                         ),
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(height: 12),
+                                  const SizedBox(height: 32),
                                 ],
                               ),
                             ),
@@ -2018,6 +2042,227 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
     return SectionSliderBannerWidget(
       key: ValueKey(keyStr),
       slidersList: slidersList,
+    );
+  }
+
+  /// Seller Search Bar Customization & Transparency Dialog
+  void _showManageSearchBarDialog() {
+    String bgColor = (_headerThemeConfig['search_bg_color'] ?? '#FFFFFF').toString();
+    double opacity = ((_headerThemeConfig['search_opacity'] as num?)?.toDouble() ?? 1.0).clamp(0.0, 1.0);
+    String textColor = (_headerThemeConfig['search_text_color'] ?? '#0F172A').toString();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final Color previewColor = HeaderThemeHelper.hexToColor(bgColor).withValues(alpha: opacity);
+          final Color previewTextColor = HeaderThemeHelper.hexToColor(textColor);
+
+          return Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              left: 20,
+              right: 20,
+              top: 16,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  const Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: Color(0xFFF3E8FF),
+                        child: Icon(Icons.palette_rounded, color: Color(0xFF8B5CF6), size: 20),
+                      ),
+                      SizedBox(width: 10),
+                      Text(
+                        'Manage Search Bar Style 🔍',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Real-time Header Preview Box
+                  const Text('Live Header Preview:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF64748B))),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF0F172A), Color(0xFF312E81)],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: previewColor,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.15),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.search_rounded, color: previewTextColor, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Search products in store... 🔍',
+                            style: TextStyle(color: previewTextColor.withValues(alpha: 0.7), fontSize: 12.5, fontWeight: FontWeight.w500),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Background Color Selection
+                  const Text('Search Bar Background Color:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        '#FFFFFF', '#F1F5F9', '#0F172A', '#8B5CF6', '#10B981', '#3B82F6', '#F97316', '#FEF3C7', '#ECFDF5', '#FEE2E2'
+                      ].map((hex) {
+                        final isSel = bgColor.toLowerCase() == hex.toLowerCase();
+                        final c = HeaderThemeHelper.hexToColor(hex);
+                        return InkWell(
+                          onTap: () {
+                            setModalState(() {
+                              bgColor = hex;
+                            });
+                          },
+                          child: Container(
+                            width: 30,
+                            height: 30,
+                            margin: const EdgeInsets.only(right: 8),
+                            decoration: BoxDecoration(
+                              color: c,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: isSel ? const Color(0xFF8B5CF6) : const Color(0xFFCBD5E1), width: isSel ? 2.8 : 1),
+                              boxShadow: isSel ? [BoxShadow(color: const Color(0xFF8B5CF6).withValues(alpha: 0.5), blurRadius: 6)] : null,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Transparency Slider
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Transparency / Opacity:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${(opacity * 100).toInt()}% ${opacity == 1.0 ? '(Solid)' : opacity == 0.0 ? '(Transparent)' : '(Glass)'}',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: Color(0xFF8B5CF6)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Slider(
+                    value: opacity,
+                    min: 0.0,
+                    max: 1.0,
+                    divisions: 20,
+                    activeColor: const Color(0xFF8B5CF6),
+                    inactiveColor: const Color(0xFFE2E8F0),
+                    onChanged: (val) {
+                      setModalState(() {
+                        opacity = val;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Text & Icon Color
+                  const Text('Search Text & Icon Color:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      '#0F172A', '#FFFFFF', '#8B5CF6', '#2563EB', '#10B981'
+                    ].map((hex) {
+                      final isSel = textColor.toLowerCase() == hex.toLowerCase();
+                      final c = HeaderThemeHelper.hexToColor(hex);
+                      return InkWell(
+                        onTap: () => setModalState(() => textColor = hex),
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          margin: const EdgeInsets.only(right: 10),
+                          decoration: BoxDecoration(
+                            color: c,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: isSel ? const Color(0xFF8B5CF6) : const Color(0xFFCBD5E1), width: isSel ? 3 : 1),
+                          ),
+                          child: isSel ? const Icon(Icons.check, size: 16, color: Colors.amber) : null,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 20),
+
+                  ElevatedButton(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      final updatedConfig = Map<String, dynamic>.from(_headerThemeConfig);
+                      updatedConfig['search_bg_color'] = bgColor;
+                      updatedConfig['search_opacity'] = opacity;
+                      updatedConfig['search_text_color'] = textColor;
+
+                      setState(() {
+                        _headerThemeConfig = updatedConfig;
+                      });
+
+                      await AuthService.saveHeaderThemeConfig(updatedConfig);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF8B5CF6),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                    child: const Text('Save Search Bar Style', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
