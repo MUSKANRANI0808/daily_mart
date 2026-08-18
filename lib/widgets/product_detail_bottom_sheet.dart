@@ -565,9 +565,9 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                     ),
                     const SizedBox(height: 10),
 
-                    // Related Items Horizontal Scroll Carousel
+                    // Related Items Horizontal Scroll Carousel (Matching Home Page Card Structure!)
                     SizedBox(
-                      height: 155,
+                      height: 195,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
                         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -582,14 +582,24 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                           final rImgUrl = (relProd['image_url'] ?? '').toString().trim();
                           final rImgVal = (relProd['image'] ?? '').toString().trim();
                           final rImg = rImgUrl.isNotEmpty ? rImgUrl : (rImgVal.isNotEmpty ? rImgVal : '📦');
+                          final rBtnText = (relProd['button_text'] ?? '').toString().trim().isNotEmpty
+                              ? (relProd['button_text'] ?? '').toString().trim()
+                              : 'Buy Now';
 
                           return Container(
-                            width: 125,
+                            width: 135,
                             margin: const EdgeInsets.only(right: 10),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
+                              color: Colors.white,
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(color: const Color(0xFFE2E8F0)),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.04),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                             ),
                             child: InkWell(
                               onTap: () {
@@ -603,70 +613,73 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    // Related Image Box
-                                    Expanded(
-                                      child: Container(
-                                        width: double.infinity,
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(12),
-                                          child: _buildProductImageWidget(rImg, emojiSize: 32),
-                                        ),
+                                    // 1. Related Product Image Box
+                                    Container(
+                                      height: 85,
+                                      width: double.infinity,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF8FAFC),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: _buildProductImageWidget(rImg, emojiSize: 36),
                                       ),
                                     ),
                                     const SizedBox(height: 6),
 
-                                    // Related Title
+                                    // 2. Item Name
                                     Text(
                                       rName,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: Color(0xFF0F172A)),
+                                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: Color(0xFF0F172A)),
                                     ),
 
-                                    // Related Price & Add Button Row
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          '₹$rRateStr/$rUnit',
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10.5, color: Color(0xFF10B981)),
-                                        ),
+                                    // 3. Rate & Unit in Subtle Gray
+                                    Text(
+                                      '₹$rRateStr / $rUnit',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11, color: Color(0xFF64748B)),
+                                    ),
+                                    const SizedBox(height: 6),
 
-                                        // Quick Add Button
-                                        InkWell(
-                                          onTap: () async {
-                                            await CartService.addToCart(
-                                              sellerUsername: widget.sellerUsername,
-                                              product: relProd,
-                                              selectedUnit: rUnit,
-                                              quantity: 1,
+                                    // 4. Seller Custom Button / Buy Now Button
+                                    SizedBox(
+                                      width: double.infinity,
+                                      height: 28,
+                                      child: ElevatedButton(
+                                        onPressed: () async {
+                                          await CartService.addToCart(
+                                            sellerUsername: widget.sellerUsername,
+                                            product: relProd,
+                                            selectedUnit: rUnit,
+                                            quantity: 1,
+                                          );
+                                          widget.onCartUpdated?.call();
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text('✓ Added "$rName" to order list!', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                                backgroundColor: const Color(0xFF10B981),
+                                                duration: const Duration(seconds: 2),
+                                                behavior: SnackBarBehavior.floating,
+                                              ),
                                             );
-                                            widget.onCartUpdated?.call();
-                                            if (context.mounted) {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                SnackBar(
-                                                  content: Text('✓ Added "$rName" to order list!', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                                                  backgroundColor: const Color(0xFF10B981),
-                                                  duration: const Duration(seconds: 2),
-                                                  behavior: SnackBarBehavior.floating,
-                                                ),
-                                              );
-                                            }
-                                          },
-                                          child: Container(
-                                            padding: const EdgeInsets.all(4),
-                                            decoration: const BoxDecoration(
-                                              color: Color(0xFF10B981),
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: const Icon(Icons.add_rounded, color: Colors.white, size: 14),
-                                          ),
+                                          }
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF2563EB), // Royal Blue
+                                          padding: EdgeInsets.zero,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                          elevation: 0,
                                         ),
-                                      ],
+                                        child: Text(
+                                          rBtnText,
+                                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
                                     ),
                                   ],
                                 ),
