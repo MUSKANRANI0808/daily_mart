@@ -1957,8 +1957,8 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
       }).toList();
 
       // Find custom background color, text color, columns & max items limit assigned to this section
-      String secBgHex = (sec['bg_color'] ?? '#FFFFFF').toString().trim();
-      String secTextHex = (sec['text_color'] ?? '').toString().trim();
+      String secBgHex = '#FFFFFF';
+      String secTextHex = '#EF4444';
       int secCols = int.tryParse((sec['columns'] ?? '2').toString()) ?? 2;
       int secMaxItems = int.tryParse((sec['max_items'] ?? '0').toString()) ?? 0;
 
@@ -1968,32 +1968,31 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
       );
 
       if (secMatch.isNotEmpty) {
-        if (secBgHex.isEmpty || secBgHex == '#FFFFFF') {
-          if (secMatch['bg_color'] != null) secBgHex = secMatch['bg_color'].toString().trim();
-        }
-        if (secTextHex.isEmpty || secTextHex == '#0F172A') {
-          if (secMatch['text_color'] != null) secTextHex = secMatch['text_color'].toString().trim();
-        }
+        final bCol = (secMatch['bg_color'] ?? '').toString().trim();
+        final tCol = (secMatch['text_color'] ?? '').toString().trim();
+        if (bCol.isNotEmpty) secBgHex = bCol;
+        if (tCol.isNotEmpty && tCol != '#0F172A') secTextHex = tCol;
         if (secMatch['columns'] != null) {
           secCols = int.tryParse(secMatch['columns'].toString()) ?? secCols;
         }
         if (secMatch['max_items'] != null) {
           secMaxItems = int.tryParse(secMatch['max_items'].toString()) ?? secMaxItems;
         }
+      } else {
+        final bCol = (sec['bg_color'] ?? '').toString().trim();
+        final tCol = (sec['text_color'] ?? '').toString().trim();
+        if (bCol.isNotEmpty) secBgHex = bCol;
+        if (tCol.isNotEmpty && tCol != '#0F172A') secTextHex = tCol;
       }
 
       if (secCols != 1 && secCols != 2 && secCols != 3) {
         secCols = 2;
       }
 
-      final secBgColor = hexToColor(secBgHex.isEmpty ? '#FFFFFF' : secBgHex);
-      Color secTextColor;
-      if (secTextHex.isNotEmpty && secTextHex != '#0F172A') {
-        secTextColor = hexToColor(secTextHex);
-      } else {
-        // Smart fallback: if background is dark, use White text for high contrast readability!
-        secTextColor = secBgColor.computeLuminance() < 0.5 ? Colors.white : const Color(0xFF0F172A);
-      }
+      final Color secBgColor = hexToColor(secBgHex.isEmpty ? '#FFFFFF' : secBgHex);
+      final Color ribbonColor = hexToColor(secTextHex.isEmpty ? '#EF4444' : secTextHex);
+      final Color ribbonDarkColor = Color.alphaBlend(Colors.black.withValues(alpha: 0.25), ribbonColor);
+      final Color ribbonTextColor = ribbonColor.computeLuminance() > 0.6 ? const Color(0xFF0F172A) : Colors.white;
 
       final bool isExpanded = _expandedSectionNames.contains(secName.toLowerCase());
       final int displayCount = (secMaxItems > 0 && !isExpanded && matchingProducts.length > secMaxItems)
@@ -2004,13 +2003,6 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
       if (externalSliders.isNotEmpty) {
         sectionWidgets.add(_buildSectionSliderBanner(externalSliders));
       }
-
-      Color ribbonColor = secTextColor;
-      if (secTextHex.isEmpty || secTextHex == '#0F172A') {
-        ribbonColor = const Color(0xFFEF4444); // Default Vibrant Red
-      }
-      final Color ribbonDarkColor = Color.alphaBlend(Colors.black.withValues(alpha: 0.25), ribbonColor);
-      final Color ribbonTextColor = ribbonColor.computeLuminance() > 0.6 ? const Color(0xFF0F172A) : Colors.white;
 
       sectionWidgets.add(
         Container(
