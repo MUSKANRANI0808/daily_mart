@@ -54,6 +54,15 @@ if (!$colCheckDelStatus || $colCheckDelStatus->num_rows == 0) {
     @$conn->query("ALTER TABLE messages ADD COLUMN delivery_status VARCHAR(50) DEFAULT 'pending', ADD COLUMN delivered_by VARCHAR(100) DEFAULT NULL, ADD COLUMN picked_up_at VARCHAR(50) DEFAULT NULL, ADD COLUMN delivered_at VARCHAR(50) DEFAULT NULL, ADD COLUMN cancel_reason VARCHAR(255) DEFAULT NULL, ADD COLUMN cancelled_at VARCHAR(50) DEFAULT NULL");
 }
 
+// 3b. Auto-check & create matching tracking columns in customer_orders table
+$colCheckCustOrdPay = $conn->query("SHOW COLUMNS FROM customer_orders LIKE 'payment_status'");
+if (!$colCheckCustOrdPay || $colCheckCustOrdPay->num_rows == 0) {
+    @$conn->query("ALTER TABLE customer_orders ADD COLUMN payment_status VARCHAR(50) DEFAULT 'unpaid', ADD COLUMN payment_utr VARCHAR(100) DEFAULT NULL, ADD COLUMN paid_amount DECIMAL(10,2) DEFAULT 0.00, ADD COLUMN paid_at VARCHAR(50) DEFAULT NULL, ADD COLUMN delivery_status VARCHAR(50) DEFAULT 'pending', ADD COLUMN delivered_by VARCHAR(100) DEFAULT NULL, ADD COLUMN picked_up_at VARCHAR(50) DEFAULT NULL, ADD COLUMN delivered_at VARCHAR(50) DEFAULT NULL, ADD COLUMN cancel_reason VARCHAR(255) DEFAULT NULL, ADD COLUMN cancelled_at VARCHAR(50) DEFAULT NULL");
+}
+
+// 3c. Auto-sync messages table fields into customer_orders table
+@$conn->query("UPDATE customer_orders co JOIN messages m ON co.order_number = m.order_id OR co.id = m.id SET co.payment_status = m.payment_status, co.payment_utr = m.payment_utr, co.paid_amount = m.paid_amount, co.paid_at = m.paid_at, co.delivery_status = m.delivery_status, co.delivered_by = m.delivered_by, co.picked_up_at = m.picked_up_at, co.delivered_at = m.delivered_at, co.cancel_reason = m.cancel_reason, co.cancelled_at = m.cancelled_at, co.order_status = m.order_status WHERE m.payment_status IS NOT NULL OR m.delivery_status IS NOT NULL");
+
 // 4. Auto-check & create seller_sliders table in database
 $conn->query("CREATE TABLE IF NOT EXISTS seller_sliders (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -175,6 +184,8 @@ if (!$colCheckCatColor || $colCheckCatColor->num_rows == 0) {
     name VARCHAR(255) NOT NULL,
     icon VARCHAR(50) DEFAULT '🏷️',
     bg_color VARCHAR(50) DEFAULT '#FFFFFF',
+    text_color VARCHAR(50) DEFAULT '#0F172A',
+    columns INT DEFAULT 2,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX(seller_username)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
@@ -182,6 +193,11 @@ if (!$colCheckCatColor || $colCheckCatColor->num_rows == 0) {
 $colCheckSecBg = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'bg_color'");
 if (!$colCheckSecBg || $colCheckSecBg->num_rows == 0) {
     @$conn->query("ALTER TABLE seller_sections ADD COLUMN bg_color VARCHAR(50) DEFAULT '#FFFFFF'");
+}
+
+$colCheckSecCols = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'columns'");
+if (!$colCheckSecCols || $colCheckSecCols->num_rows == 0) {
+    @$conn->query("ALTER TABLE seller_sections ADD COLUMN columns INT DEFAULT 2");
 }
 
 $colCheckSecCol = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'section'");
@@ -344,6 +360,10 @@ if ($action == 'get-header-theme') {
     $time_str = date('d/m/Y, H:i');
 
     if ($msg_id > 0) {
+        $msgRow = $conn->query("SELECT order_id FROM messages WHERE id = $msg_id LIMIT 1");
+        $ordNum = ($msgRow && $r = $msgRow->fetch_assoc()) ? $r['order_id'] : "#DM-" . (1000 + $msg_id);
+        $escapedDelBy = $conn->real_escape_string($delivered_by);
+
         $lowerStatus = strtolower($delivery_status);
         if ($lowerStatus == 'picked up' || $lowerStatus == 'picked_up' || $lowerStatus == 'out for delivery') {
             $stmt = $conn->prepare("UPDATE messages SET delivery_status = ?, delivered_by = ?, picked_up_at = ? WHERE id = ?");
@@ -351,18 +371,21 @@ if ($action == 'get-header-theme') {
                 $stmt->bind_param("sssi", $delivery_status, $delivered_by, $time_str, $msg_id);
                 $stmt->execute();
             }
+            @$conn->query("UPDATE customer_orders SET delivery_status = '$delivery_status', delivered_by = '$escapedDelBy', picked_up_at = '$time_str' WHERE order_number = '$ordNum' OR id = $msg_id");
         } elseif ($lowerStatus == 'delivered') {
             $stmt = $conn->prepare("UPDATE messages SET delivery_status = 'Delivered', order_status = 'Delivered', delivered_by = ?, delivered_at = ? WHERE id = ?");
             if ($stmt) {
                 $stmt->bind_param("ssi", $delivered_by, $time_str, $msg_id);
                 $stmt->execute();
             }
+            @$conn->query("UPDATE customer_orders SET delivery_status = 'Delivered', order_status = 'Delivered', delivered_by = '$escapedDelBy', delivered_at = '$time_str' WHERE order_number = '$ordNum' OR id = $msg_id");
         } else {
             $stmt = $conn->prepare("UPDATE messages SET delivery_status = ?, delivered_by = ? WHERE id = ?");
             if ($stmt) {
                 $stmt->bind_param("ssi", $delivery_status, $delivered_by, $msg_id);
                 $stmt->execute();
             }
+            @$conn->query("UPDATE customer_orders SET delivery_status = '$delivery_status', delivered_by = '$escapedDelBy' WHERE order_number = '$ordNum' OR id = $msg_id");
         }
         echo json_encode(["success" => true, "message" => "Delivery status updated in database"]);
         exit();
@@ -857,18 +880,23 @@ if ($action == 'get-header-theme') {
     $cancel_reason = isset($input['cancel_reason']) ? trim($input['cancel_reason']) : '';
 
     if ($msg_id > 0) {
+        $msgRow = $conn->query("SELECT order_id FROM messages WHERE id = $msg_id LIMIT 1");
+        $ordNum = ($msgRow && $r = $msgRow->fetch_assoc()) ? $r['order_id'] : "#DM-" . (1000 + $msg_id);
+
         if (!empty($cancel_reason) || strtolower($status_text) == 'cancelled') {
             $stmt = $conn->prepare("UPDATE messages SET order_status = 'Cancelled', delivery_status = 'Cancelled', cancelled_at = ?, cancel_reason = ? WHERE id = ?");
             if ($stmt) {
                 $stmt->bind_param("ssi", $cancelled_at, $cancel_reason, $msg_id);
                 $stmt->execute();
             }
+            @$conn->query("UPDATE customer_orders SET order_status = 'Cancelled', delivery_status = 'Cancelled', cancelled_at = '$cancelled_at', cancel_reason = '" . $conn->real_escape_string($cancel_reason) . "' WHERE order_number = '$ordNum' OR id = $msg_id");
         } else {
             $stmt = $conn->prepare("UPDATE messages SET order_status = ? WHERE id = ?");
             if ($stmt) {
                 $stmt->bind_param("si", $status_text, $msg_id);
                 $stmt->execute();
             }
+            @$conn->query("UPDATE customer_orders SET order_status = '" . $conn->real_escape_string($status_text) . "' WHERE order_number = '$ordNum' OR id = $msg_id");
         }
     }
     echo json_encode(["success" => true]);
@@ -888,6 +916,9 @@ if ($action == 'get-header-theme') {
             $stmt->bind_param("di", $amount, $msg_id);
             $stmt->execute();
         }
+        $msgRow = $conn->query("SELECT order_id FROM messages WHERE id = $msg_id LIMIT 1");
+        $ordNum = ($msgRow && $r = $msgRow->fetch_assoc()) ? $r['order_id'] : "#DM-" . (1000 + $msg_id);
+        @$conn->query("UPDATE customer_orders SET total_amount = $amount WHERE order_number = '$ordNum' OR id = $msg_id");
     }
     echo json_encode(["success" => true, "order_amount" => $amount]);
     exit();
@@ -904,6 +935,9 @@ if ($action == 'get-header-theme') {
             $stmt->bind_param("ssdsi", $payment_status, $payment_utr, $paid_amount, $paid_at, $msg_id);
             $stmt->execute();
         }
+        $msgRow = $conn->query("SELECT order_id FROM messages WHERE id = $msg_id LIMIT 1");
+        $ordNum = ($msgRow && $r = $msgRow->fetch_assoc()) ? $r['order_id'] : "#DM-" . (1000 + $msg_id);
+        @$conn->query("UPDATE customer_orders SET payment_status = '" . $conn->real_escape_string($payment_status) . "', payment_utr = '" . $conn->real_escape_string($payment_utr) . "', paid_amount = $paid_amount, paid_at = '$paid_at' WHERE order_number = '$ordNum' OR id = $msg_id");
     }
     echo json_encode(["success" => true, "message" => "Payment status saved in database"]);
     exit();
@@ -1276,6 +1310,11 @@ if ($action == 'get-header-theme') {
     }
     echo json_encode(["success" => false, "message" => "Invalid credentials"]);
 } elseif ($action == 'add-seller-product') {
+    $colCheckBtnText = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'button_text'");
+    if (!$colCheckBtnText || $colCheckBtnText->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_products ADD COLUMN button_text VARCHAR(100) DEFAULT 'Buy Now'");
+    }
+
     $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : '';
     $name = isset($input['name']) ? trim($input['name']) : '';
     $description = isset($input['description']) ? trim($input['description']) : '';
@@ -1285,6 +1324,7 @@ if ($action == 'get-header-theme') {
     $qty = isset($input['qty']) ? (int)$input['qty'] : 1;
     if ($qty <= 0) $qty = 1;
     $rate = isset($input['rate']) ? (float)$input['rate'] : 0.0;
+    $button_text = isset($input['button_text']) && !empty(trim($input['button_text'])) ? trim($input['button_text']) : 'Buy Now';
 
     if (empty($seller_username) || empty($name)) {
         echo json_encode(["success" => false, "message" => "Seller username and product name are required"]);
@@ -1304,9 +1344,9 @@ if ($action == 'get-header-theme') {
         @$conn->query("ALTER TABLE seller_products ADD COLUMN section VARCHAR(255) DEFAULT NULL");
     }
 
-    $stmt = $conn->prepare("INSERT INTO seller_products (seller_username, name, description, unit, category, section, qty, rate, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt = $conn->prepare("INSERT INTO seller_products (seller_username, name, description, unit, category, section, qty, rate, image_url, button_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     if ($stmt) {
-        $stmt->bind_param("ssssssids", $seller_username, $name, $description, $unit, $category, $section, $qty, $rate, $image_url);
+        $stmt->bind_param("sssssidsss", $seller_username, $name, $description, $unit, $category, $section, $qty, $rate, $image_url, $button_text);
         if ($stmt->execute()) {
             $newId = $stmt->insert_id;
             echo json_encode([
@@ -1322,7 +1362,8 @@ if ($action == 'get-header-theme') {
                     "section" => $section,
                     "qty" => $qty,
                     "rate" => $rate,
-                    "image_url" => $image_url
+                    "image_url" => $image_url,
+                    "button_text" => $button_text
                 ]
             ]);
             exit();
@@ -1331,6 +1372,11 @@ if ($action == 'get-header-theme') {
     echo json_encode(["success" => false, "message" => "Failed to add product"]);
     exit();
 } elseif ($action == 'get-seller-products') {
+    $colCheckBtnText = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'button_text'");
+    if (!$colCheckBtnText || $colCheckBtnText->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_products ADD COLUMN button_text VARCHAR(100) DEFAULT 'Buy Now'");
+    }
+
     $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
     if (empty($seller_username)) {
         echo json_encode(["success" => true, "products" => array()]);
@@ -1347,12 +1393,18 @@ if ($action == 'get-header-theme') {
             $row['rate'] = (float)$row['rate'];
             $row['section'] = isset($row['section']) ? $row['section'] : '';
             $row['image_url'] = isset($row['image_url']) ? $row['image_url'] : (isset($row['image']) ? $row['image'] : '');
+            $row['button_text'] = isset($row['button_text']) && !empty($row['button_text']) ? $row['button_text'] : 'Buy Now';
             $products[] = $row;
         }
     }
     echo json_encode(["success" => true, "products" => $products]);
     exit();
 } elseif ($action == 'update-seller-product') {
+    $colCheckBtnText = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'button_text'");
+    if (!$colCheckBtnText || $colCheckBtnText->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_products ADD COLUMN button_text VARCHAR(100) DEFAULT 'Buy Now'");
+    }
+
     $id = isset($input['id']) ? (int)$input['id'] : 0;
     $name = isset($input['name']) ? trim($input['name']) : '';
     $description = isset($input['description']) ? trim($input['description']) : '';
@@ -1363,15 +1415,16 @@ if ($action == 'get-header-theme') {
     if ($qty <= 0) $qty = 1;
     $rate = isset($input['rate']) ? (float)$input['rate'] : 0.0;
     $image_url = isset($input['image_url']) ? trim($input['image_url']) : (isset($input['image']) ? trim($input['image']) : '');
+    $button_text = isset($input['button_text']) && !empty(trim($input['button_text'])) ? trim($input['button_text']) : 'Buy Now';
 
     if ($id <= 0 || empty($name)) {
         echo json_encode(["success" => false, "message" => "Product ID and name required"]);
         exit();
     }
 
-    $stmt = $conn->prepare("UPDATE seller_products SET name = ?, description = ?, unit = ?, category = ?, section = ?, qty = ?, rate = ?, image_url = ? WHERE id = ?");
+    $stmt = $conn->prepare("UPDATE seller_products SET name = ?, description = ?, unit = ?, category = ?, section = ?, qty = ?, rate = ?, image_url = ?, button_text = ? WHERE id = ?");
     if ($stmt) {
-        $stmt->bind_param("sssssidsi", $name, $description, $unit, $category, $section, $qty, $rate, $image_url, $id);
+        $stmt->bind_param("sssssidssi", $name, $description, $unit, $category, $section, $qty, $rate, $image_url, $button_text, $id);
         if ($stmt->execute()) {
             echo json_encode(["success" => true, "message" => "Product updated successfully"]);
             exit();
@@ -1395,6 +1448,10 @@ if ($action == 'get-header-theme') {
     if (!$colCheckSecTextColor || $colCheckSecTextColor->num_rows == 0) {
         @$conn->query("ALTER TABLE seller_sections ADD COLUMN text_color VARCHAR(50) DEFAULT '#0F172A'");
     }
+    $colCheckSecCols = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'columns'");
+    if (!$colCheckSecCols || $colCheckSecCols->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN columns INT DEFAULT 2");
+    }
 
     $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
     if (empty($seller_username)) {
@@ -1403,12 +1460,13 @@ if ($action == 'get-header-theme') {
     }
 
     $escapedSeller = $conn->real_escape_string($seller_username);
-    $res = $conn->query("SELECT * FROM seller_sections WHERE seller_username = '$escapedSeller' ORDER BY id ASC");
+    $res = $conn->query("SELECT * FROM seller_sections WHERE seller_username = '$escapedSeller' OR LOWER(seller_username) = LOWER('$escapedSeller') OR seller_username LIKE '%$escapedSeller%' ORDER BY id ASC");
     $sections = array();
     if ($res && $res !== true) {
         while ($row = $res->fetch_assoc()) {
             $row['id'] = (int)$row['id'];
             $row['text_color'] = isset($row['text_color']) && !empty($row['text_color']) ? $row['text_color'] : '#0F172A';
+            $row['columns'] = isset($row['columns']) ? (int)$row['columns'] : 2;
             $sections[] = $row;
         }
     }
@@ -1419,12 +1477,18 @@ if ($action == 'get-header-theme') {
     if (!$colCheckSecTextColor || $colCheckSecTextColor->num_rows == 0) {
         @$conn->query("ALTER TABLE seller_sections ADD COLUMN text_color VARCHAR(50) DEFAULT '#0F172A'");
     }
+    $colCheckSecCols = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'columns'");
+    if (!$colCheckSecCols || $colCheckSecCols->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN columns INT DEFAULT 2");
+    }
 
     $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : (isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($_POST['seller_username']) ? trim($_POST['seller_username']) : ''));
     $name = isset($input['name']) ? trim($input['name']) : (isset($_GET['name']) ? trim($_GET['name']) : (isset($_POST['name']) ? trim($_POST['name']) : ''));
     $icon = isset($input['icon']) ? trim($input['icon']) : '🏷️';
     $bg_color = isset($input['bg_color']) ? trim($input['bg_color']) : '#FFFFFF';
     $text_color = isset($input['text_color']) ? trim($input['text_color']) : '#0F172A';
+    $columns = isset($input['columns']) ? (int)$input['columns'] : 2;
+    if ($columns <= 0 || $columns > 3) $columns = 2;
 
     if (empty($seller_username) || empty($name)) {
         echo json_encode(["success" => false, "message" => "Seller username and section name required"]);
@@ -1436,9 +1500,9 @@ if ($action == 'get-header-theme') {
     $chk = $conn->query("SELECT id FROM seller_sections WHERE seller_username = '$escapedSeller' AND name = '$escapedName' LIMIT 1");
     if ($chk && $row = $chk->fetch_assoc()) {
         $existingId = (int)$row['id'];
-        $stmtUp = $conn->prepare("UPDATE seller_sections SET icon = ?, bg_color = ?, text_color = ? WHERE id = ?");
+        $stmtUp = $conn->prepare("UPDATE seller_sections SET icon = ?, bg_color = ?, text_color = ?, columns = ? WHERE id = ?");
         if ($stmtUp) {
-            $stmtUp->bind_param("sssi", $icon, $bg_color, $text_color, $existingId);
+            $stmtUp->bind_param("sssii", $icon, $bg_color, $text_color, $columns, $existingId);
             $stmtUp->execute();
         }
         echo json_encode([
@@ -1450,15 +1514,16 @@ if ($action == 'get-header-theme') {
                 "name" => $name,
                 "icon" => $icon,
                 "bg_color" => $bg_color,
-                "text_color" => $text_color
+                "text_color" => $text_color,
+                "columns" => $columns
             ]
         ]);
         exit();
     }
 
-    $stmt = $conn->prepare("INSERT INTO seller_sections (seller_username, name, icon, bg_color, text_color) VALUES (?, ?, ?, ?, ?)");
+    $stmt = $conn->prepare("INSERT INTO seller_sections (seller_username, name, icon, bg_color, text_color, columns) VALUES (?, ?, ?, ?, ?, ?)");
     if ($stmt) {
-        $stmt->bind_param("sssss", $seller_username, $name, $icon, $bg_color, $text_color);
+        $stmt->bind_param("sssssi", $seller_username, $name, $icon, $bg_color, $text_color, $columns);
         if ($stmt->execute()) {
             $newId = $stmt->insert_id;
             echo json_encode([
@@ -1470,7 +1535,8 @@ if ($action == 'get-header-theme') {
                     "name" => $name,
                     "icon" => $icon,
                     "bg_color" => $bg_color,
-                    "text_color" => $text_color
+                    "text_color" => $text_color,
+                    "columns" => $columns
                 ]
             ]);
             exit();
@@ -1483,24 +1549,58 @@ if ($action == 'get-header-theme') {
     if (!$colCheckSecTextColor || $colCheckSecTextColor->num_rows == 0) {
         @$conn->query("ALTER TABLE seller_sections ADD COLUMN text_color VARCHAR(50) DEFAULT '#0F172A'");
     }
+    $colCheckSecCols = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'columns'");
+    if (!$colCheckSecCols || $colCheckSecCols->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN columns INT DEFAULT 2");
+    }
 
-    $id = isset($input['id']) ? (int)$input['id'] : 0;
-    $name = isset($input['name']) ? trim($input['name']) : '';
+    $id = isset($input['id']) ? (int)$input['id'] : (isset($_POST['id']) ? (int)$_POST['id'] : 0);
+    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : (isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($_POST['seller_username']) ? trim($_POST['seller_username']) : ''));
+    $name = isset($input['name']) ? trim($input['name']) : (isset($_POST['name']) ? trim($_POST['name']) : '');
     $icon = isset($input['icon']) ? trim($input['icon']) : '🏷️';
     $bg_color = isset($input['bg_color']) ? trim($input['bg_color']) : '#FFFFFF';
     $text_color = isset($input['text_color']) ? trim($input['text_color']) : '#0F172A';
+    $columns = isset($input['columns']) ? (int)$input['columns'] : 2;
+    if ($columns <= 0 || $columns > 3) $columns = 2;
 
-    if ($id <= 0 || empty($name)) {
-        echo json_encode(["success" => false, "message" => "Section ID and name required"]);
+    if (empty($name)) {
+        echo json_encode(["success" => false, "message" => "Section name required"]);
         exit();
     }
 
-    $stmt = $conn->prepare("UPDATE seller_sections SET name = ?, icon = ?, bg_color = ?, text_color = ? WHERE id = ?");
-    if ($stmt) {
-        $stmt->bind_param("ssssi", $name, $icon, $bg_color, $text_color, $id);
-        $stmt->execute();
+    $escapedSeller = $conn->real_escape_string($seller_username);
+    $escapedName = $conn->real_escape_string($name);
+
+    $updated = false;
+    if ($id > 0) {
+        $stmt = $conn->prepare("UPDATE seller_sections SET name = ?, icon = ?, bg_color = ?, text_color = ?, columns = ? WHERE id = ?");
+        if ($stmt) {
+            $stmt->bind_param("ssssii", $name, $icon, $bg_color, $text_color, $columns, $id);
+            if ($stmt->execute() && $stmt->affected_rows > 0) {
+                $updated = true;
+            }
+        }
     }
-    echo json_encode(["success" => true, "message" => "Section updated"]);
+
+    if (!$updated && !empty($seller_username)) {
+        $stmt = $conn->prepare("UPDATE seller_sections SET icon = ?, bg_color = ?, text_color = ?, columns = ? WHERE seller_username = ? AND name = ?");
+        if ($stmt) {
+            $stmt->bind_param("sssiss", $icon, $bg_color, $text_color, $columns, $seller_username, $name);
+            if ($stmt->execute() && $stmt->affected_rows > 0) {
+                $updated = true;
+            }
+        }
+    }
+
+    if (!$updated && !empty($seller_username)) {
+        $stmtIns = $conn->prepare("INSERT INTO seller_sections (seller_username, name, icon, bg_color, text_color, columns) VALUES (?, ?, ?, ?, ?, ?)");
+        if ($stmtIns) {
+            $stmtIns->bind_param("sssssi", $seller_username, $name, $icon, $bg_color, $text_color, $columns);
+            $stmtIns->execute();
+        }
+    }
+
+    echo json_encode(["success" => true, "message" => "Section updated", "columns" => $columns]);
     exit();
 } elseif ($action == 'delete-seller-section') {
     $id = isset($input['id']) ? (int)$input['id'] : (isset($_GET['id']) ? (int)$_GET['id'] : 0);
@@ -1521,7 +1621,7 @@ if ($action == 'get-header-theme') {
     }
 
     $escapedSeller = $conn->real_escape_string($seller_username);
-    $res = $conn->query("SELECT * FROM seller_units WHERE seller_username = '$escapedSeller' ORDER BY id ASC");
+    $res = $conn->query("SELECT * FROM seller_units WHERE seller_username = '$escapedSeller' OR LOWER(seller_username) = LOWER('$escapedSeller') OR seller_username LIKE '%$escapedSeller%' ORDER BY id ASC");
     $units = array();
     if ($res && $res !== true) {
         while ($row = $res->fetch_assoc()) {
@@ -1610,7 +1710,7 @@ if ($action == 'get-header-theme') {
     }
 
     $escapedSeller = $conn->real_escape_string($seller_username);
-    $res = $conn->query("SELECT * FROM seller_categories WHERE seller_username = '$escapedSeller' ORDER BY id ASC");
+    $res = $conn->query("SELECT * FROM seller_categories WHERE seller_username = '$escapedSeller' OR LOWER(seller_username) = LOWER('$escapedSeller') OR seller_username LIKE '%$escapedSeller%' ORDER BY id ASC");
     $categories = array();
     if ($res && $res !== true) {
         while ($row = $res->fetch_assoc()) {
