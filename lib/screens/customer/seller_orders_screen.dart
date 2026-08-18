@@ -1093,140 +1093,167 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                                                 overflow: TextOverflow.ellipsis,
                                               ),
                                               if (_sellerLocation.isNotEmpty) ...[
-                                                 const SizedBox(height: 2),
-                                                 Text(
-                                                   _sellerLocation,
-                                                   style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
-                                                   overflow: TextOverflow.ellipsis,
-                                                 ),
-                                               ] else if (widget.sellerMobile.isNotEmpty) ...[
-                                                 const SizedBox(height: 2),
-                                                 Text(
-                                                   '+91 ${widget.sellerMobile}',
-                                                   style: const TextStyle(color: Colors.white70, fontSize: 11),
-                                                   overflow: TextOverflow.ellipsis,
-                                                 ),
-                                               ],
-                                              const SizedBox(height: 4),
-                                              const FittedBox(
-                                                fit: BoxFit.scaleDown,
-                                                alignment: Alignment.centerLeft,
-                                                child: PulsingStoreBadge(),
-                                              ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  _sellerLocation,
+                                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ] else if (widget.sellerMobile.isNotEmpty) ...[
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  '+91 ${widget.sellerMobile}',
+                                                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ],
                                             ],
                                           ),
                                         ),
-                                         Row(
-                                           mainAxisSize: MainAxisSize.min,
-                                           children: [
-                                             IconButton(
-                                               visualDensity: VisualDensity.compact,
-                                               padding: const EdgeInsets.all(4),
-                                               constraints: const BoxConstraints(),
-                                               icon: const Icon(Icons.phone_in_talk_rounded, color: Color(0xFF34D399), size: 22),
-                                               tooltip: 'Call Seller 📞',
-                                               onPressed: _callSeller,
-                                             ),
-                                             const SizedBox(width: 4),
-                                             IconButton(
-                                               visualDensity: VisualDensity.compact,
-                                               padding: const EdgeInsets.all(4),
-                                               constraints: const BoxConstraints(),
-                                               icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 22),
-                                               tooltip: 'Refresh Data 🔄',
-                                               onPressed: _loadData,
-                                             ),
-                                             const SizedBox(width: 4),
-                                             IconButton(
-                                               visualDensity: VisualDensity.compact,
-                                               padding: const EdgeInsets.all(4),
-                                               constraints: const BoxConstraints(),
-                                               icon: const Icon(Icons.exit_to_app_rounded, color: Colors.white, size: 22),
-                                               tooltip: 'Exit to Seller List 🚪',
-                                               onPressed: _exitToSellerList,
-                                             ),
-                                             const SizedBox(width: 2),
-                                             PopupMenuButton<String>(
-                                               padding: const EdgeInsets.all(4),
-                                               constraints: const BoxConstraints(),
-                                               icon: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 22),
-                                               color: Colors.white,
-                                               surfaceTintColor: Colors.white,
-                                               elevation: 4,
-                                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                               onSelected: (val) async {
-                                                 if (val == 'switch_seller') {
-                                                   _exitToSellerList();
-                                                 } else if (val == 'delete_seller') {
-                                                   _disconnectAndDeleteSeller();
-                                                 } else if (val == 'call_seller') {
-                                                   _callSeller();
-                                                 } else if (val == 'logout') {
-                                                   _logout();
-                                                 } else if (val == 'refresh') {
-                                                   _loadData();
-                                                 }
-                                               },
-                                               itemBuilder: (ctx) => [
-                                                 const PopupMenuItem(
-                                                   value: 'switch_seller',
-                                                   child: Row(
-                                                     children: [
-                                                       Icon(Icons.swap_horiz_rounded, color: Color(0xFF0F172A), size: 20),
-                                                       SizedBox(width: 10),
-                                                       Text('Switch / Add Seller', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
-                                                     ],
-                                                   ),
-                                                 ),
-                                                 const PopupMenuItem(
-                                                   value: 'delete_seller',
-                                                   child: Row(
-                                                     children: [
-                                                       Icon(Icons.delete_outline_rounded, color: Color(0xFF0F172A), size: 20),
-                                                       SizedBox(width: 10),
-                                                       Text('Remove Seller', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
-                                                     ],
-                                                   ),
-                                                 ),
-                                                 const PopupMenuItem(
-                                                   value: 'call_seller',
-                                                   child: Row(
-                                                     children: [
-                                                       Icon(Icons.phone_rounded, color: Color(0xFF0F172A), size: 20),
-                                                       SizedBox(width: 10),
-                                                       Text('Call Seller', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
-                                                     ],
-                                                   ),
-                                                 ),
-                                                 const PopupMenuItem(
-                                                   value: 'refresh',
-                                                   child: Row(
-                                                     children: [
-                                                       Icon(Icons.refresh_rounded, color: Color(0xFF0F172A), size: 20),
-                                                       SizedBox(width: 10),
-                                                       Text('Refresh Data', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
-                                                     ],
-                                                   ),
-                                                 ),
-                                                 const PopupMenuItem(
-                                                   value: 'logout',
-                                                   child: Row(
-                                                     children: [
-                                                       Icon(Icons.logout_rounded, color: Color(0xFF0F172A), size: 20),
-                                                       SizedBox(width: 10),
-                                                       Text('Logout App', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
-                                                     ],
-                                                   ),
-                                                 ),
-                                               ],
-                                             ),
-                                           ],
-                                         ),
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            IconButton(
+                                              visualDensity: VisualDensity.compact,
+                                              padding: const EdgeInsets.all(4),
+                                              constraints: const BoxConstraints(),
+                                              icon: const Icon(Icons.phone_in_talk_rounded, color: Color(0xFF34D399), size: 22),
+                                              tooltip: 'Call Seller 📞',
+                                              onPressed: _callSeller,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            IconButton(
+                                              visualDensity: VisualDensity.compact,
+                                              padding: const EdgeInsets.all(4),
+                                              constraints: const BoxConstraints(),
+                                              icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 22),
+                                              tooltip: 'Refresh Data 🔄',
+                                              onPressed: _loadData,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            IconButton(
+                                              visualDensity: VisualDensity.compact,
+                                              padding: const EdgeInsets.all(4),
+                                              constraints: const BoxConstraints(),
+                                              icon: const Icon(Icons.exit_to_app_rounded, color: Colors.white, size: 22),
+                                              tooltip: 'Exit to Seller List 🚪',
+                                              onPressed: _exitToSellerList,
+                                            ),
+                                            const SizedBox(width: 2),
+                                            PopupMenuButton<String>(
+                                              padding: const EdgeInsets.all(4),
+                                              constraints: const BoxConstraints(),
+                                              icon: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 22),
+                                              color: Colors.white,
+                                              surfaceTintColor: Colors.white,
+                                              elevation: 4,
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                              onSelected: (val) async {
+                                                if (val == 'switch_seller') {
+                                                  _exitToSellerList();
+                                                } else if (val == 'delete_seller') {
+                                                  _disconnectAndDeleteSeller();
+                                                } else if (val == 'call_seller') {
+                                                  _callSeller();
+                                                } else if (val == 'logout') {
+                                                  _logout();
+                                                } else if (val == 'refresh') {
+                                                  _loadData();
+                                                }
+                                              },
+                                              itemBuilder: (ctx) => [
+                                                const PopupMenuItem(
+                                                  value: 'switch_seller',
+                                                  child: Row(
+                                                    children: [
+                                                      Icon(Icons.swap_horiz_rounded, color: Color(0xFF0F172A), size: 20),
+                                                      SizedBox(width: 10),
+                                                      Text('Switch / Add Seller', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const PopupMenuItem(
+                                                  value: 'delete_seller',
+                                                  child: Row(
+                                                    children: [
+                                                      Icon(Icons.delete_outline_rounded, color: Color(0xFF0F172A), size: 20),
+                                                      SizedBox(width: 10),
+                                                      Text('Remove Seller', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const PopupMenuItem(
+                                                  value: 'call_seller',
+                                                  child: Row(
+                                                    children: [
+                                                      Icon(Icons.phone_rounded, color: Color(0xFF0F172A), size: 20),
+                                                      SizedBox(width: 10),
+                                                      Text('Call Seller', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const PopupMenuItem(
+                                                  value: 'refresh',
+                                                  child: Row(
+                                                    children: [
+                                                      Icon(Icons.refresh_rounded, color: Color(0xFF0F172A), size: 20),
+                                                      SizedBox(width: 10),
+                                                      Text('Refresh Data', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const PopupMenuItem(
+                                                  value: 'logout',
+                                                  child: Row(
+                                                    children: [
+                                                      Icon(Icons.logout_rounded, color: Color(0xFF0F172A), size: 20),
+                                                      SizedBox(width: 10),
+                                                      Text('Logout App', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
                                       ],
                                     ),
                                   ),
 
-                                  const SizedBox(height: 95),
+                                  // Search Bar placed in Header
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(14, 2, 14, 12),
+                                    child: TextField(
+                                      onChanged: (val) {
+                                        setState(() {
+                                          _searchQuery = val.trim();
+                                        });
+                                      },
+                                      style: const TextStyle(color: Color(0xFF0F172A), fontSize: 13.5),
+                                      decoration: InputDecoration(
+                                        hintText: 'Search products in ${widget.sellerName}... 🔍',
+                                        hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                                        prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF8B5CF6)),
+                                        isDense: true,
+                                        contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                                        filled: true,
+                                        fillColor: Colors.white,
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                          borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 1.8),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
                                 ],
                               ),
                             ),
@@ -1248,38 +1275,6 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                               _buildSliderSection(),
                               const SizedBox(height: 8),
                             ],
-                              // Search Bar for Store Products
-                             Padding(
-                               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
-                               child: TextField(
-                                 onChanged: (val) {
-                                   setState(() {
-                                     _searchQuery = val.trim();
-                                   });
-                                 },
-                                 decoration: InputDecoration(
-                                   hintText: 'Search products in ${widget.sellerName}... 🔍',
-                                   hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-                                   prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF8B5CF6)),
-                                   isDense: true,
-                                   contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                                   filled: true,
-                                   fillColor: Colors.white,
-                                   border: OutlineInputBorder(
-                                     borderRadius: BorderRadius.circular(16),
-                                     borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                                   ),
-                                   enabledBorder: OutlineInputBorder(
-                                     borderRadius: BorderRadius.circular(16),
-                                     borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                                   ),
-                                   focusedBorder: OutlineInputBorder(
-                                     borderRadius: BorderRadius.circular(16),
-                                     borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 1.8),
-                                   ),
-                                 ),
-                               ),
-                             ),
 
                              // Circular Category Avatars Carousel
                              _buildCircularCategorySection(),
