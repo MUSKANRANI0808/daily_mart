@@ -3619,192 +3619,91 @@ class AuthService {
 
   static Future<List<Map<String, dynamic>>> _refreshSellerCustomerOrdersInBackground(String cleanSeller) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      Map<String, dynamic> savedOrderStatuses = {};
-      Map<String, dynamic> savedDeliveryStatuses = {};
-      Map<String, dynamic> savedCancelReasons = {};
-      Map<String, dynamic> savedCancelTimes = {};
-      Map<String, dynamic> savedPayments = {};
-      try {
-        final sStr = prefs.getString('saved_order_statuses');
-        if (sStr != null && sStr.isNotEmpty) savedOrderStatuses = Map<String, dynamic>.from(jsonDecode(sStr));
-        final dStr = prefs.getString('saved_delivery_statuses');
-        if (dStr != null && dStr.isNotEmpty) savedDeliveryStatuses = Map<String, dynamic>.from(jsonDecode(dStr));
-        final rStr = prefs.getString('saved_cancel_reasons');
-        if (rStr != null && rStr.isNotEmpty) savedCancelReasons = Map<String, dynamic>.from(jsonDecode(rStr));
-        final tStr = prefs.getString('saved_cancel_times');
-        if (tStr != null && tStr.isNotEmpty) savedCancelTimes = Map<String, dynamic>.from(jsonDecode(tStr));
-        final pStr = prefs.getString('saved_order_payments');
-        if (pStr != null && pStr.isNotEmpty) savedPayments = Map<String, dynamic>.from(jsonDecode(pStr));
-      } catch (_) {}
+      final res = await VpsApiService.get('get-seller-customer-orders&seller_username=$cleanSeller');
+      if (res != null && res['success'] == true && res['orders'] is List) {
+        final List rawOrders = res['orders'];
+        final List<Map<String, dynamic>> allSellerOrders = [];
+        final Set<String> processedIds = {};
 
-      final convs = await getSellerConversations(cleanSeller);
-      final List<Map<String, dynamic>> allSellerOrders = [];
-      final Set<String> processedIds = {};
+        for (var m in rawOrders) {
+          if (m is! Map) continue;
+          final msgMap = Map<String, dynamic>.from(m);
+          final msgId = (msgMap['id'] ?? '').toString();
+          if (msgId.isNotEmpty && processedIds.contains(msgId)) continue;
+          if (msgId.isNotEmpty) processedIds.add(msgId);
 
-      for (var conv in convs) {
-        final custMobile = (conv['customer_mobile'] ?? conv['mobile'] ?? '').toString().trim();
-        final custName = (conv['customer_name'] ?? conv['display_name'] ?? conv['name'] ?? 'Customer').toString().trim();
+          final custMobile = (msgMap['customer_mobile'] ?? '').toString().trim();
+          final custName = (msgMap['customer_name'] ?? 'Customer').toString().trim();
 
-        if (custMobile.isEmpty) continue;
-
-        final msgs = await getMessages(sellerUsername: cleanSeller, customerMobile: custMobile);
-
-        for (var m in msgs) {
-          final msgId = (m['id'] ?? m['order_id'] ?? '').toString();
-          final isOrderMsg = m['items_json'] != null ||
-              m['order_id'] != null ||
-              m['_calculated_order_id'] != null ||
-              (m['message'] ?? '').toString().toLowerCase().contains('order');
-
-          String orderStatus = (m['order_status'] ?? m['status'] ?? '').toString();
-          if (savedOrderStatuses.containsKey(msgId)) {
-            orderStatus = savedOrderStatuses[msgId].toString();
-          }
-
-          String deliveryStatus = (m['delivery_status'] ?? '').toString();
-          if (savedDeliveryStatuses.containsKey(msgId)) {
-            final val = savedDeliveryStatuses[msgId];
-            if (val is Map) {
-              deliveryStatus = (val['delivery_status'] ?? deliveryStatus).toString();
-            } else {
-              deliveryStatus = val.toString();
-            }
-          }
-
-          String cancelReason = (m['cancel_reason'] ?? m['cancellation_reason'] ?? '').toString();
-          if (savedCancelReasons.containsKey(msgId)) {
-            final rVal = savedCancelReasons[msgId]?.toString() ?? '';
-            if (rVal.isNotEmpty) cancelReason = rVal;
-          }
-
-          String cancelTime = (m['cancelled_at'] ?? m['cancel_time'] ?? m['cancelled_time'] ?? '').toString();
-          if (savedCancelTimes.containsKey(msgId)) {
-            final tVal = savedCancelTimes[msgId]?.toString() ?? '';
-            if (tVal.isNotEmpty) cancelTime = tVal;
-          }
-
-          String paymentUtr = (m['payment_utr'] ?? m['utr'] ?? m['utr_number'] ?? m['txn_id'] ?? m['transaction_id'] ?? m['razorpay_payment_id'] ?? m['payment_id'] ?? '').toString().trim();
-          String paymentStatus = (m['payment_status'] ?? '').toString().trim().toLowerCase();
-          String paymentMode = (m['payment_mode'] ?? m['payment_method'] ?? m['payment_type'] ?? '').toString().trim();
-
-          if (savedPayments.containsKey(msgId)) {
-            final pData = savedPayments[msgId];
-            if (pData is Map) {
-              if (pData['payment_utr'] != null && pData['payment_utr'].toString().isNotEmpty) {
-                paymentUtr = pData['payment_utr'].toString().trim();
+          List<Map<String, dynamic>> items = [];
+          if (msgMap['items_json'] != null) {
+            try {
+              final decoded = jsonDecode(msgMap['items_json'].toString());
+              if (decoded is List) {
+                items = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
               }
-              if (pData['payment_status'] != null) {
-                paymentStatus = pData['payment_status'].toString().trim().toLowerCase();
-              }
-              if (pData['payment_mode'] != null) {
-                paymentMode = pData['payment_mode'].toString().trim();
-              }
+            } catch (_) {}
+          }
+
+          double totalAmount = double.tryParse((msgMap['order_amount'] ?? '').toString()) ?? 0.0;
+          if (totalAmount <= 0 && items.isNotEmpty) {
+            for (var it in items) {
+              final rate = (it['rate'] as num?)?.toDouble() ?? (it['amount'] as num?)?.toDouble() ?? 0.0;
+              final qty = (it['qty'] as num?)?.toInt() ?? 1;
+              totalAmount += (rate * qty);
             }
           }
 
-          final msgStr = (m['message'] ?? '').toString();
-          if (paymentUtr.isEmpty) {
-            final utrMatch = RegExp(r'(?:UTR|Txn|Transaction ID|Payment ID|Razorpay ID|Ref):\s*([A-Za-z0-9_]+)', caseSensitive: false).firstMatch(msgStr);
-            if (utrMatch != null) {
-              paymentUtr = utrMatch.group(1)!.trim();
-            } else {
-              final payMatch = RegExp(r'\b(pay_[A-Za-z0-9]+)\b').firstMatch(msgStr);
-              if (payMatch != null) {
-                paymentUtr = payMatch.group(1)!.trim();
-              }
-            }
-          }
+          final orderStatus = (msgMap['order_status'] ?? 'Pending').toString();
+          final deliveryStatus = (msgMap['delivery_status'] ?? 'Pending').toString();
+          final paymentStatus = (msgMap['payment_status'] ?? 'unpaid').toString().toLowerCase();
+          final paymentUtr = (msgMap['payment_utr'] ?? '').toString();
+          final paidAmount = double.tryParse((msgMap['paid_amount'] ?? '').toString()) ?? (paymentStatus == 'paid' ? totalAmount : 0.0);
+          final paidAt = (msgMap['paid_at'] ?? '').toString();
+          final dateStr = (msgMap['created_at'] ?? '').toString();
+          final orderIdStr = (msgMap['order_id'] ?? (msgId.isNotEmpty ? '#DM-$msgId' : '#DM-1001')).toString();
 
-          if (paymentMode.isEmpty) {
-            final lowerMsg = msgStr.toLowerCase();
-            if (lowerMsg.contains('online') || lowerMsg.contains('upi') || lowerMsg.contains('razorpay') || lowerMsg.contains('paid online')) {
-              paymentMode = 'Online';
-            }
-          }
+          final isDelivered = deliveryStatus.toLowerCase() == 'delivered' || orderStatus.toLowerCase() == 'delivered';
+          final displayStatus = isDelivered ? 'DELIVERED' : orderStatus;
 
-          final bool isDelivered = deliveryStatus.toLowerCase() == 'delivered' ||
-              orderStatus.toLowerCase() == 'delivered';
+          allSellerOrders.add({
+            'id': msgId,
+            'order_id': orderIdStr,
+            'order_number': orderIdStr,
+            'seller_username': cleanSeller,
+            'customer_mobile': custMobile,
+            'customer_name': custName,
+            'items': items,
+            'total_amount': totalAmount,
+            'order_amount': totalAmount,
+            'total_count': items.length,
+            'order_status': displayStatus,
+            'status': displayStatus,
+            'delivery_status': deliveryStatus,
+            'payment_status': paymentStatus,
+            'payment_utr': paymentUtr,
+            'paid_amount': paidAmount,
+            'paid_at': paidAt,
+            'created_at': dateStr,
+            'date': dateStr,
+            'delivered_at': (msgMap['delivered_at'] ?? '').toString(),
+            'picked_up_at': (msgMap['picked_up_at'] ?? '').toString(),
+            'delivered_by': (msgMap['delivered_by'] ?? '').toString(),
+            'cancelled_at': (msgMap['cancelled_at'] ?? '').toString(),
+            'cancel_reason': (msgMap['cancel_reason'] ?? '').toString(),
+            'raw_msg': msgMap,
+          });
+        }
 
-          final bool isDeleted = orderStatus.toLowerCase() == 'deleted' ||
-              m['is_deleted'] == true ||
-              m['is_deleted'] == 1 ||
-              m['is_deleted'] == '1';
-
-          if (isOrderMsg && !isDeleted) {
-            if (msgId.isNotEmpty && processedIds.contains(msgId)) continue;
-            if (msgId.isNotEmpty) processedIds.add(msgId);
-
-            List<Map<String, dynamic>> items = [];
-            if (m['items_json'] != null) {
-              try {
-                final decoded = jsonDecode(m['items_json'].toString());
-                if (decoded is List) {
-                  items = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
-                }
-              } catch (_) {}
-            }
-
-            double totalAmount = double.tryParse((m['order_amount'] ?? '').toString()) ?? 0.0;
-            if (totalAmount <= 0 && items.isNotEmpty) {
-              for (var it in items) {
-                final rate = (it['rate'] as num?)?.toDouble() ?? (it['amount'] as num?)?.toDouble() ?? 0.0;
-                final qty = (it['qty'] as num?)?.toInt() ?? 1;
-                totalAmount += (rate * qty);
-              }
-            }
-
-            final orderIdStr = (m['order_id'] ?? (msgId.isNotEmpty ? '#DM-$msgId' : '#DM-1001')).toString();
-            final dateStr = (m['created_at'] ?? m['date'] ?? '').toString();
-            final displayStatus = isDelivered ? 'DELIVERED' : (orderStatus.isNotEmpty ? orderStatus : 'Pending');
-
-            allSellerOrders.add({
-              'order_id': orderIdStr,
-              'id': msgId,
-              'seller_username': cleanSeller,
-              'seller_name': cleanSeller,
-              'customer_mobile': custMobile,
-              'customer_name': custName,
-              'order_status': displayStatus,
-              'delivery_status': deliveryStatus.isNotEmpty ? deliveryStatus : (isDelivered ? 'Delivered' : 'Pending'),
-              'status': displayStatus,
-              'cancel_reason': cancelReason.isNotEmpty ? cancelReason : (displayStatus == 'CANCELLED' ? 'Cancelled by seller' : ''),
-              'cancelled_at': cancelTime.isNotEmpty ? cancelTime : (displayStatus == 'CANCELLED' || displayStatus == 'Cancelled' ? dateStr : ''),
-              'picked_up_at': m['picked_up_at'] ?? m['pickup_time'] ?? '',
-              'delivered_at': m['delivered_at'] ?? m['delivered_time'] ?? '',
-              'date': dateStr,
-              'created_at': dateStr,
-              'items': items,
-              'items_json': m['items_json'],
-              'total_amount': totalAmount,
-              'total_count': items.length,
-              'payment_utr': paymentUtr,
-              'utr': paymentUtr,
-              'payment_status': paymentStatus,
-              'payment_mode': paymentMode,
-              'message': msgStr,
-            });
-          }
+        if (allSellerOrders.isNotEmpty) {
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            final key = 'cache_seller_cust_orders_${cleanSeller.toLowerCase()}';
+            await prefs.setString(key, jsonEncode(allSellerOrders));
+          } catch (_) {}
+          return allSellerOrders;
         }
       }
-
-      // Sort by newest order first
-      allSellerOrders.sort((a, b) {
-        final idA = int.tryParse(a['id']?.toString() ?? '0') ?? 0;
-        final idB = int.tryParse(b['id']?.toString() ?? '0') ?? 0;
-        if (idA != 0 && idB != 0) return idB.compareTo(idA);
-        return (b['created_at']?.toString() ?? '').compareTo(a['created_at']?.toString() ?? '');
-      });
-
-      if (allSellerOrders.isNotEmpty) {
-        try {
-          final prefs = await SharedPreferences.getInstance();
-          final key = 'cache_seller_cust_orders_${cleanSeller.toLowerCase()}';
-          await prefs.setString(key, jsonEncode(allSellerOrders));
-        } catch (_) {}
-      }
-
-      return allSellerOrders;
     } catch (_) {}
 
     return [];

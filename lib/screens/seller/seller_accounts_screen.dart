@@ -183,21 +183,27 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
     final str = raw.toString().trim();
     if (str.isEmpty) return null;
 
+    // 1. Try standard ISO parse ("2026-08-15 10:23:14" -> "2026-08-15T10:23:14")
     try {
-      return DateTime.parse(str);
+      final isoStr = str.replaceAll(' ', 'T');
+      final dt = DateTime.tryParse(isoStr) ?? DateTime.tryParse(str);
+      if (dt != null) return dt;
     } catch (_) {}
 
+    // 2. YYYY-MM-DD
     try {
-      final clean = str.replaceAll(',', ' ');
-      final ymdMatch = RegExp(r'(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})').firstMatch(clean);
+      final ymdMatch = RegExp(r'(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})').firstMatch(str);
       if (ymdMatch != null) {
         final year = int.parse(ymdMatch.group(1)!);
         final month = int.parse(ymdMatch.group(2)!);
         final day = int.parse(ymdMatch.group(3)!);
         return DateTime(year, month, day);
       }
+    } catch (_) {}
 
-      final dmyMatch = RegExp(r'(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})').firstMatch(clean);
+    // 3. DD/MM/YYYY
+    try {
+      final dmyMatch = RegExp(r'(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})').firstMatch(str);
       if (dmyMatch != null) {
         final day = int.parse(dmyMatch.group(1)!);
         final month = int.parse(dmyMatch.group(2)!);
@@ -236,10 +242,10 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
       return datesToCheck.any((d) =>
           (d.year == yesterdayStart.year && d.month == yesterdayStart.month && d.day == yesterdayStart.day) ||
           (d.isAfter(yesterdayStart.subtract(const Duration(seconds: 1))) && d.isBefore(yesterdayEnd.add(const Duration(seconds: 1)))));
-    } else if (filter == 'ThisWeek') {
+    } else if (filter == 'ThisWeek' || filter == 'Week') {
       return datesToCheck.any((d) =>
           d.isAfter(weekStart.subtract(const Duration(seconds: 1))) && d.isBefore(todayEnd.add(const Duration(seconds: 1))));
-    } else if (filter == 'ThisMonth') {
+    } else if (filter == 'ThisMonth' || filter == 'Month' || filter == '30 Days' || filter.contains('30')) {
       return datesToCheck.any((d) =>
           d.isAfter(monthStart.subtract(const Duration(seconds: 1))) && d.isBefore(todayEnd.add(const Duration(seconds: 1))));
     } else if (filter == 'Custom' && _customStartDate != null && _customEndDate != null) {
