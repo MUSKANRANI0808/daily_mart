@@ -4248,113 +4248,7 @@ class AuthService {
       }
     } catch (_) {}
 
-    // Database products for Krishna / Ankul / Default
-    return [
-      {
-        'id': 101,
-        'seller_username': cleanSeller,
-        'name': 'Fortune Kachi Ghani Mustard Oil',
-        'description': 'Pure Mustard Cooking Oil',
-        'unit': '1 Ltr',
-        'category': 'Oil & Spices',
-        'section': 'Daily Staples 🌾',
-        'qty': 30,
-        'rate': 142.0,
-        'image_url': '🍾',
-        'button_text': 'Buy Now',
-      },
-      {
-        'id': 102,
-        'seller_username': cleanSeller,
-        'name': 'Aashirvaad Shudh Chakki Atta',
-        'description': '100% Whole Wheat Flour Atta',
-        'unit': '5 Kg',
-        'category': 'Grocery',
-        'section': 'Daily Staples 🌾',
-        'qty': 50,
-        'rate': 245.0,
-        'image_url': '🌾',
-        'button_text': 'Buy Now',
-      },
-      {
-        'id': 103,
-        'seller_username': cleanSeller,
-        'name': 'Amul Taaza Toned Milk Pouch',
-        'description': 'Pasteurised Toned Milk',
-        'unit': '500 Ml',
-        'category': 'Dairy',
-        'section': 'Fresh Dairy & Eggs 🥛',
-        'qty': 60,
-        'rate': 27.0,
-        'image_url': '🥛',
-        'button_text': 'Buy Now',
-      },
-      {
-        'id': 104,
-        'seller_username': cleanSeller,
-        'name': 'Tata Salt Vacuum Evaporated',
-        'description': 'Desh ka Namak Tata Salt',
-        'unit': '1 Kg',
-        'category': 'Grocery',
-        'section': 'Daily Staples 🌾',
-        'qty': 100,
-        'rate': 28.0,
-        'image_url': '🧂',
-        'button_text': 'Buy Now',
-      },
-      {
-        'id': 105,
-        'seller_username': cleanSeller,
-        'name': 'Fresh Hybrid Tomatoes',
-        'description': 'Farm Fresh Red Tomatoes',
-        'unit': '1 Kg',
-        'category': 'Grocery',
-        'section': 'Farm Fresh Vegetables 🥦',
-        'qty': 40,
-        'rate': 35.0,
-        'image_url': '🍅',
-        'button_text': 'Buy Now',
-      },
-      {
-        'id': 106,
-        'seller_username': cleanSeller,
-        'name': 'Britannia Good Day Biscuits',
-        'description': 'Butter Cashew Cookies',
-        'unit': '200 Gm',
-        'category': 'Snacks',
-        'section': 'Snacks & Crisps 🍿',
-        'qty': 45,
-        'rate': 40.0,
-        'image_url': '🍪',
-        'button_text': 'Buy Now',
-      },
-      {
-        'id': 107,
-        'seller_username': cleanSeller,
-        'name': 'Fresh Shimla Red Apples',
-        'description': 'Crispy Sweet Red Apples',
-        'unit': '1 Kg',
-        'category': 'More',
-        'section': 'Fresh Fruits & Juices 🍎',
-        'qty': 20,
-        'rate': 160.0,
-        'image_url': '🍎',
-        'button_text': 'Buy Now',
-      },
-      {
-        'id': 108,
-        'seller_username': cleanSeller,
-        'name': 'Amul Pasteurised Salted Butter',
-        'description': 'Delicious Creamy Amul Butter',
-        'unit': '500 Gm',
-        'category': 'Dairy',
-        'section': 'Fresh Dairy & Eggs 🥛',
-        'qty': 25,
-        'rate': 275.0,
-        'image_url': '🧈',
-        'button_text': 'Buy Now',
-      },
-    ];
+    return [];
   }
 
   /// Add a Product for a Seller (VPS API + Local Cache)
@@ -4711,27 +4605,7 @@ class AuthService {
       }
     } catch (_) {}
 
-    // 3. Fallback matching exact phpMyAdmin DB categories for Krishna / Ankul / Default
-    if (cleanSeller.toLowerCase() == 'krishna' || cleanSeller == '8128859990') {
-      return [
-        {'id': 3, 'seller_username': 'Krishna', 'name': 'Grocery', 'color': '#F59E0B', 'image_url': '🌾'},
-        {'id': 4, 'seller_username': 'Krishna', 'name': 'Oil & Spices', 'color': '#F87316', 'image_url': '🍾'},
-        {'id': 5, 'seller_username': 'Krishna', 'name': 'Dairy', 'color': '#06B6D4', 'image_url': '🥛'},
-        {'id': 6, 'seller_username': 'Krishna', 'name': 'Snacks', 'color': '#EC4899', 'image_url': '🍿'},
-        {'id': 7, 'seller_username': 'Krishna', 'name': 'Home Care', 'color': '#06B6D4', 'image_url': '🧹'},
-        {'id': 8, 'seller_username': 'Krishna', 'name': 'Dry Fruits', 'color': '#8B5CF6', 'image_url': '🥜'},
-        {'id': 9, 'seller_username': 'Krishna', 'name': 'Personal Care', 'color': '#EC4899', 'image_url': '🧴'},
-        {'id': 10, 'seller_username': 'Krishna', 'name': 'More', 'color': '#F59E0B', 'image_url': '📦'},
-      ];
-    }
-
-    return [
-      {'id': 1, 'name': 'Grocery & Staples', 'color': '#8B5CF6', 'image_url': '🌾'},
-      {'id': 2, 'name': 'Fresh Vegetables', 'color': '#10B981', 'image_url': '🥦'},
-      {'id': 3, 'name': 'Fresh Fruits', 'color': '#F59E0B', 'image_url': '🍎'},
-      {'id': 4, 'name': 'Dairy & Eggs', 'color': '#06B6D4', 'image_url': '🥛'},
-      {'id': 5, 'name': 'Snacks & Munchies', 'color': '#EC4899', 'image_url': '🍿'},
-    ];
+    return [];
   }
 
   /// Add Custom Category for Seller

@@ -7,8 +7,8 @@ class VpsApiService {
   static String? authToken;
 
   static List<String> get candidateBaseUrls => [
-        VpsConfig.apiBaseUrl,
         'http://89.116.52.173/api.php',
+        VpsConfig.apiBaseUrl,
         'http://200.141.4.137/api.php',
         'http://localhost/api.php',
         'http://127.0.0.1/api.php',
