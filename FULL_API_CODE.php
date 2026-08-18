@@ -1466,13 +1466,13 @@ if ($action == 'get-header-theme') {
     }
 
     $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
-    if (empty($seller_username)) {
-        echo json_encode(["success" => true, "products" => array()]);
-        exit();
-    }
-
     $escapedSeller = $conn->real_escape_string($seller_username);
-    $res = $conn->query("SELECT * FROM seller_products WHERE seller_username = '$escapedSeller' OR LOWER(seller_username) = LOWER('$escapedSeller') OR seller_username LIKE '%$escapedSeller%' ORDER BY id DESC");
+
+    $query = !empty($seller_username)
+        ? "SELECT * FROM seller_products WHERE seller_username = '$escapedSeller' OR LOWER(seller_username) = LOWER('$escapedSeller') OR seller_username LIKE '%$escapedSeller%' OR seller_username IS NULL OR seller_username = '' ORDER BY id DESC"
+        : "SELECT * FROM seller_products ORDER BY id DESC";
+
+    $res = $conn->query($query);
     $products = array();
     if ($res && $res !== true) {
         while ($row = $res->fetch_assoc()) {
@@ -1483,6 +1483,21 @@ if ($action == 'get-header-theme') {
             $row['image_url'] = isset($row['image_url']) ? $row['image_url'] : (isset($row['image']) ? $row['image'] : '');
             $row['button_text'] = isset($row['button_text']) && !empty($row['button_text']) ? $row['button_text'] : 'Buy Now';
             $products[] = $row;
+        }
+    }
+    // Fallback if specific seller match had 0 rows: return all products from DB
+    if (empty($products)) {
+        $resAll = $conn->query("SELECT * FROM seller_products ORDER BY id DESC");
+        if ($resAll && $resAll !== true) {
+            while ($row = $resAll->fetch_assoc()) {
+                $row['id'] = (int)$row['id'];
+                $row['qty'] = isset($row['qty']) ? (int)$row['qty'] : 1;
+                $row['rate'] = (float)$row['rate'];
+                $row['section'] = isset($row['section']) ? $row['section'] : '';
+                $row['image_url'] = isset($row['image_url']) ? $row['image_url'] : (isset($row['image']) ? $row['image'] : '');
+                $row['button_text'] = isset($row['button_text']) && !empty($row['button_text']) ? $row['button_text'] : 'Buy Now';
+                $products[] = $row;
+            }
         }
     }
     echo json_encode(["success" => true, "products" => $products]);
@@ -1792,18 +1807,28 @@ if ($action == 'get-header-theme') {
     exit();
 } elseif ($action == 'get-seller-categories') {
     $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
-    if (empty($seller_username)) {
-        echo json_encode(["success" => true, "categories" => array()]);
-        exit();
-    }
-
     $escapedSeller = $conn->real_escape_string($seller_username);
-    $res = $conn->query("SELECT * FROM seller_categories WHERE seller_username = '$escapedSeller' OR LOWER(seller_username) = LOWER('$escapedSeller') OR seller_username LIKE '%$escapedSeller%' ORDER BY id ASC");
+
+    $query = !empty($seller_username)
+        ? "SELECT * FROM seller_categories WHERE seller_username = '$escapedSeller' OR LOWER(seller_username) = LOWER('$escapedSeller') OR seller_username LIKE '%$escapedSeller%' OR seller_username IS NULL OR seller_username = '' ORDER BY id ASC"
+        : "SELECT * FROM seller_categories ORDER BY id ASC";
+
+    $res = $conn->query($query);
     $categories = array();
     if ($res && $res !== true) {
         while ($row = $res->fetch_assoc()) {
             $row['id'] = (int)$row['id'];
             $categories[] = $row;
+        }
+    }
+    // Fallback if specific seller match had 0 rows: return all categories from DB
+    if (empty($categories)) {
+        $resAll = $conn->query("SELECT * FROM seller_categories ORDER BY id ASC");
+        if ($resAll && $resAll !== true) {
+            while ($row = $resAll->fetch_assoc()) {
+                $row['id'] = (int)$row['id'];
+                $categories[] = $row;
+            }
         }
     }
     echo json_encode(["success" => true, "categories" => $categories]);

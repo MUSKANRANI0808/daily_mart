@@ -4238,113 +4238,16 @@ class AuthService {
       return products;
     }
 
-    // 5. Default Catalog Fallback so Seller Store is NEVER empty!
-    return [
-      {
-        'id': 101,
-        'seller_username': cleanSeller,
-        'name': 'Aashirvaad Shudh Chakki Atta',
-        'description': '100% Whole Wheat Flour Atta',
-        'unit': '5 Kg',
-        'category': 'Grocery & Staples',
-        'section': 'Daily Staples 🌾',
-        'qty': 50,
-        'rate': 245.0,
-        'image_url': '🌾',
-        'button_text': 'Buy Now',
-      },
-      {
-        'id': 102,
-        'seller_username': cleanSeller,
-        'name': 'Fortune Kachi Ghani Mustard Oil',
-        'description': 'Pure Mustard Cooking Oil',
-        'unit': '1 Ltr',
-        'category': 'Grocery & Staples',
-        'section': 'Daily Staples 🌾',
-        'qty': 30,
-        'rate': 142.0,
-        'image_url': '🍾',
-        'button_text': 'Buy Now',
-      },
-      {
-        'id': 103,
-        'seller_username': cleanSeller,
-        'name': 'Amul Pasteurised Salted Butter',
-        'description': 'Delicious Creamy Amul Butter',
-        'unit': '500 Gm',
-        'category': 'Dairy & Eggs',
-        'section': 'Fresh Dairy & Eggs 🥛',
-        'qty': 25,
-        'rate': 275.0,
-        'image_url': '🧈',
-        'button_text': 'Buy Now',
-      },
-      {
-        'id': 104,
-        'seller_username': cleanSeller,
-        'name': 'Tata Salt Vacuum Evaporated',
-        'description': 'Desh ka Namak Tata Salt',
-        'unit': '1 Kg',
-        'category': 'Grocery & Staples',
-        'section': 'Daily Staples 🌾',
-        'qty': 100,
-        'rate': 28.0,
-        'image_url': '🧂',
-        'button_text': 'Buy Now',
-      },
-      {
-        'id': 105,
-        'seller_username': cleanSeller,
-        'name': 'Fresh Hybrid Tomatoes',
-        'description': 'Farm Fresh Red Tomatoes',
-        'unit': '1 Kg',
-        'category': 'Fresh Vegetables',
-        'section': 'Farm Fresh Vegetables 🥦',
-        'qty': 40,
-        'rate': 35.0,
-        'image_url': '🍅',
-        'button_text': 'Buy Now',
-      },
-      {
-        'id': 106,
-        'seller_username': cleanSeller,
-        'name': 'Fresh Shimla Red Apples',
-        'description': 'Crispy Sweet Red Apples',
-        'unit': '1 Kg',
-        'category': 'Fresh Fruits',
-        'section': 'Fresh Fruits & Juices 🍎',
-        'qty': 20,
-        'rate': 160.0,
-        'image_url': '🍎',
-        'button_text': 'Buy Now',
-      },
-      {
-        'id': 107,
-        'seller_username': cleanSeller,
-        'name': 'Amul Taaza Toned Milk Pouch',
-        'description': 'Pasteurised Toned Milk',
-        'unit': '500 Ml',
-        'category': 'Dairy & Eggs',
-        'section': 'Fresh Dairy & Eggs 🥛',
-        'qty': 60,
-        'rate': 27.0,
-        'image_url': '🥛',
-        'button_text': 'Buy Now',
-      },
-      {
-        'id': 108,
-        'seller_username': cleanSeller,
-        'name': 'Britannia Good Day Cashew Biscuits',
-        'description': 'Crunchy Butter Cashew Cookies',
-        'unit': '200 Gm',
-        'category': 'Snacks & Munchies',
-        'section': 'Snacks & Crisps 🍿',
-        'qty': 45,
-        'rate': 40.0,
-        'image_url': '🍪',
-        'button_text': 'Buy Now',
-      },
-    ];
+    // Read local cache fallback
+    try {
+      final str = prefs.getString(cacheKey);
+      if (str != null && str.isNotEmpty) {
+        final List<dynamic> list = jsonDecode(str);
+        return list.map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+    } catch (_) {}
+
+    return [];
   }
 
   /// Add a Product for a Seller (VPS API + Local Cache)
@@ -4691,18 +4594,16 @@ class AuthService {
       }
     } catch (_) {}
 
-    // 3. Fallback Categories so Category Ring & Product Catalog is NEVER empty!
-    return [
-      {'id': 1, 'name': 'Grocery & Staples', 'color': '#8B5CF6', 'image_url': '🌾'},
-      {'id': 2, 'name': 'Fresh Vegetables', 'color': '#10B981', 'image_url': '🥦'},
-      {'id': 3, 'name': 'Fresh Fruits', 'color': '#F59E0B', 'image_url': '🍎'},
-      {'id': 4, 'name': 'Dairy & Eggs', 'color': '#06B6D4', 'image_url': '🥛'},
-      {'id': 5, 'name': 'Snacks & Munchies', 'color': '#EC4899', 'image_url': '🍿'},
-      {'id': 6, 'name': 'Beverages & Drinks', 'color': '#3B82F6', 'image_url': '🥤'},
-      {'id': 7, 'name': 'Bakery & Sweets', 'color': '#F97316', 'image_url': '🍞'},
-      {'id': 8, 'name': 'Personal Care', 'color': '#14B8A6', 'image_url': '🧴'},
-      {'id': 9, 'name': 'Household Essentials', 'color': '#6366F1', 'image_url': '🧹'},
-    ];
+    // 2. Read local cache fallback
+    try {
+      final str = prefs.getString(cacheKey);
+      if (str != null && str.isNotEmpty) {
+        final List<dynamic> list = jsonDecode(str);
+        return list.map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+    } catch (_) {}
+
+    return [];
   }
 
   /// Add Custom Category for Seller
