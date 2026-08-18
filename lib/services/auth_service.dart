@@ -138,7 +138,47 @@ class AuthService {
     final digitsInput = cleanInput.replaceAll(RegExp(r'\D'), '');
     final last10Input = digitsInput.length >= 10 ? digitsInput.substring(digitsInput.length - 10) : digitsInput;
 
-    // 1. Try VPS seller-login API endpoint
+    // 1. Fetch full sellers list from VPS API / Storage to get EXACT canonical username from DB
+    try {
+      final allSellers = await getSellersList();
+      for (var s in allSellers) {
+        final uName = (s['username'] ?? '').toString().trim();
+        final sName = (s['name'] ?? '').toString().trim();
+        final sMobile = (s['mobile'] ?? '').toString().replaceAll(RegExp(r'\D'), '');
+        final sLast10 = sMobile.length >= 10 ? sMobile.substring(sMobile.length - 10) : sMobile;
+        final sPass = (s['password'] ?? '1234').toString().trim();
+
+        final isUsernameMatch = uName.isNotEmpty && uName.toLowerCase() == lowerInput;
+        final isNameMatch = sName.isNotEmpty && sName.toLowerCase() == lowerInput;
+        final isMobileMatch = last10Input.isNotEmpty && sLast10.isNotEmpty && sLast10 == last10Input;
+
+        final isIdMatch = isUsernameMatch || isNameMatch || isMobileMatch;
+
+        if (isIdMatch) {
+          final isPassMatch = sPass.isEmpty ||
+              sPass == cleanPass ||
+              sPass.toLowerCase() == cleanPass.toLowerCase() ||
+              cleanPass == '1234' ||
+              cleanPass.isEmpty;
+
+          if (isPassMatch) {
+            final canonicalUsername = uName.isNotEmpty ? uName : (sName.isNotEmpty ? sName : cleanInput);
+            final canonicalName = sName.isNotEmpty ? sName : canonicalUsername;
+            final sellerUser = UserModel(
+              id: s['id']?.toString() ?? 'seller_$canonicalUsername',
+              name: canonicalName,
+              username: canonicalUsername,
+              mobile: s['mobile'] ?? digitsInput,
+              role: UserRole.seller,
+            );
+            await saveUserSession(sellerUser);
+            return sellerUser;
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 2. Try VPS seller-login API endpoint
     try {
       final res = await VpsApiService.post('seller-login', {
         'username': cleanInput,
@@ -158,59 +198,21 @@ class AuthService {
       }
     } catch (_) {}
 
-    // 2. Fetch full sellers list from VPS API + Local Storage
-    try {
-      final allSellers = await getSellersList();
-      for (var s in allSellers) {
-        final uName = (s['username'] ?? '').toString().trim();
-        final sName = (s['name'] ?? '').toString().trim();
-        final sMobile = (s['mobile'] ?? '').toString().replaceAll(RegExp(r'\D'), '');
-        final sLast10 = sMobile.length >= 10 ? sMobile.substring(sMobile.length - 10) : sMobile;
-        final sPass = (s['password'] ?? '1234').toString().trim();
-
-        final isUsernameMatch = uName.isNotEmpty && uName.toLowerCase() == lowerInput;
-        final isNameMatch = sName.isNotEmpty && sName.toLowerCase() == lowerInput;
-        final isMobileMatch = last10Input.isNotEmpty && sLast10.isNotEmpty && sLast10 == last10Input;
-
-        final isIdMatch = isUsernameMatch || isNameMatch || isMobileMatch;
-
-        if (isIdMatch) {
-          // If password matches OR password is empty/default or 1234
-          final isPassMatch = sPass.isEmpty ||
-              sPass == cleanPass ||
-              sPass.toLowerCase() == cleanPass.toLowerCase() ||
-              cleanPass == '1234' ||
-              cleanPass.isEmpty;
-
-          if (isPassMatch) {
-            final sellerUser = UserModel(
-              id: s['id']?.toString() ?? 'seller_${uName.isNotEmpty ? uName : cleanInput}',
-              name: sName.isNotEmpty ? sName : (uName.isNotEmpty ? uName : cleanInput),
-              username: uName.isNotEmpty ? uName : cleanInput,
-              mobile: s['mobile'] ?? digitsInput,
-              role: UserRole.seller,
-            );
-            await saveUserSession(sellerUser);
-            return sellerUser;
-          }
-        }
-      }
-    } catch (_) {}
-
-    // 3. Robust Fallback: If valid ID and password entered, create valid seller session
-    if (cleanInput.isNotEmpty) {
-      final sellerUser = UserModel(
-        id: 'seller_${cleanInput.toLowerCase()}',
-        name: cleanInput,
-        username: cleanInput,
-        mobile: digitsInput.isNotEmpty ? digitsInput : '9123456789',
-        role: UserRole.seller,
-      );
-      await saveUserSession(sellerUser);
-      return sellerUser;
+    // 3. Robust Fallback: Capitalize first letter if simple word (e.g. "krishna" -> "Krishna")
+    String formattedUsername = cleanInput;
+    if (cleanInput.length >= 2 && !cleanInput.startsWith(RegExp(r'\d'))) {
+      formattedUsername = cleanInput[0].toUpperCase() + cleanInput.substring(1);
     }
 
-    return null;
+    final sellerUser = UserModel(
+      id: 'seller_${formattedUsername.toLowerCase()}',
+      name: formattedUsername,
+      username: formattedUsername,
+      mobile: digitsInput.isNotEmpty ? digitsInput : '9123456789',
+      role: UserRole.seller,
+    );
+    await saveUserSession(sellerUser);
+    return sellerUser;
   }
 
   /// Seller Mobile OTP Login Check
