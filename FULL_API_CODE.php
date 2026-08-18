@@ -1200,7 +1200,7 @@ if ($action == 'get-header-theme') {
                 }
             }
 
-            if (!$alreadyInList && count($itemsDecoded) > 0) {
+            if (!$alreadyInList) {
                 $sellerU = $row['seller_username'];
                 $sName = $sellerU;
                 $sRes = $conn->query("SELECT name FROM sellers WHERE username = '$sellerU' OR name = '$sellerU' LIMIT 1");

@@ -41,7 +41,9 @@ class _SellerOrderCartScreenState extends State<SellerOrderCartScreen> {
     super.initState();
     if (_isSellerMode) {
       _showHistoryTab = true; // Show Customer Orders tab by default for Sellers!
-      _sellerOrderFilter = 'pending'; // Default filter is 'pending'!
+      _sellerOrderFilter = 'pending'; // Default filter is 'pending' for sellers!
+    } else {
+      _sellerOrderFilter = 'all'; // Default filter is 'all' for Customers so ALL orders show up!
     }
     _loadCart();
     _cartPoller = Timer.periodic(const Duration(milliseconds: 3000), (timer) {
@@ -97,7 +99,8 @@ class _SellerOrderCartScreenState extends State<SellerOrderCartScreen> {
       }
     } else {
       final custMobile = await _getEffectiveCustomerMobile();
-      history = await AuthService.getCustomerPlacedOrders(custMobile, sellerUsername: _sellerUsername);
+      // Fetch orders across all sellers for Customer Order History tab!
+      history = await AuthService.getCustomerPlacedOrders(custMobile, sellerUsername: '');
     }
     
     if (mounted) {
