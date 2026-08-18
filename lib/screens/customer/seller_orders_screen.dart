@@ -379,7 +379,36 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
         });
       }
 
-      // 2. Fetch Products, Categories & Sections FIRST (High Priority for Store UI)
+      // 2. INSTANT CACHE DISPLAY FOR STORE UI (0.01 Seconds - Zero Delay!)
+      final cachedProds = await AuthService.getCachedSellerProducts(widget.sellerUsername);
+      final cachedCats = await AuthService.getCachedSellerCategories(widget.sellerUsername);
+      final cachedSecs = await AuthService.getCachedSellerSections(widget.sellerUsername);
+      final initialCartItems = await CartService.getCartItems(widget.sellerUsername);
+
+      if (cachedProds.isNotEmpty || cachedCats.isNotEmpty || cachedSecs.isNotEmpty) {
+        final List<Map<String, dynamic>> parsedRawCats = [];
+        final List<String> parsedCats = [];
+        for (var c in cachedCats) {
+          if (c is Map) {
+            parsedRawCats.add(Map<String, dynamic>.from(c));
+            final name = (c['name'] ?? c['category_name'] ?? '').toString().trim();
+            if (name.isNotEmpty && !parsedCats.contains(name)) parsedCats.add(name);
+          }
+        }
+        if (mounted) {
+          setState(() {
+            _products = cachedProds;
+            _rawCategories = parsedRawCats;
+            _categories = parsedCats;
+            _sellerSections = cachedSecs;
+            _cartBadgeCount = CartService.getTotalCount(initialCartItems);
+            _cartTotalAmount = CartService.getTotalAmount(initialCartItems);
+            _isLoading = false; // INSTANT DISPLAY! ZERO WAITING TIME!
+          });
+        }
+      }
+
+      // 3. BACKGROUND VPS DATABASE REFRESH (Silent Sync)
       final results = await Future.wait([
         AuthService.getSellerProducts(widget.sellerUsername),
         AuthService.getSellerCategories(widget.sellerUsername),

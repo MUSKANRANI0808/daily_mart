@@ -23,7 +23,7 @@ class VpsApiService {
     for (var base in candidateBaseUrls) {
       try {
         final String fullUrl = base.contains('?') ? '$base&action=sellers' : '$base?action=sellers';
-        final response = await http.get(Uri.parse(fullUrl)).timeout(const Duration(seconds: 4));
+        final response = await http.get(Uri.parse(fullUrl)).timeout(const Duration(milliseconds: 2500));
         if (response.statusCode == 200) return true;
       } catch (_) {}
     }
@@ -49,7 +49,7 @@ class VpsApiService {
         final response = await http.get(
           uri,
           headers: _headers,
-        ).timeout(const Duration(seconds: 4));
+        ).timeout(const Duration(milliseconds: 2500));
 
         if (response.statusCode >= 200 && response.statusCode < 300) {
           final resData = _handleResponse(response);
@@ -78,7 +78,7 @@ class VpsApiService {
           uri,
           headers: _headers,
           body: jsonEncode(data),
-        ).timeout(const Duration(seconds: 4));
+        ).timeout(const Duration(milliseconds: 2500));
 
         if (response.statusCode >= 200 && response.statusCode < 300) {
           final resData = _handleResponse(response);

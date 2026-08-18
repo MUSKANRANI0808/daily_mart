@@ -72,11 +72,30 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
   }
 
   Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-    });
-
     final username = _sellerUsername;
+
+    // 1. INSTANT LOCAL CACHE DISPLAY (0.01 Seconds - Zero Loading Delay!)
+    final cachedProds = await AuthService.getCachedSellerProducts(username);
+    final cachedCats = await AuthService.getCachedSellerCategories(username);
+    final cachedSecs = await AuthService.getCachedSellerSections(username);
+
+    if (cachedProds.isNotEmpty || cachedCats.isNotEmpty || cachedSecs.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _allProducts = cachedProds;
+          _sellerCategories = cachedCats;
+          _sellerSections = cachedSecs;
+          _isLoading = false;
+        });
+        _applyFilter();
+      }
+    } else {
+      setState(() {
+        _isLoading = true;
+      });
+    }
+
+    // 2. BACKGROUND VPS DATABASE REFRESH (Silent Sync)
     final products = await AuthService.getSellerProducts(username);
     final units = await AuthService.getSellerUnits(username);
     final categories = await AuthService.getSellerCategories(username);

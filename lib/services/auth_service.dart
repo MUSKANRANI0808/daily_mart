@@ -4144,6 +4144,63 @@ class AuthService {
   // SELLER PRODUCTS CRUD API & LOCAL CACHE
   // ==========================================
 
+  /// Read Cached Products for a Seller (Instant 0.01 sec read without network delay)
+  static Future<List<Map<String, dynamic>>> getCachedSellerProducts(String sellerUsername) async {
+    final cleanSeller = sellerUsername.trim();
+    if (cleanSeller.isEmpty) return [];
+
+    final prefs = await SharedPreferences.getInstance();
+    for (var keySuffix in [cleanSeller, cleanSeller.toLowerCase(), cleanSeller.toUpperCase()]) {
+      try {
+        final str = prefs.getString('seller_products_$keySuffix');
+        if (str != null && str.isNotEmpty) {
+          final List<dynamic> list = jsonDecode(str);
+          final prods = list.map((e) => Map<String, dynamic>.from(e)).toList();
+          if (prods.isNotEmpty) return prods;
+        }
+      } catch (_) {}
+    }
+    return [];
+  }
+
+  /// Read Cached Categories for a Seller (Instant 0.01 sec read without network delay)
+  static Future<List<Map<String, dynamic>>> getCachedSellerCategories(String sellerUsername) async {
+    final cleanSeller = sellerUsername.trim();
+    if (cleanSeller.isEmpty) return [];
+
+    final prefs = await SharedPreferences.getInstance();
+    for (var keySuffix in [cleanSeller, cleanSeller.toLowerCase(), cleanSeller.toUpperCase()]) {
+      try {
+        final str = prefs.getString('seller_categories_$keySuffix');
+        if (str != null && str.isNotEmpty) {
+          final List<dynamic> list = jsonDecode(str);
+          final cats = list.map((e) => Map<String, dynamic>.from(e)).toList();
+          if (cats.isNotEmpty) return cats;
+        }
+      } catch (_) {}
+    }
+    return [];
+  }
+
+  /// Read Cached Sections for a Seller (Instant 0.01 sec read without network delay)
+  static Future<List<Map<String, dynamic>>> getCachedSellerSections(String sellerUsername) async {
+    final cleanSeller = sellerUsername.trim();
+    if (cleanSeller.isEmpty) return [];
+
+    final prefs = await SharedPreferences.getInstance();
+    for (var keySuffix in [cleanSeller, cleanSeller.toLowerCase(), cleanSeller.toUpperCase()]) {
+      try {
+        final str = prefs.getString('seller_sections_$keySuffix');
+        if (str != null && str.isNotEmpty) {
+          final List<dynamic> list = jsonDecode(str);
+          final secs = list.map((e) => Map<String, dynamic>.from(e)).toList();
+          if (secs.isNotEmpty) return secs;
+        }
+      } catch (_) {}
+    }
+    return [];
+  }
+
   /// Get Products for a Seller (from VPS Database with local cache fallback)
   static Future<List<Map<String, dynamic>>> getSellerProducts(String sellerUsername) async {
     final cleanSeller = sellerUsername.trim();
