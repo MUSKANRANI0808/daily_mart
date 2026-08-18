@@ -8,8 +8,10 @@ class VpsApiService {
 
   static List<String> get candidateBaseUrls => [
         'http://89.116.52.173/api.php',
-        VpsConfig.apiBaseUrl,
+        'https://corsproxy.io/?http://89.116.52.173/api.php',
+        'https://api.allorigins.win/raw?url=http://89.116.52.173/api.php',
         'http://200.141.4.137/api.php',
+        VpsConfig.apiBaseUrl,
         'http://localhost/api.php',
         'http://127.0.0.1/api.php',
         'http://localhost/vps_backend/api.php',
