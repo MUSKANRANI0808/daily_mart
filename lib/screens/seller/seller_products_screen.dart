@@ -2522,7 +2522,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           Icon(Icons.search_rounded, color: previewTextColor, size: 20),
                           const SizedBox(width: 8),
                           Text(
-                            'Search products in store... 🔍',
+                            'Search products in store...',
                             style: TextStyle(color: previewTextColor.withValues(alpha: 0.7), fontSize: 12.5, fontWeight: FontWeight.w500),
                           ),
                         ],

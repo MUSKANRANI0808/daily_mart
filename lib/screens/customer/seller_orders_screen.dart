@@ -1261,7 +1261,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                                           fontWeight: FontWeight.w600,
                                         ),
                                         decoration: InputDecoration(
-                                          hintText: 'Search products in ${widget.sellerName}... 🔍',
+                                          hintText: 'Search products in ${widget.sellerName}...',
                                           hintStyle: TextStyle(
                                             fontSize: 13,
                                             color: HeaderThemeHelper.hexToColor(_headerThemeConfig['search_text_color'] ?? '#0F172A').withValues(alpha: 0.65),
@@ -1776,7 +1776,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  '$_selectedCategory Category 📁',
+                  _selectedCategory,
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                 ),
                 Text(
@@ -2132,7 +2132,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                           Icon(Icons.search_rounded, color: previewTextColor, size: 20),
                           const SizedBox(width: 8),
                           Text(
-                            'Search products in store... 🔍',
+                            'Search products in store...',
                             style: TextStyle(color: previewTextColor.withValues(alpha: 0.7), fontSize: 12.5, fontWeight: FontWeight.w500),
                           ),
                         ],
