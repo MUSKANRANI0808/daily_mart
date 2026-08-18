@@ -4957,6 +4957,36 @@ class AuthService {
     }
   }
 
+  /// Read Cached Customer Placed Orders History (Instant 0.01 sec read without network delay)
+  static Future<List<Map<String, dynamic>>> getCachedCustomerPlacedOrders(String customerMobile) async {
+    final prefs = await SharedPreferences.getInstance();
+    String custMobile = customerMobile.trim();
+    if (custMobile.isEmpty) {
+      final currentUser = await getCurrentUser();
+      custMobile = (currentUser?.mobile ?? '').trim();
+    }
+    final digits = custMobile.replaceAll(RegExp(r'[^0-9]'), '');
+    final last10 = digits.length >= 10 ? digits.substring(digits.length - 10) : digits;
+
+    final keysToCheck = <String>[
+      if (custMobile.isNotEmpty) 'customer_orders_history_$custMobile',
+      if (last10.isNotEmpty) 'customer_orders_history_$last10',
+      'global_all_customer_orders_history',
+    ];
+
+    for (final key in keysToCheck) {
+      try {
+        final String? str = prefs.getString(key);
+        if (str != null && str.isNotEmpty) {
+          final List decoded = jsonDecode(str);
+          final list = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+          if (list.isNotEmpty) return list;
+        }
+      } catch (_) {}
+    }
+    return [];
+  }
+
   /// Fetch Customer/Seller Placed Orders History (Merges MySQL VPS Database & Local Cache)
   static Future<List<Map<String, dynamic>>> getCustomerPlacedOrders(String customerMobile, {String sellerUsername = ''}) async {
     final prefs = await SharedPreferences.getInstance();
@@ -5353,6 +5383,11 @@ class AuthService {
       final tsB = int.tryParse(b['timestamp']?.toString() ?? '0') ?? 0;
       return tsB.compareTo(tsA);
     });
+
+    try {
+      if (custMobile.isNotEmpty) prefs.setString('customer_orders_history_$custMobile', jsonEncode(result));
+      if (last10.isNotEmpty) prefs.setString('customer_orders_history_$last10', jsonEncode(result));
+    } catch (_) {}
 
     return result;
   }

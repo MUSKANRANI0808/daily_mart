@@ -76,47 +76,60 @@ class _SellerOrderCartScreenState extends State<SellerOrderCartScreen> {
 
   Future<void> _loadCart() async {
     final items = await CartService.getCartItems(_sellerUsername);
-    List<Map<String, dynamic>> history = [];
 
     if (_isSellerMode) {
-      // 1. Instant 0ms cache load
+      // 1. Instant 0ms cache load for Seller Mode
       final cachedHistory = await AuthService.getCachedSellerCustomerOrders(_sellerUsername);
-      if (cachedHistory.isNotEmpty && mounted && _isLoading) {
+      if (mounted) {
         setState(() {
           _placedOrders = cachedHistory;
           _cartItems = items;
-          _isLoading = false;
+          _isLoading = false; // INSTANT DISPLAY! NO SPINNER!
+          _showHistoryTab = true;
         });
       }
 
-      // 2. Fetch fresh from VPS
-      history = await AuthService.getSellerCustomerOrders(_sellerUsername);
+      // 2. Fetch fresh from VPS in background
+      List<Map<String, dynamic>> history = await AuthService.getSellerCustomerOrders(_sellerUsername);
       if (history.isEmpty) {
         final fallbackName = (widget.seller.name ?? '').trim();
         if (fallbackName.isNotEmpty && fallbackName.toLowerCase() != _sellerUsername.toLowerCase()) {
           history = await AuthService.getSellerCustomerOrders(fallbackName);
         }
       }
-    } else {
-      final custMobile = await _getEffectiveCustomerMobile();
-      // Fetch orders across all sellers for Customer Order History tab!
-      history = await AuthService.getCustomerPlacedOrders(custMobile, sellerUsername: '');
-    }
-    
-    if (mounted) {
-      final newCartJson = jsonEncode(items);
-      final oldCartJson = jsonEncode(_cartItems);
-      final newHistJson = jsonEncode(history);
-      final oldHistJson = jsonEncode(_placedOrders);
 
-      if (newCartJson != oldCartJson || newHistJson != oldHistJson || _isLoading) {
+      if (mounted) {
         setState(() {
           _cartItems = items;
           _placedOrders = history;
           _isLoading = false;
-          if (_isSellerMode) {
+        });
+      }
+    } else {
+      // Customer Mode: Instant 0.01 sec Cache Load + Background VPS Refresh!
+      final custMobile = await _getEffectiveCustomerMobile();
+
+      // 1. Instant Local Cache Load
+      final cachedCustomerOrders = await AuthService.getCachedCustomerPlacedOrders(custMobile);
+      if (mounted) {
+        setState(() {
+          _cartItems = items;
+          _placedOrders = cachedCustomerOrders;
+          _isLoading = false; // INSTANT DISPLAY! NO SPINNER!
+          if (!_hasUserToggledTab && items.isEmpty && cachedCustomerOrders.isNotEmpty) {
             _showHistoryTab = true;
-          } else if (!_hasUserToggledTab && items.isEmpty && history.isNotEmpty) {
+          }
+        });
+      }
+
+      // 2. Fetch fresh from VPS Database in background!
+      final freshOrders = await AuthService.getCustomerPlacedOrders(custMobile, sellerUsername: '');
+      if (mounted) {
+        setState(() {
+          _cartItems = items;
+          _placedOrders = freshOrders;
+          _isLoading = false;
+          if (!_hasUserToggledTab && items.isEmpty && freshOrders.isNotEmpty) {
             _showHistoryTab = true;
           }
         });
