@@ -345,6 +345,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
   bool _hasDraft = false;
   String _draftSnippet = '';
   List<Map<String, dynamic>> _sellerSections = [];
+  final Set<String> _expandedSectionNames = {};
 
   Future<void> _checkBlockedBySeller() async {
     final blocked = await AuthService.isCustomerBlocked(
@@ -1832,6 +1833,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
       final sBg = (sec['bg_color'] ?? '#FFFFFF').toString().trim();
       final sText = (sec['text_color'] ?? '').toString().trim();
       final sCols = (sec['columns'] ?? 2).toString().trim();
+      final sMaxLimit = (sec['max_items'] ?? 0).toString().trim();
       if (sName.isNotEmpty && !addedSecNames.contains(sName.toLowerCase())) {
         addedSecNames.add(sName.toLowerCase());
         effectiveSections.add({
@@ -1840,6 +1842,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
           'bg_color': sBg.isNotEmpty ? sBg : '#FFFFFF',
           'text_color': sText.isNotEmpty ? sText : '#0F172A',
           'columns': sCols.isNotEmpty ? sCols : '2',
+          'max_items': sMaxLimit,
         });
       }
     }
@@ -1857,6 +1860,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
           'bg_color': cBg.isNotEmpty ? cBg : '#FFFFFF',
           'text_color': '#0F172A',
           'columns': '2',
+          'max_items': '0',
         });
       }
     }
@@ -1868,13 +1872,13 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
       final tag = pSec.isNotEmpty ? pSec : pCat;
       if (tag.isNotEmpty && !addedSecNames.contains(tag.toLowerCase())) {
         addedSecNames.add(tag.toLowerCase());
-        effectiveSections.add({'name': tag, 'icon': '🏷️', 'bg_color': '#FFFFFF', 'text_color': '#0F172A', 'columns': '2'});
+        effectiveSections.add({'name': tag, 'icon': '🏷️', 'bg_color': '#FFFFFF', 'text_color': '#0F172A', 'columns': '2', 'max_items': '0'});
       }
     }
 
     // If no section created yet, but products exist, create a default fallback section name using first available category or 'Items'
     if (effectiveSections.isEmpty && filtered.isNotEmpty) {
-      effectiveSections.add({'name': 'Items', 'icon': '🏷️', 'bg_color': '#FFFFFF', 'text_color': '#0F172A', 'columns': '2'});
+      effectiveSections.add({'name': 'Items', 'icon': '🏷️', 'bg_color': '#FFFFFF', 'text_color': '#0F172A', 'columns': '2', 'max_items': '0'});
     }
 
     // 2. Render each section with its matching products
@@ -1923,10 +1927,11 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
         return pos != 'external';
       }).toList();
 
-      // Find custom background color, text color & columns layout assigned to this section
+      // Find custom background color, text color, columns & max items limit assigned to this section
       String secBgHex = (sec['bg_color'] ?? '#FFFFFF').toString().trim();
       String secTextHex = (sec['text_color'] ?? '').toString().trim();
       int secCols = int.tryParse((sec['columns'] ?? '2').toString()) ?? 2;
+      int secMaxItems = int.tryParse((sec['max_items'] ?? '0').toString()) ?? 0;
 
       final secMatch = _sellerSections.firstWhere(
         (s) => (s['name'] ?? '').toString().trim().toLowerCase() == secName.toLowerCase(),
@@ -1943,6 +1948,9 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
         if (secMatch['columns'] != null) {
           secCols = int.tryParse(secMatch['columns'].toString()) ?? secCols;
         }
+        if (secMatch['max_items'] != null) {
+          secMaxItems = int.tryParse(secMatch['max_items'].toString()) ?? secMaxItems;
+        }
       }
 
       if (secCols != 1 && secCols != 2 && secCols != 3) {
@@ -1957,6 +1965,11 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
         // Smart fallback: if background is dark, use White text for high contrast readability!
         secTextColor = secBgColor.computeLuminance() < 0.5 ? Colors.white : const Color(0xFF0F172A);
       }
+
+      final bool isExpanded = _expandedSectionNames.contains(secName.toLowerCase());
+      final int displayCount = (secMaxItems > 0 && !isExpanded && matchingProducts.length > secMaxItems)
+          ? secMaxItems
+          : matchingProducts.length;
 
       // Render External Sliders ABOVE / OUTSIDE the section box
       if (externalSliders.isNotEmpty) {
@@ -2035,9 +2048,58 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                   crossAxisSpacing: secCols == 3 ? 8 : 12,
                   mainAxisSpacing: secCols == 3 ? 8 : (secCols == 1 ? 8 : 12),
                 ),
-                itemCount: matchingProducts.length,
+                itemCount: displayCount,
                 itemBuilder: (ctx, idx) => _buildProductCard(matchingProducts[idx], columns: secCols),
               ),
+
+              // YELLOW THEMED "VIEW MORE" BUTTON AT BOTTOM CENTER OF SECTION
+              if (secMaxItems > 0 && matchingProducts.length > secMaxItems) ...[
+                const SizedBox(height: 10),
+                Center(
+                  child: InkWell(
+                    onTap: () {
+                      setState(() {
+                        if (isExpanded) {
+                          _expandedSectionNames.remove(secName.toLowerCase());
+                        } else {
+                          _expandedSectionNames.add(secName.toLowerCase());
+                        }
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF59E0B), // Vibrant Yellow Theme
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFF59E0B).withValues(alpha: 0.4),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            isExpanded
+                                ? 'Show Less ⬆️'
+                                : 'View More (${matchingProducts.length - secMaxItems} more items) 👇',
+                            style: const TextStyle(
+                              color: Color(0xFF0F172A), // Dark contrast text on yellow button
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+              ],
               const SizedBox(height: 6),
             ],
           ),

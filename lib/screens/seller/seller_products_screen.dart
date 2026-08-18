@@ -560,6 +560,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     String secBgColor = '#FFFFFF';
     String secTextColor = '#0F172A';
     int secColumns = 2;
+    int secMaxItems = 0; // 0 = All Items
 
     showModalBottomSheet(
       context: context,
@@ -656,7 +657,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           if (sName.isEmpty) return;
                           secNameController.clear();
 
-                          await AuthService.addSellerSection(username, sName, secIcon, secBgColor, secTextColor, secColumns);
+                          await AuthService.addSellerSection(username, sName, secIcon, secBgColor, secTextColor, secColumns, secMaxItems);
                           final updatedSecs = await AuthService.getSellerSections(username);
 
                           setModalState(() {
@@ -665,6 +666,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                             secBgColor = '#FFFFFF';
                             secTextColor = '#0F172A';
                             secColumns = 2;
+                            secMaxItems = 0;
                           });
                           setState(() {
                             _sellerSections = updatedSecs;
@@ -943,6 +945,40 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                     ),
                   ),
 
+                  const SizedBox(height: 10),
+
+                  // 4. Section Display Products Limit (View More Limit)
+                  const Text('Max Products Limit To Display (View More Limit):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                  const SizedBox(height: 6),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [0, 4, 6, 8, 10, 12, 16, 20].map((limit) {
+                        final isSel = secMaxItems == limit;
+                        final label = limit == 0 ? 'All Items 📦' : '$limit Items 🔢';
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 6.0),
+                          child: ChoiceChip(
+                            label: Text(
+                              label,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isSel ? Colors.white : const Color(0xFF0F172A),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            selected: isSel,
+                            selectedColor: const Color(0xFFF59E0B), // Yellow theme highlight
+                            backgroundColor: const Color(0xFFF1F5F9),
+                            onSelected: (sel) {
+                              setModalState(() => secMaxItems = limit);
+                            },
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+
                   const SizedBox(height: 16),
 
                   const Text('Your Saved Sections:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
@@ -973,6 +1009,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                               final sBgHex = safeString(sMap['bg_color'], '#FFFFFF');
                               final sTextHex = safeString(sMap['text_color'], '#0F172A');
                               final sCols = safeInt(sMap['columns'], 2);
+                              final sMaxLimit = safeInt(sMap['max_items'], 0);
                               final sBgCol = hexToColor(sBgHex);
                               final sTextCol = hexToColor(sTextHex);
 
@@ -1038,6 +1075,22 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                                             fontSize: 10,
                                             fontWeight: FontWeight.bold,
                                             color: sTextCol.computeLuminance() > 0.5 ? Colors.black87 : Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF59E0B), // Yellow theme tag
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          sMaxLimit > 0 ? '$sMaxLimit Max 🔢' : 'All 📦',
+                                          style: const TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF0F172A),
                                           ),
                                         ),
                                       ),
@@ -1109,6 +1162,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     String editBgColor = safeString(section['bg_color'], '#FFFFFF');
     String editTextColor = safeString(section['text_color'], '#0F172A');
     int editColumns = safeInt(section['columns'], 2);
+    int editMaxItems = safeInt(section['max_items'], 0);
 
     showDialog(
       context: context,
@@ -1425,6 +1479,40 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                       ),
                     ),
                   ),
+
+                  const SizedBox(height: 10),
+
+                  // 4. Max Products Limit To Display (View More Limit)
+                  const Text('Max Products Limit To Display (View More Limit):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                  const SizedBox(height: 6),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [0, 4, 6, 8, 10, 12, 16, 20].map((limit) {
+                        final isSel = editMaxItems == limit;
+                        final label = limit == 0 ? 'All Items 📦' : '$limit Items 🔢';
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 6.0),
+                          child: ChoiceChip(
+                            label: Text(
+                              label,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isSel ? Colors.white : const Color(0xFF0F172A),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            selected: isSel,
+                            selectedColor: const Color(0xFFF59E0B), // Yellow theme highlight
+                            backgroundColor: const Color(0xFFF1F5F9),
+                            onSelected: (sel) {
+                              setDlgState(() => editMaxItems = limit);
+                            },
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1442,7 +1530,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                   final newName = sNameCtrl.text.trim();
                   if (newName.isEmpty) return;
                   Navigator.pop(dlgCtx);
-                  await AuthService.updateSellerSection(sId, _sellerUsername, newName, editIcon, editBgColor, editTextColor, editColumns);
+                  await AuthService.updateSellerSection(sId, _sellerUsername, newName, editIcon, editBgColor, editTextColor, editColumns, editMaxItems);
                   onUpdated();
                 },
                 child: const Text('Save Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),

@@ -5333,13 +5333,14 @@ class AuthService {
   }
 
   /// Add Seller Section (VPS API + Local Cache)
-  static Future<bool> addSellerSection(String sellerUsername, String name, [String icon = '🏷️', String bgColor = '#FFFFFF', String textColor = '#0F172A', int columns = 2]) async {
+  static Future<bool> addSellerSection(String sellerUsername, String name, [String icon = '🏷️', String bgColor = '#FFFFFF', String textColor = '#0F172A', int columns = 2, int maxItems = 0]) async {
     final cleanSeller = sellerUsername.trim().toLowerCase();
     final cleanName = name.trim();
     final cleanIcon = icon.trim().isNotEmpty ? icon.trim() : '🏷️';
     final cleanBgColor = bgColor.trim().isNotEmpty ? bgColor.trim() : '#FFFFFF';
     final cleanTextColor = textColor.trim().isNotEmpty ? textColor.trim() : '#0F172A';
     final cleanCols = (columns >= 1 && columns <= 3) ? columns : 2;
+    final cleanMaxItems = maxItems >= 0 ? maxItems : 0;
     if (cleanSeller.isEmpty || cleanName.isEmpty) return false;
 
     Map<String, dynamic>? newSec;
@@ -5352,6 +5353,7 @@ class AuthService {
         'bg_color': cleanBgColor,
         'text_color': cleanTextColor,
         'columns': cleanCols,
+        'max_items': cleanMaxItems,
       });
       if (res != null && res['success'] == true && res['section'] != null) {
         newSec = Map<String, dynamic>.from(res['section']);
@@ -5366,6 +5368,7 @@ class AuthService {
       'bg_color': cleanBgColor,
       'text_color': cleanTextColor,
       'columns': cleanCols,
+      'max_items': cleanMaxItems,
     };
 
     final prefs = await SharedPreferences.getInstance();
@@ -5384,6 +5387,7 @@ class AuthService {
       sections[exIdx]['bg_color'] = cleanBgColor;
       sections[exIdx]['text_color'] = cleanTextColor;
       sections[exIdx]['columns'] = cleanCols;
+      sections[exIdx]['max_items'] = cleanMaxItems;
       if (newSec['id'] != null) sections[exIdx]['id'] = newSec['id'];
     } else {
       sections.add(newSec);
@@ -5393,13 +5397,14 @@ class AuthService {
   }
 
   /// Update Seller Section
-  static Future<bool> updateSellerSection(int id, String sellerUsername, String newName, [String icon = '🏷️', String bgColor = '#FFFFFF', String textColor = '#0F172A', int columns = 2]) async {
+  static Future<bool> updateSellerSection(int id, String sellerUsername, String newName, [String icon = '🏷️', String bgColor = '#FFFFFF', String textColor = '#0F172A', int columns = 2, int maxItems = 0]) async {
     final cleanSeller = sellerUsername.trim().toLowerCase();
     final cleanName = newName.trim();
     final cleanIcon = icon.trim().isNotEmpty ? icon.trim() : '🏷️';
     final cleanBgColor = bgColor.trim().isNotEmpty ? bgColor.trim() : '#FFFFFF';
     final cleanTextColor = textColor.trim().isNotEmpty ? textColor.trim() : '#0F172A';
     final cleanCols = (columns >= 1 && columns <= 3) ? columns : 2;
+    final cleanMaxItems = maxItems >= 0 ? maxItems : 0;
     if (cleanName.isEmpty) return false;
 
     try {
@@ -5411,6 +5416,7 @@ class AuthService {
         'bg_color': cleanBgColor,
         'text_color': cleanTextColor,
         'columns': cleanCols,
+        'max_items': cleanMaxItems,
       });
     } catch (_) {}
 
@@ -5432,6 +5438,7 @@ class AuthService {
           s['bg_color'] = cleanBgColor;
           s['text_color'] = cleanTextColor;
           s['columns'] = cleanCols;
+          s['max_items'] = cleanMaxItems;
           updatedInCache = true;
         }
       }
@@ -5444,6 +5451,7 @@ class AuthService {
           'bg_color': cleanBgColor,
           'text_color': cleanTextColor,
           'columns': cleanCols,
+          'max_items': cleanMaxItems,
         });
       }
       await prefs.setString(cacheKey, jsonEncode(sections));

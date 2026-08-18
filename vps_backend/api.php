@@ -1576,6 +1576,10 @@ if ($action == 'get-header-theme') {
     if (!$colCheckSecCols || $colCheckSecCols->num_rows == 0) {
         @$conn->query("ALTER TABLE seller_sections ADD COLUMN columns INT DEFAULT 2");
     }
+    $colCheckMaxItems = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'max_items'");
+    if (!$colCheckMaxItems || $colCheckMaxItems->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN max_items INT DEFAULT 0");
+    }
 
     $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
     if (empty($seller_username)) {
@@ -1591,6 +1595,7 @@ if ($action == 'get-header-theme') {
             $row['id'] = (int)$row['id'];
             $row['text_color'] = isset($row['text_color']) && !empty($row['text_color']) ? $row['text_color'] : '#0F172A';
             $row['columns'] = isset($row['columns']) ? (int)$row['columns'] : 2;
+            $row['max_items'] = isset($row['max_items']) ? (int)$row['max_items'] : 0;
             $sections[] = $row;
         }
     }
@@ -1605,6 +1610,10 @@ if ($action == 'get-header-theme') {
     if (!$colCheckSecCols || $colCheckSecCols->num_rows == 0) {
         @$conn->query("ALTER TABLE seller_sections ADD COLUMN columns INT DEFAULT 2");
     }
+    $colCheckMaxItems = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'max_items'");
+    if (!$colCheckMaxItems || $colCheckMaxItems->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN max_items INT DEFAULT 0");
+    }
 
     $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : (isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($_POST['seller_username']) ? trim($_POST['seller_username']) : ''));
     $name = isset($input['name']) ? trim($input['name']) : (isset($_GET['name']) ? trim($_GET['name']) : (isset($_POST['name']) ? trim($_POST['name']) : ''));
@@ -1613,6 +1622,8 @@ if ($action == 'get-header-theme') {
     $text_color = isset($input['text_color']) ? trim($input['text_color']) : '#0F172A';
     $columns = isset($input['columns']) ? (int)$input['columns'] : 2;
     if ($columns <= 0 || $columns > 3) $columns = 2;
+    $max_items = isset($input['max_items']) ? (int)$input['max_items'] : 0;
+    if ($max_items < 0) $max_items = 0;
 
     if (empty($seller_username) || empty($name)) {
         echo json_encode(["success" => false, "message" => "Seller username and section name required"]);
@@ -1624,9 +1635,9 @@ if ($action == 'get-header-theme') {
     $chk = $conn->query("SELECT id FROM seller_sections WHERE seller_username = '$escapedSeller' AND name = '$escapedName' LIMIT 1");
     if ($chk && $row = $chk->fetch_assoc()) {
         $existingId = (int)$row['id'];
-        $stmtUp = $conn->prepare("UPDATE seller_sections SET icon = ?, bg_color = ?, text_color = ?, columns = ? WHERE id = ?");
+        $stmtUp = $conn->prepare("UPDATE seller_sections SET icon = ?, bg_color = ?, text_color = ?, columns = ?, max_items = ? WHERE id = ?");
         if ($stmtUp) {
-            $stmtUp->bind_param("sssii", $icon, $bg_color, $text_color, $columns, $existingId);
+            $stmtUp->bind_param("sssiii", $icon, $bg_color, $text_color, $columns, $max_items, $existingId);
             $stmtUp->execute();
         }
         echo json_encode([
@@ -1639,15 +1650,16 @@ if ($action == 'get-header-theme') {
                 "icon" => $icon,
                 "bg_color" => $bg_color,
                 "text_color" => $text_color,
-                "columns" => $columns
+                "columns" => $columns,
+                "max_items" => $max_items
             ]
         ]);
         exit();
     }
 
-    $stmt = $conn->prepare("INSERT INTO seller_sections (seller_username, name, icon, bg_color, text_color, columns) VALUES (?, ?, ?, ?, ?, ?)");
+    $stmt = $conn->prepare("INSERT INTO seller_sections (seller_username, name, icon, bg_color, text_color, columns, max_items) VALUES (?, ?, ?, ?, ?, ?, ?)");
     if ($stmt) {
-        $stmt->bind_param("sssssi", $seller_username, $name, $icon, $bg_color, $text_color, $columns);
+        $stmt->bind_param("sssssii", $seller_username, $name, $icon, $bg_color, $text_color, $columns, $max_items);
         if ($stmt->execute()) {
             $newId = $stmt->insert_id;
             echo json_encode([
@@ -1660,7 +1672,8 @@ if ($action == 'get-header-theme') {
                     "icon" => $icon,
                     "bg_color" => $bg_color,
                     "text_color" => $text_color,
-                    "columns" => $columns
+                    "columns" => $columns,
+                    "max_items" => $max_items
                 ]
             ]);
             exit();
@@ -1677,6 +1690,10 @@ if ($action == 'get-header-theme') {
     if (!$colCheckSecCols || $colCheckSecCols->num_rows == 0) {
         @$conn->query("ALTER TABLE seller_sections ADD COLUMN columns INT DEFAULT 2");
     }
+    $colCheckMaxItems = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'max_items'");
+    if (!$colCheckMaxItems || $colCheckMaxItems->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN max_items INT DEFAULT 0");
+    }
 
     $id = isset($input['id']) ? (int)$input['id'] : (isset($_POST['id']) ? (int)$_POST['id'] : 0);
     $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : (isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($_POST['seller_username']) ? trim($_POST['seller_username']) : ''));
@@ -1686,6 +1703,8 @@ if ($action == 'get-header-theme') {
     $text_color = isset($input['text_color']) ? trim($input['text_color']) : '#0F172A';
     $columns = isset($input['columns']) ? (int)$input['columns'] : 2;
     if ($columns <= 0 || $columns > 3) $columns = 2;
+    $max_items = isset($input['max_items']) ? (int)$input['max_items'] : 0;
+    if ($max_items < 0) $max_items = 0;
 
     if (empty($name)) {
         echo json_encode(["success" => false, "message" => "Section name required"]);
@@ -1697,9 +1716,9 @@ if ($action == 'get-header-theme') {
 
     $updated = false;
     if ($id > 0) {
-        $stmt = $conn->prepare("UPDATE seller_sections SET name = ?, icon = ?, bg_color = ?, text_color = ?, columns = ? WHERE id = ?");
+        $stmt = $conn->prepare("UPDATE seller_sections SET name = ?, icon = ?, bg_color = ?, text_color = ?, columns = ?, max_items = ? WHERE id = ?");
         if ($stmt) {
-            $stmt->bind_param("ssssii", $name, $icon, $bg_color, $text_color, $columns, $id);
+            $stmt->bind_param("ssssiii", $name, $icon, $bg_color, $text_color, $columns, $max_items, $id);
             if ($stmt->execute() && $stmt->affected_rows > 0) {
                 $updated = true;
             }
@@ -1707,9 +1726,9 @@ if ($action == 'get-header-theme') {
     }
 
     if (!$updated && !empty($seller_username)) {
-        $stmt = $conn->prepare("UPDATE seller_sections SET icon = ?, bg_color = ?, text_color = ?, columns = ? WHERE seller_username = ? AND name = ?");
+        $stmt = $conn->prepare("UPDATE seller_sections SET icon = ?, bg_color = ?, text_color = ?, columns = ?, max_items = ? WHERE seller_username = ? AND name = ?");
         if ($stmt) {
-            $stmt->bind_param("sssiss", $icon, $bg_color, $text_color, $columns, $seller_username, $name);
+            $stmt->bind_param("sssissi", $icon, $bg_color, $text_color, $columns, $max_items, $seller_username, $name);
             if ($stmt->execute() && $stmt->affected_rows > 0) {
                 $updated = true;
             }
@@ -1717,14 +1736,14 @@ if ($action == 'get-header-theme') {
     }
 
     if (!$updated && !empty($seller_username)) {
-        $stmtIns = $conn->prepare("INSERT INTO seller_sections (seller_username, name, icon, bg_color, text_color, columns) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmtIns = $conn->prepare("INSERT INTO seller_sections (seller_username, name, icon, bg_color, text_color, columns, max_items) VALUES (?, ?, ?, ?, ?, ?, ?)");
         if ($stmtIns) {
-            $stmtIns->bind_param("sssssi", $seller_username, $name, $icon, $bg_color, $text_color, $columns);
+            $stmtIns->bind_param("sssssii", $seller_username, $name, $icon, $bg_color, $text_color, $columns, $max_items);
             $stmtIns->execute();
         }
     }
 
-    echo json_encode(["success" => true, "message" => "Section updated", "columns" => $columns]);
+    echo json_encode(["success" => true, "message" => "Section updated", "columns" => $columns, "max_items" => $max_items]);
     exit();
 } elseif ($action == 'delete-seller-section') {
     $id = isset($input['id']) ? (int)$input['id'] : (isset($_GET['id']) ? (int)$_GET['id'] : 0);
