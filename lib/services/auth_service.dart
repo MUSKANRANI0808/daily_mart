@@ -138,12 +138,14 @@ class AuthService {
     final digitsInput = cleanInput.replaceAll(RegExp(r'\D'), '');
     final last10Input = digitsInput.length >= 10 ? digitsInput.substring(digitsInput.length - 10) : digitsInput;
 
-    // 1. Try VPS seller-login API endpoint
+    // 1. Try VPS seller-login API endpoint (POST and GET fallback)
     try {
       final res = await VpsApiService.post('seller-login', {
-        'username': cleanInput,
-        'password': cleanPass,
-      });
+            'username': cleanInput,
+            'password': cleanPass,
+          }) ??
+          await VpsApiService.get('seller-login&username=${Uri.encodeComponent(cleanInput)}&password=${Uri.encodeComponent(cleanPass)}');
+
       if (res != null && res['success'] == true && res['seller'] != null) {
         final sellerData = res['seller'];
         final sellerUser = UserModel(

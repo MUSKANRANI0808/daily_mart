@@ -494,6 +494,7 @@ if ($action == 'get-header-theme') {
         }
     }
     echo json_encode(["success" => true, "sellers" => $sellers]);
+    exit();
 } elseif ($action == 'get-seller-sliders') {
     $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
     $escapedSeller = $conn->real_escape_string($seller_username);
