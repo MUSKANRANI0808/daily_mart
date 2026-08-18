@@ -1335,7 +1335,7 @@ class _SellerOrderCartScreenState extends State<SellerOrderCartScreen> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Text(
-                          'Tax Invoice',
+                          'Invoice',
                           style: TextStyle(color: Color(0xFF15803D), fontWeight: FontWeight.bold, fontSize: 10),
                         ),
                       ),
