@@ -415,18 +415,30 @@ if ($action == 'get-header-theme') {
     echo json_encode(["success" => true, "message" => "Delivery Boy Account Deleted"]);
     exit();
 } elseif ($action == 'delivery-boy-login') {
-    $username = isset($input['username']) ? trim($input['username']) : '';
-    $password = isset($input['password']) ? trim($input['password']) : '';
-    $stmt = $conn->prepare("SELECT * FROM delivery_boys WHERE username = ? AND password = ?");
-    if ($stmt) {
-        $stmt->bind_param("ss", $username, $password);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        if ($res && $row = $res->fetch_assoc()) {
+    $username = isset($input['username']) ? trim($input['username']) : (isset($_GET['username']) ? trim($_GET['username']) : '');
+    $password = isset($input['password']) ? trim($input['password']) : (isset($_GET['password']) ? trim($_GET['password']) : '');
+
+    $escapedUser = $conn->real_escape_string($username);
+
+    $digits = preg_replace('/[^0-9]/', '', $username);
+    $last10 = (strlen($digits) >= 10) ? substr($digits, -10) : $digits;
+    $escapedLike = "%" . $conn->real_escape_string($last10) . "%";
+
+    $query = "SELECT * FROM delivery_boys WHERE (LOWER(username) = LOWER('$escapedUser') OR LOWER(name) = LOWER('$escapedUser')" . (!empty($last10) ? " OR mobile = '$username' OR mobile LIKE '$escapedLike'" : "") . ") ORDER BY id DESC LIMIT 1";
+
+    $res = $conn->query($query);
+    if ($res && $row = $res->fetch_assoc()) {
+        $dbPass = trim($row['password'] ?? '');
+        $passMatch = ($dbPass === $password) || (strtolower($dbPass) === strtolower($password));
+        if ($passMatch) {
             echo json_encode(["success" => true, "delivery_boy" => $row]);
+            exit();
+        } else {
+            echo json_encode(["success" => false, "message" => "Incorrect Password"]);
             exit();
         }
     }
+
     echo json_encode(["success" => false, "message" => "Invalid Delivery Boy credentials"]);
     exit();
 } elseif ($action == 'create-seller') {
@@ -1357,20 +1369,33 @@ if ($action == 'get-header-theme') {
         $stmt->execute();
     }
     echo json_encode(["success" => true, "message" => "Seller Deleted"]);
-} elseif ($action == 'seller-login') {
-    $username = isset($input['username']) ? trim($input['username']) : '';
-    $password = isset($input['password']) ? trim($input['password']) : '';
-    $stmt = $conn->prepare("SELECT * FROM sellers WHERE username = ? AND password = ?");
-    if ($stmt) {
-        $stmt->bind_param("ss", $username, $password);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        if ($res && $row = $res->fetch_assoc()) {
+} elseif ($action == 'seller-login' || $action == 'login-seller') {
+    $username = isset($input['username']) ? trim($input['username']) : (isset($_GET['username']) ? trim($_GET['username']) : '');
+    $password = isset($input['password']) ? trim($input['password']) : (isset($_GET['password']) ? trim($_GET['password']) : '');
+
+    $escapedUser = $conn->real_escape_string($username);
+
+    $digits = preg_replace('/[^0-9]/', '', $username);
+    $last10 = (strlen($digits) >= 10) ? substr($digits, -10) : $digits;
+    $escapedLike = "%" . $conn->real_escape_string($last10) . "%";
+
+    $query = "SELECT * FROM sellers WHERE (LOWER(username) = LOWER('$escapedUser') OR LOWER(name) = LOWER('$escapedUser')" . (!empty($last10) ? " OR mobile = '$username' OR mobile LIKE '$escapedLike'" : "") . ") ORDER BY id DESC LIMIT 1";
+
+    $res = $conn->query($query);
+    if ($res && $row = $res->fetch_assoc()) {
+        $dbPass = trim($row['password'] ?? '');
+        $passMatch = ($dbPass === $password) || (strtolower($dbPass) === strtolower($password));
+        if ($passMatch) {
             echo json_encode(["success" => true, "seller" => $row]);
+            exit();
+        } else {
+            echo json_encode(["success" => false, "message" => "Incorrect Password"]);
             exit();
         }
     }
+
     echo json_encode(["success" => false, "message" => "Invalid credentials"]);
+    exit();
 } elseif ($action == 'add-seller-product') {
     $colCheckBtnText = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'button_text'");
     if (!$colCheckBtnText || $colCheckBtnText->num_rows == 0) {
