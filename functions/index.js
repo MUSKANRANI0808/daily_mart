@@ -1,30 +1,34 @@
 const functions = require("firebase-functions");
 const http = require("http");
 
-const TARGET_HOSTS = ["89.116.52.173", "200.141.4.137"];
+const TARGET_URLS = [
+  "http://89.116.52.173/api.php",
+  "http://200.141.4.137/api.php"
+];
 
-function forwardRequest(hostIndex, req, res) {
-  if (hostIndex >= TARGET_HOSTS.length) {
-    res.status(500).send(JSON.stringify({ error: "All VPS targets failed" }));
+function forwardRequest(targetIndex, req, res) {
+  if (targetIndex >= TARGET_URLS.length) {
+    res.status(500).send(JSON.stringify({ success: false, error: "VPS server connection failed" }));
     return;
   }
 
-  const targetHost = TARGET_HOSTS[hostIndex];
+  const baseUrl = TARGET_URLS[targetIndex];
   const queryString = req.url.includes("?") ? req.url.substring(req.url.indexOf("?")) : "";
+  const fullUrl = `${baseUrl}${queryString}`;
 
   if (req.method === "POST") {
     const postData = JSON.stringify(req.body || {});
+    const parsedUrl = new URL(fullUrl);
     const options = {
-      hostname: targetHost,
+      hostname: parsedUrl.hostname,
       port: 80,
-      path: `/api.php${queryString}`,
+      path: parsedUrl.pathname + parsedUrl.search,
       method: "POST",
       headers: {
-        "Host": "200.141.4.137",
         "Content-Type": "application/json",
         "Content-Length": Buffer.byteLength(postData),
       },
-      timeout: 4000,
+      timeout: 6000,
     };
 
     const apiReq = http.request(options, (apiRes) => {
@@ -37,21 +41,22 @@ function forwardRequest(hostIndex, req, res) {
     });
 
     apiReq.on("error", () => {
-      forwardRequest(hostIndex + 1, req, res);
+      forwardRequest(targetIndex + 1, req, res);
     });
 
     apiReq.write(postData);
     apiReq.end();
   } else {
+    const parsedUrl = new URL(fullUrl);
     const options = {
-      hostname: targetHost,
+      hostname: parsedUrl.hostname,
       port: 80,
-      path: `/api.php${queryString}`,
+      path: parsedUrl.pathname + parsedUrl.search,
       method: "GET",
       headers: {
-        "Host": "200.141.4.137",
+        "Content-Type": "application/json",
       },
-      timeout: 4000,
+      timeout: 6000,
     };
 
     const apiReq = http.request(options, (apiRes) => {
@@ -64,7 +69,7 @@ function forwardRequest(hostIndex, req, res) {
     });
 
     apiReq.on("error", () => {
-      forwardRequest(hostIndex + 1, req, res);
+      forwardRequest(targetIndex + 1, req, res);
     });
 
     apiReq.end();
