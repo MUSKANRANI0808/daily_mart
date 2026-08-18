@@ -200,19 +200,7 @@ class AuthService {
       }
     } catch (_) {}
 
-    // 3. Robust Fallback for Sellers (Krishna, Ankul, or any registered store)
-    if (cleanInput.isNotEmpty && cleanPass.isNotEmpty) {
-      final sellerUser = UserModel(
-        id: 'seller_${cleanInput.toLowerCase()}',
-        name: cleanInput,
-        username: cleanInput,
-        mobile: digitsInput.isNotEmpty ? digitsInput : '9800000000',
-        role: UserRole.seller,
-      );
-      await saveUserSession(sellerUser);
-      return sellerUser;
-    }
-
+    // STRICT: Return null if username or password does NOT match Database!
     return null;
   }
 
