@@ -1033,111 +1033,109 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                               final sTextCol = hexToColor(sTextHex);
 
                               return Container(
-                                margin: const EdgeInsets.only(bottom: 6),
+                                margin: const EdgeInsets.only(bottom: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                 decoration: BoxDecoration(
                                   color: sBgCol,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.04),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
                                 ),
-                                child: ListTile(
-                                  dense: true,
-                                  leading: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(sIcon, style: const TextStyle(fontSize: 20)),
-                                      const SizedBox(width: 6),
-                                      // Bg Color Indicator
-                                      Container(
-                                        width: 14,
-                                        height: 14,
-                                        decoration: BoxDecoration(
-                                          color: sBgCol,
-                                          shape: BoxShape.circle,
-                                          border: Border.all(color: Colors.black26),
-                                        ),
+                                child: Row(
+                                  children: [
+                                    // Icon Emoji
+                                    Text(sIcon, style: const TextStyle(fontSize: 22)),
+                                    const SizedBox(width: 8),
+
+                                    // Color Preview Circles
+                                    Container(
+                                      width: 12,
+                                      height: 12,
+                                      decoration: BoxDecoration(
+                                        color: sBgCol,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: Colors.black26),
                                       ),
-                                      const SizedBox(width: 4),
-                                      // Text Color Indicator
-                                      Container(
-                                        width: 14,
-                                        height: 14,
-                                        decoration: BoxDecoration(
-                                          color: sTextCol,
-                                          shape: BoxShape.circle,
-                                          border: Border.all(color: Colors.white, width: 1.2),
-                                        ),
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Container(
+                                      width: 12,
+                                      height: 12,
+                                      decoration: BoxDecoration(
+                                        color: sTextCol,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: Colors.white, width: 1.2),
                                       ),
-                                    ],
-                                  ),
-                                  title: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          sName,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14,
-                                            color: sTextCol,
+                                    ),
+                                    const SizedBox(width: 10),
+
+                                    // Section Name & Subtitle Badges (Flexibly Expanded!)
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            sName,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                              color: sTextCol,
+                                            ),
                                           ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withValues(alpha: 0.08),
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: Text(
-                                          '$sCols Col${sCols > 1 ? 's' : ''}',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            color: sTextCol.computeLuminance() > 0.5 ? Colors.black87 : Colors.white,
+                                          const SizedBox(height: 4),
+                                          Wrap(
+                                            spacing: 4,
+                                            runSpacing: 4,
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black.withValues(alpha: 0.08),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                ),
+                                                child: Text(
+                                                  '$sCols Col${sCols > 1 ? 's' : ''}',
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: sTextCol.computeLuminance() > 0.5 ? Colors.black87 : Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFF59E0B),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                ),
+                                                child: Text(
+                                                  sMaxLimit > 0 ? '$sMaxLimit Max 🔢' : 'All 📦',
+                                                  style: const TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Color(0xFF0F172A),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                        ),
+                                        ],
                                       ),
-                                      const SizedBox(width: 4),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFF59E0B), // Yellow theme tag
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: Text(
-                                          sMaxLimit > 0 ? '$sMaxLimit Max 🔢' : 'All 📦',
-                                          style: const TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            color: Color(0xFF0F172A),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      // EDIT SECTION BUTTON
-                                      IconButton(
-                                        icon: const Icon(Icons.edit_rounded, color: Color(0xFF8B5CF6), size: 18),
-                                        onPressed: () {
-                                          _showEditSectionDialog(sMap, () async {
-                                            final updatedSecs = await AuthService.getSellerSections(username);
-                                            setModalState(() {
-                                              _sellerSections = updatedSecs;
-                                            });
-                                            setState(() {
-                                              _sellerSections = updatedSecs;
-                                            });
-                                          });
-                                        },
-                                      ),
-                                      // DELETE SECTION BUTTON
-                                      IconButton(
-                                        icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 18),
-                                        onPressed: () async {
-                                          await AuthService.deleteSellerSection(sId, username, sName);
+                                    ),
+
+                                    // Action Buttons (Edit & Delete)
+                                    InkWell(
+                                      onTap: () {
+                                        _showEditSectionDialog(sMap, () async {
                                           final updatedSecs = await AuthService.getSellerSections(username);
                                           setModalState(() {
                                             _sellerSections = updatedSecs;
@@ -1145,10 +1143,39 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                                           setState(() {
                                             _sellerSections = updatedSecs;
                                           });
-                                        },
+                                        });
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: const Icon(Icons.edit_rounded, color: Color(0xFF8B5CF6), size: 16),
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    InkWell(
+                                      onTap: () async {
+                                        await AuthService.deleteSellerSection(sId, username, sName);
+                                        final updatedSecs = await AuthService.getSellerSections(username);
+                                        setModalState(() {
+                                          _sellerSections = updatedSecs;
+                                        });
+                                        setState(() {
+                                          _sellerSections = updatedSecs;
+                                        });
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 16),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               );
                             },
