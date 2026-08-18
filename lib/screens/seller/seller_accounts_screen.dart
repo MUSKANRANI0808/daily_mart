@@ -106,19 +106,19 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
     List<Map<String, dynamic>> ordersList = [];
 
     for (var o in rawOrders) {
-      final msgId = (o['id'] ?? o['msg_id'] as num?)?.toInt() ?? 0;
-      final rawOrderId = (o['order_id'] ?? 'Order #$msgId').toString();
+      final int msgId = int.tryParse(o['id']?.toString() ?? o['msg_id']?.toString() ?? '0') ?? 0;
+      final rawOrderId = (o['order_id'] ?? (msgId > 0 ? '#DM-$msgId' : 'Order')).toString();
       final custMobile = (o['customer_mobile'] ?? '').toString();
       final custName = (o['customer_name'] ?? 'Customer').toString();
 
       final rawAmt = o['total_amount'] ?? o['order_amount'] ?? o['amount'] ?? 0.0;
-      double amt = (rawAmt as num?)?.toDouble() ?? double.tryParse(rawAmt.toString()) ?? 0.0;
+      double amt = double.tryParse(rawAmt.toString()) ?? 0.0;
 
       final payStat = (o['payment_status'] ?? '').toString().toLowerCase();
-      final isPaid = payStat == 'paid' || payStat == 'success';
-      final utr = (o['payment_utr'] ?? o['utr'] ?? '').toString();
+      final utr = (o['payment_utr'] ?? o['utr'] ?? '').toString().trim();
+      final isPaid = payStat == 'paid' || payStat == 'success' || utr.isNotEmpty;
       final payMode = (o['payment_mode'] ?? '').toString().toLowerCase();
-      final isOnline = utr.isNotEmpty || (isPaid && (payMode == 'online' || payMode == 'upi' || payMode.contains('online')));
+      final isOnline = (utr.isNotEmpty && utr.toLowerCase() != 'cash') || (isPaid && (payMode == 'online' || payMode == 'upi' || payMode.contains('online')));
 
       final ordStat = (o['order_status'] ?? o['status'] ?? 'Pending').toString();
       final isDeleted = ordStat.toLowerCase() == 'deleted' || o['is_deleted'] == true || o['is_deleted'] == 1 || o['is_deleted'] == '1';
@@ -169,7 +169,11 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
     }
 
     // Sort by primary timestamp newest first
-    ordersList.sort((a, b) => (b['primary_date'] as DateTime).compareTo(a['primary_date'] as DateTime));
+    ordersList.sort((a, b) {
+      final dtA = (a['primary_date'] as DateTime?) ?? DateTime.now();
+      final dtB = (b['primary_date'] as DateTime?) ?? DateTime.now();
+      return dtB.compareTo(dtA);
+    });
 
     setState(() {
       _allOrders = ordersList;
