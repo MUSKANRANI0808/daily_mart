@@ -2028,36 +2028,35 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(6.0, 6.0, 16.0, 10.0),
+                padding: const EdgeInsets.fromLTRB(0.0, 0.0, 16.0, 10.0),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // 3D Ribbon / Curved Pill-Badge Shape Container for Section Title
+                    // 3D Bookmark Ribbon Label Emerging Directly from Container's Left Edge
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                      padding: const EdgeInsets.fromLTRB(16, 7, 18, 7),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          colors: secTextColor == Colors.white
-                              ? [const Color(0xFFEF4444), const Color(0xFFDC2626)]
-                              : [secTextColor.withValues(alpha: 0.12), secTextColor.withValues(alpha: 0.05)],
+                          colors: secTextColor == Colors.white || secBgColor.computeLuminance() < 0.4
+                              ? [const Color(0xFFEF4444), const Color(0xFFB91C1C)]
+                              : [
+                                  secTextColor.withValues(alpha: 0.95),
+                                  secTextColor.withValues(alpha: 0.80),
+                                ],
                           begin: Alignment.centerLeft,
                           end: Alignment.centerRight,
                         ),
                         borderRadius: const BorderRadius.only(
-                          topRight: Radius.circular(20),
-                          bottomRight: Radius.circular(20),
-                          topLeft: Radius.circular(10),
-                          bottomLeft: Radius.circular(10),
-                        ),
-                        border: Border.all(
-                          color: secTextColor.withValues(alpha: 0.25),
-                          width: 1.2,
+                          topLeft: Radius.circular(16),
+                          bottomLeft: Radius.zero,
+                          topRight: Radius.circular(22),
+                          bottomRight: Radius.circular(22),
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: secTextColor.withValues(alpha: 0.15),
-                            blurRadius: 6,
-                            offset: const Offset(2, 2),
+                            color: Colors.black.withValues(alpha: 0.20),
+                            blurRadius: 8,
+                            offset: const Offset(3, 3),
                           ),
                         ],
                       ),
@@ -2065,16 +2064,23 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           if (secIcon.isNotEmpty && secIcon != '🏷️') ...[
-                            Text(secIcon, style: const TextStyle(fontSize: 18)),
+                            Text(secIcon, style: const TextStyle(fontSize: 17)),
                             const SizedBox(width: 6),
                           ],
                           Text(
                             secName,
-                            style: TextStyle(
-                              fontSize: 16,
+                            style: const TextStyle(
+                              fontSize: 15,
                               fontWeight: FontWeight.w900,
-                              color: secTextColor,
-                              letterSpacing: 0.4,
+                              color: Colors.white,
+                              letterSpacing: 0.5,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black38,
+                                  blurRadius: 3,
+                                  offset: Offset(1, 1),
+                                ),
+                              ],
                             ),
                           ),
                         ],
