@@ -1321,7 +1321,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                                       ],
                                     ),
                                   ),
-                                  const SizedBox(height: 16),
+                                  const SizedBox(height: 38),
                                 ],
                               ),
                             ),
@@ -2423,22 +2423,22 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                   });
                 },
                 child: Container(
-                  width: 72,
-                  margin: const EdgeInsets.symmetric(horizontal: 6),
+                  width: 60,
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
                   child: Column(
                     children: [
                       // Round Avatar Circle Container with Database Color Rotating Ring Animation
                       RotatingCategoryAvatarRingWidget(
                         isSelected: isSel,
                         ringColor: catColor,
-                        child: _buildCategoryImageWidget(cImg, emojiSize: 26),
+                        child: _buildCategoryImageWidget(cImg, emojiSize: 22),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       // Category Name Text Below Round Circle
                       Text(
                         cName,
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 10,
                           fontWeight: isSel ? FontWeight.bold : FontWeight.w600,
                           color: isSel ? catColor : const Color(0xFF334155),
                         ),
@@ -2743,8 +2743,8 @@ class _RotatingCategoryAvatarRingWidgetState extends State<RotatingCategoryAvata
         final angle = _controller.value * 2 * math.pi;
 
         return Container(
-          width: 58,
-          height: 58,
+          width: 50,
+          height: 50,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             boxShadow: widget.isSelected
