@@ -2942,17 +2942,6 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                   ],
                 ),
               ),
-              const PopupMenuDivider(),
-              const PopupMenuItem(
-                value: 'add_product',
-                child: Row(
-                  children: [
-                    Icon(Icons.add_box_rounded, color: Color(0xFFF59E0B), size: 20),
-                    SizedBox(width: 10),
-                    Text('Add New Product 📦', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
-                  ],
-                ),
-              ),
             ],
           ),
         ],

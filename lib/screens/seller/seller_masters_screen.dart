@@ -1878,13 +1878,6 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                     color: const Color(0xFF0284C7),
                     onTap: _uploadProductsFromExcel,
                   ),
-                  _buildMasterCard(
-                    title: 'Add New Product 📦',
-                    subtitle: 'Create single item',
-                    icon: Icons.add_box_rounded,
-                    color: const Color(0xFF6366F1),
-                    onTap: _showAddEditProductDialog,
-                  ),
                 ],
               ),
             ),
