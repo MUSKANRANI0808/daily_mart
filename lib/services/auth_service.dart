@@ -5670,4 +5670,19 @@ class AuthService {
 
     return true;
   }
+
+  /// Get Cached Seller Sliders (Instant Local Cache)
+  static Future<List<Map<String, dynamic>>> getCachedSellerSliders(String sellerUsername) async {
+    final cleanSeller = sellerUsername.trim().toLowerCase();
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_sliders_$cleanSeller';
+    try {
+      final str = prefs.getString(cacheKey);
+      if (str != null && str.isNotEmpty) {
+        final List<dynamic> list = jsonDecode(str);
+        return list.map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
 }

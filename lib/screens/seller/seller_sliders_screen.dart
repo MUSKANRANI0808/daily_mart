@@ -411,27 +411,66 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
   }
 
   Future<void> _loadSliders() async {
-    setState(() => _isLoading = true);
-    final list = await AuthService.getSellerSliders(_sellerUsername);
-    final secList = await AuthService.getSellerSections(_sellerUsername);
-    final catList = await AuthService.getSellerCategories(_sellerUsername);
+    final username = _sellerUsername;
+
+    final cachedSliders = await AuthService.getCachedSellerSliders(username);
+    final cachedSecs = await AuthService.getCachedSellerSections(username);
+    final cachedCats = await AuthService.getCachedSellerCategories(username);
 
     final Set<String> secNames = {'Top Banner'};
-    for (var s in secList) {
+    for (var s in cachedSecs) {
       final name = (s['name'] ?? '').toString().trim();
       if (name.isNotEmpty) secNames.add(name);
     }
-    for (var c in catList) {
+    for (var c in cachedCats) {
       final name = (c['name'] ?? c['category_name'] ?? '').toString().trim();
       if (name.isNotEmpty) secNames.add(name);
     }
 
-    if (mounted) {
-      setState(() {
-        _sliders = list;
-        _availableSections = secNames.toList();
-        _isLoading = false;
-      });
+    if (cachedSliders.isNotEmpty || cachedSecs.isNotEmpty || cachedCats.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _sliders = cachedSliders;
+          _availableSections = secNames.toList();
+          _isLoading = false;
+        });
+      }
+    } else {
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+        });
+      }
+    }
+
+    try {
+      final list = await AuthService.getSellerSliders(username);
+      final secList = await AuthService.getSellerSections(username);
+      final catList = await AuthService.getSellerCategories(username);
+
+      final Set<String> freshSecNames = {'Top Banner'};
+      for (var s in secList) {
+        final name = (s['name'] ?? '').toString().trim();
+        if (name.isNotEmpty) freshSecNames.add(name);
+      }
+      for (var c in catList) {
+        final name = (c['name'] ?? c['category_name'] ?? '').toString().trim();
+        if (name.isNotEmpty) freshSecNames.add(name);
+      }
+
+      if (mounted) {
+        setState(() {
+          _sliders = list;
+          _availableSections = freshSecNames.toList();
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -1720,24 +1759,31 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                 children: [
                                   Row(
                                     children: [
-                                      const Icon(Icons.touch_app_rounded, size: 16, color: Color(0xFF8B5CF6)),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'Assigned Section: ${sec.isEmpty ? 'Top Banner' : sec}',
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A)),
+                                      const Icon(Icons.touch_app_rounded, size: 14, color: Color(0xFF8B5CF6)),
+                                      const SizedBox(width: 4),
+                                      Expanded(
+                                        child: Text(
+                                          'Assigned Section: ${sec.isEmpty ? 'Top Banner' : sec}',
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: Color(0xFF0F172A)),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
-                                      const Spacer(),
+                                      const SizedBox(width: 6),
                                       const Text(
-                                        '👈 Tap chip to move section',
-                                        style: TextStyle(fontSize: 10.5, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                                        '👉 Tap chip to move',
+                                        style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
                                       ),
                                     ],
                                   ),
                                   const SizedBox(height: 6),
-                                  SingleChildScrollView(
-                                    scrollDirection: Axis.horizontal,
-                                    child: Row(
-                                      children: _availableSections.map((secName) {
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      physics: const BouncingScrollPhysics(),
+                                      child: Row(
+                                        children: _availableSections.map((secName) {
                                         final isCur = sec.toLowerCase() == secName.toLowerCase() || (sec.isEmpty && secName == 'Top Banner');
                                         return Padding(
                                           padding: const EdgeInsets.only(right: 6),
@@ -1776,11 +1822,12 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                       }).toList(),
                                     ),
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                          ],
-                        );
+                          ),
+                        ],
+                      );
                       },
                     );
                   }(),
