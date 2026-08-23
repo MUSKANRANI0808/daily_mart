@@ -1480,6 +1480,111 @@ if ($action == 'get-header-theme') {
     }
     echo json_encode(["success" => false, "message" => "Failed to add product"]);
     exit();
+} elseif ($action == 'bulk-add-seller-products') {
+    $colCheckProdImg = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'image_url'");
+    if (!$colCheckProdImg || $colCheckProdImg->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_products ADD COLUMN image_url LONGTEXT DEFAULT NULL");
+    }
+    $colCheckProdSec = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'section'");
+    if (!$colCheckProdSec || $colCheckProdSec->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_products ADD COLUMN section VARCHAR(255) DEFAULT NULL");
+    }
+    $colCheckLongDesc = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'long_description'");
+    if (!$colCheckLongDesc || $colCheckLongDesc->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_products ADD COLUMN long_description LONGTEXT DEFAULT NULL");
+    }
+    $colCheckPurRate = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'purchase_rate'");
+    if (!$colCheckPurRate || $colCheckPurRate->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_products ADD COLUMN purchase_rate DECIMAL(10,2) DEFAULT 0.00");
+    }
+
+    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : '';
+    $products = isset($input['products']) && is_array($input['products']) ? $input['products'] : array();
+
+    if (empty($seller_username) || empty($products)) {
+        echo json_encode(["success" => false, "message" => "Seller username and non-empty products list required"]);
+        exit();
+    }
+
+    $insertedProducts = array();
+    $stmt = $conn->prepare("INSERT INTO seller_products (seller_username, name, description, long_description, unit, category, section, qty, rate, purchase_rate, image_url, button_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+
+    foreach ($products as $p) {
+        $name = isset($p['name']) ? trim($p['name']) : '';
+        if (empty($name)) continue;
+
+        $description = isset($p['description']) ? trim($p['description']) : '';
+        $long_description = isset($p['long_description']) ? trim($p['long_description']) : '';
+        $unit = isset($p['unit']) && !empty(trim($p['unit'])) ? trim($p['unit']) : 'Pcs';
+        $category = isset($p['category']) ? trim($p['category']) : '';
+        $section = isset($p['section']) ? trim($p['section']) : '';
+        $qty = isset($p['qty']) ? (int)$p['qty'] : 1;
+        if ($qty <= 0) $qty = 1;
+        $rate = isset($p['rate']) ? (float)$p['rate'] : (isset($p['sale_rate']) ? (float)$p['sale_rate'] : 0.0);
+        $purchase_rate = isset($p['purchase_rate']) ? (float)$p['purchase_rate'] : (isset($p['purchase_price']) ? (float)$p['purchase_price'] : 0.0);
+        $image_url = isset($p['image_url']) ? trim($p['image_url']) : '';
+        $button_text = isset($p['button_text']) && !empty(trim($p['button_text'])) ? trim($p['button_text']) : 'Buy Now';
+
+        if ($stmt) {
+            $stmt->bind_param("sssssssiddss", $seller_username, $name, $description, $long_description, $unit, $category, $section, $qty, $rate, $purchase_rate, $image_url, $button_text);
+            if ($stmt->execute()) {
+                $newId = $stmt->insert_id;
+                $insertedProducts[] = [
+                    "id" => $newId,
+                    "seller_username" => $seller_username,
+                    "name" => $name,
+                    "description" => $description,
+                    "long_description" => $long_description,
+                    "unit" => $unit,
+                    "category" => $category,
+                    "section" => $section,
+                    "qty" => $qty,
+                    "rate" => $rate,
+                    "purchase_rate" => $purchase_rate,
+                    "image_url" => $image_url,
+                    "button_text" => $button_text
+                ];
+
+                // Auto-create category if missing
+                if (!empty($category)) {
+                    $escCat = $conn->real_escape_string($category);
+                    $escSeller = $conn->real_escape_string($seller_username);
+                    $catCheck = $conn->query("SELECT id FROM seller_categories WHERE seller_username = '$escSeller' AND LOWER(name) = LOWER('$escCat')");
+                    if (!$catCheck || $catCheck->num_rows == 0) {
+                        @$conn->query("INSERT INTO seller_categories (seller_username, name, image_url, ring_color) VALUES ('$escSeller', '$escCat', '📁', '#8B5CF6')");
+                    }
+                }
+
+                // Auto-create section if missing
+                if (!empty($section)) {
+                    $escSec = $conn->real_escape_string($section);
+                    $escSeller = $conn->real_escape_string($seller_username);
+                    $secCheck = $conn->query("SELECT id FROM seller_sections WHERE seller_username = '$escSeller' AND LOWER(name) = LOWER('$escSec')");
+                    if (!$secCheck || $secCheck->num_rows == 0) {
+                        @$conn->query("INSERT INTO seller_sections (seller_username, name, icon, bg_color, text_color, columns, max_items) VALUES ('$escSeller', '$escSec', '🏷️', '#FFFFFF', '#EF4444', 2, 0)");
+                    }
+                }
+
+                // Auto-create unit if missing
+                if (!empty($unit)) {
+                    $escUnit = $conn->real_escape_string($unit);
+                    $escSeller = $conn->real_escape_string($seller_username);
+                    $unitCheck = $conn->query("SELECT id FROM seller_units WHERE seller_username = '$escSeller' AND LOWER(name) = LOWER('$escUnit')");
+                    if (!$unitCheck || $unitCheck->num_rows == 0) {
+                        @$conn->query("INSERT INTO seller_units (seller_username, name) VALUES ('$escSeller', '$escUnit')");
+                    }
+                }
+            }
+        }
+    }
+
+    echo json_encode([
+        "success" => true,
+        "message" => count($insertedProducts) . " products imported successfully",
+        "count" => count($insertedProducts),
+        "products" => $insertedProducts
+    ]);
+    exit();
 } elseif ($action == 'get-seller-products') {
     $colCheckBtnText = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'button_text'");
     if (!$colCheckBtnText || $colCheckBtnText->num_rows == 0) {

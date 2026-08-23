@@ -1,5 +1,6 @@
 // Conditional import for web download
 import 'package:daily_mart/utils/csv_exporter_web.dart' if (dart.library.io) 'package:daily_mart/utils/csv_exporter_mobile.dart';
+export 'package:daily_mart/utils/csv_exporter_web.dart' if (dart.library.io) 'package:daily_mart/utils/csv_exporter_mobile.dart';
 
 class CsvExporter {
   static void exportOrders(List<Map<String, dynamic>> orders) {

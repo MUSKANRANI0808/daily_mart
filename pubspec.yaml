@@ -20,6 +20,8 @@ dependencies:
   flutter_local_notifications: ^22.2.0
   flutter_background_service: ^5.0.5
   lottie: ^3.3.3
+  csv: ^8.0.0
+  file_picker: ^12.0.0
 
 dev_dependencies:
   flutter_test:

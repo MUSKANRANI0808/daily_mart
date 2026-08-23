@@ -1,9 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:csv/csv.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/color_picker_dialog.dart';
+import '../../utils/csv_exporter.dart';
 
 int safeInt(dynamic val, [int defaultValue = 0]) {
   if (val == null) return defaultValue;
@@ -2820,6 +2823,10 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                 _showManageUnitsDialog();
               } else if (value == 'search_bar_style') {
                 _showManageSearchBarDialog();
+              } else if (value == 'export_excel') {
+                _exportProductsToExcel();
+              } else if (value == 'import_excel') {
+                _importProductsFromExcel();
               } else if (value == 'add_product') {
                 _showAddEditProductDialog();
               } else if (value == 'refresh') {
@@ -2864,6 +2871,27 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                     Icon(Icons.palette_rounded, color: Color(0xFF8B5CF6), size: 20),
                     SizedBox(width: 10),
                     Text('Search Bar Style 🔍', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'export_excel',
+                child: Row(
+                  children: [
+                    Icon(Icons.file_download_rounded, color: Color(0xFF10B981), size: 20),
+                    SizedBox(width: 10),
+                    Text('Export Excel 📊', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'import_excel',
+                child: Row(
+                  children: [
+                    Icon(Icons.file_upload_rounded, color: Color(0xFF0284C7), size: 20),
+                    SizedBox(width: 10),
+                    Text('Import Excel 📥', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
                   ],
                 ),
               ),
@@ -3252,5 +3280,335 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
         label: const Text('Add Product', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
       ),
     );
+  }
+
+  /// Export Products list as Excel / CSV file
+  void _exportProductsToExcel() {
+    final StringBuffer csvBuf = StringBuffer();
+    // UTF-8 BOM for Excel compatibility (so Excel opens Hindi/English cleanly)
+    csvBuf.write('\uFEFF');
+
+    // 9 Columns requested by user:
+    // Item name, Short Discription, Long Disdription, Category, Section, Unit, Qty, Sale Rate, Purchage Rate
+    csvBuf.writeln('Item name,Short Discription,Long Disdription,Category,Section,Unit,Qty,Sale Rate,Purchage Rate');
+
+    if (_allProducts.isNotEmpty) {
+      for (var p in _allProducts) {
+        final itemName = _csvEscape(p['name'] ?? '');
+        final shortDesc = _csvEscape(p['description'] ?? '');
+        final longDesc = _csvEscape(p['long_description'] ?? p['details'] ?? '');
+        final category = _csvEscape(p['category'] ?? '');
+        final section = _csvEscape(p['section'] ?? '');
+        final unit = _csvEscape(p['unit'] ?? 'Pcs');
+        final qty = (p['qty'] ?? 1).toString();
+        final saleRate = (double.tryParse((p['rate'] ?? p['sale_rate'] ?? 0).toString()) ?? 0.0).toStringAsFixed(2);
+        final purRate = (double.tryParse((p['purchase_rate'] ?? p['purchase_price'] ?? 0).toString()) ?? 0.0).toStringAsFixed(2);
+
+        csvBuf.writeln('$itemName,$shortDesc,$longDesc,$category,$section,$unit,$qty,$saleRate,$purRate');
+      }
+    } else {
+      // Template rows for easy filling if seller has no products yet
+      csvBuf.writeln('Nimak (Namak),Fresh Iodized Salt,High quality iodized salt for everyday cooking,Grocery,Daily Use,Kg,1,20.00,15.00');
+      csvBuf.writeln('Sabun,Bathing Soap,Pure herbal bathing soap bar,Grocery,Daily Use,Pcs,1,5.00,3.50');
+      csvBuf.writeln('Kurkure,Masala Munch,Crispy spicy corn puffs packet,Snacks,Popular,Pcs,1,5.00,4.00');
+    }
+
+    final now = DateTime.now();
+    final timeStr = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
+    final fileName = 'DailyMart_Products_$timeStr.csv';
+
+    downloadCsvFile(csvBuf.toString(), fileName);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Excel file exported successfully: $fileName 📊'),
+        backgroundColor: const Color(0xFF10B981),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _csvEscape(dynamic value) {
+    String str = (value ?? '').toString().replaceAll('"', '""');
+    if (str.contains(',') || str.contains('"') || str.contains('\n') || str.contains('\r')) {
+      return '"$str"';
+    }
+    return str;
+  }
+
+  /// Import Products from Excel / CSV file
+  Future<void> _importProductsFromExcel() async {
+    try {
+      final List<PlatformFile> files = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv', 'txt', 'xlsx', 'xls'],
+      );
+
+      if (files.isEmpty) return;
+
+      final file = files.first;
+      final bytes = await file.readAsBytes();
+      final csvString = utf8.decode(bytes, allowMalformed: true);
+
+      if (csvString.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Selected file is empty or could not be read ❌'),
+              backgroundColor: Color(0xFFEF4444),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Convert CSV content to rows
+      final List<List<dynamic>> rows = const CsvDecoder().convert(csvString);
+
+      if (rows.isEmpty || rows.length < 2) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No product data rows found in Excel file ❌'),
+            backgroundColor: Color(0xFFEF4444),
+          ),
+        );
+        return;
+      }
+
+      // Read Header Row (Row 0)
+      final List<String> headers = rows[0].map((h) => h.toString().trim().toLowerCase()).toList();
+
+      int nameIdx = headers.indexWhere((h) => h.contains('item name') || h.contains('item_name') || h == 'name' || h.contains('product'));
+      int shortDescIdx = headers.indexWhere((h) => h.contains('short') || h == 'description' || h.contains('sub'));
+      int longDescIdx = headers.indexWhere((h) => h.contains('long') || h.contains('details') || h.contains('full'));
+      int catIdx = headers.indexWhere((h) => h.contains('category') || h == 'cat');
+      int secIdx = headers.indexWhere((h) => h.contains('section') || h == 'sec');
+      int unitIdx = headers.indexWhere((h) => h.contains('unit'));
+      int qtyIdx = headers.indexWhere((h) => h.contains('qty') || h.contains('quantity') || h.contains('stock'));
+      int saleRateIdx = headers.indexWhere((h) => h.contains('sale') || h.contains('rate') || h.contains('price') || h.contains('mrp'));
+      int purRateIdx = headers.indexWhere((h) => h.contains('purch') || h.contains('cost') || h.contains('buy'));
+
+      // Smart fallback indexing if headers match standard order:
+      // Item name, Short Discription, Long Disdription, Category, Section, Unit, Qty, Sale Rate, Purchage Rate
+      if (nameIdx == -1 && headers.isNotEmpty) nameIdx = 0;
+      if (shortDescIdx == -1 && headers.length > 1) shortDescIdx = 1;
+      if (longDescIdx == -1 && headers.length > 2) longDescIdx = 2;
+      if (catIdx == -1 && headers.length > 3) catIdx = 3;
+      if (secIdx == -1 && headers.length > 4) secIdx = 4;
+      if (unitIdx == -1 && headers.length > 5) unitIdx = 5;
+      if (qtyIdx == -1 && headers.length > 6) qtyIdx = 6;
+      if (saleRateIdx == -1 && headers.length > 7) saleRateIdx = 7;
+      if (purRateIdx == -1 && headers.length > 8) purRateIdx = 8;
+
+      final List<Map<String, dynamic>> parsedProducts = [];
+
+      for (int i = 1; i < rows.length; i++) {
+        final row = rows[i];
+        if (row.isEmpty) continue;
+
+        final String itemName = (nameIdx >= 0 && nameIdx < row.length) ? row[nameIdx].toString().trim() : '';
+        if (itemName.isEmpty || itemName.toLowerCase() == 'item name') continue;
+
+        final String shortDesc = (shortDescIdx >= 0 && shortDescIdx < row.length) ? row[shortDescIdx].toString().trim() : '';
+        final String longDesc = (longDescIdx >= 0 && longDescIdx < row.length) ? row[longDescIdx].toString().trim() : '';
+        final String category = (catIdx >= 0 && catIdx < row.length) ? row[catIdx].toString().trim() : '';
+        final String section = (secIdx >= 0 && secIdx < row.length) ? row[secIdx].toString().trim() : '';
+        final String unit = (unitIdx >= 0 && unitIdx < row.length && row[unitIdx].toString().trim().isNotEmpty) ? row[unitIdx].toString().trim() : 'Pcs';
+        final int qty = (qtyIdx >= 0 && qtyIdx < row.length) ? (int.tryParse(row[qtyIdx].toString().trim()) ?? 1) : 1;
+        final double saleRate = (saleRateIdx >= 0 && saleRateIdx < row.length) ? (double.tryParse(row[saleRateIdx].toString().trim()) ?? 0.0) : 0.0;
+        final double purRate = (purRateIdx >= 0 && purRateIdx < row.length) ? (double.tryParse(row[purRateIdx].toString().trim()) ?? 0.0) : 0.0;
+
+        parsedProducts.add({
+          'name': itemName,
+          'description': shortDesc,
+          'long_description': longDesc,
+          'category': category,
+          'section': section,
+          'unit': unit,
+          'qty': qty <= 0 ? 1 : qty,
+          'rate': saleRate,
+          'purchase_rate': purRate,
+        });
+      }
+
+      if (parsedProducts.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No valid product records found in Excel file ❌'),
+            backgroundColor: Color(0xFFEF4444),
+          ),
+        );
+        return;
+      }
+
+      // Show Import Confirmation Preview Modal
+      _showImportPreviewModal(parsedProducts);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error importing Excel file: $e ❌'),
+          backgroundColor: const Color(0xFFEF4444),
+        ),
+      );
+    }
+  }
+
+  /// Show Import Preview & Confirmation Dialog
+  void _showImportPreviewModal(List<Map<String, dynamic>> parsedProducts) {
+    bool isImporting = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              left: 20,
+              right: 20,
+              top: 20,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.file_upload_rounded, color: Color(0xFF0284C7), size: 26),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Import Products (${parsedProducts.length}) 📊',
+                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Found ${parsedProducts.length} product(s) in Excel file. Preview first few items below:',
+                  style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                ),
+                const SizedBox(height: 14),
+
+                // Preview List Container
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: parsedProducts.length > 5 ? 5 : parsedProducts.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (ctx, idx) {
+                      final p = parsedProducts[idx];
+                      return ListTile(
+                        dense: true,
+                        title: Text(
+                          p['name'] ?? '',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                        ),
+                        subtitle: Text(
+                          'Cat: ${p['category'].toString().isEmpty ? 'General' : p['category']} | Sec: ${p['section'].toString().isEmpty ? 'General' : p['section']} | Unit: ${p['unit']}',
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                        ),
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '₹${p['rate']}',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF10B981)),
+                            ),
+                            if (safeDouble(p['purchase_rate']) > 0)
+                              Text(
+                                'Buy: ₹${p['purchase_rate']}',
+                                style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8)),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                if (parsedProducts.length > 5)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      '+ ${parsedProducts.length - 5} more items ready to import...',
+                      style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Color(0xFF64748B)),
+                    ),
+                  ),
+                const SizedBox(height: 18),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: isImporting
+                        ? null
+                        : () async {
+                            setModalState(() => isImporting = true);
+                            final count = await AuthService.bulkAddSellerProducts(
+                              sellerUsername: widget.seller.username ?? '',
+                              productsList: parsedProducts,
+                            );
+
+                            if (ctx.mounted) Navigator.pop(ctx);
+
+                            await _loadData();
+
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Successfully imported $count products! 🎉'),
+                                  backgroundColor: const Color(0xFF10B981),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0284C7),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      elevation: 2,
+                    ),
+                    child: isImporting
+                        ? const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
+                              SizedBox(width: 10),
+                              Text('Importing Products...', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                            ],
+                          )
+                        : Text(
+                            'Import ${parsedProducts.length} Products Now 🚀',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );  
   }
 }

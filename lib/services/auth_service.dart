@@ -4385,6 +4385,66 @@ class AuthService {
     return true;
   }
 
+  /// Bulk Add Products for a Seller (VPS API + Local Cache)
+  static Future<int> bulkAddSellerProducts({
+    required String sellerUsername,
+    required List<Map<String, dynamic>> productsList,
+  }) async {
+    final cleanSeller = sellerUsername.trim();
+    if (cleanSeller.isEmpty || productsList.isEmpty) return 0;
+
+    int importedCount = 0;
+    List<Map<String, dynamic>> newlyCreatedProds = [];
+
+    try {
+      final res = await VpsApiService.post('bulk-add-seller-products', {
+        'seller_username': cleanSeller,
+        'products': productsList,
+      });
+
+      if (res != null && res['success'] == true && res['products'] != null) {
+        final List returnedProds = res['products'];
+        newlyCreatedProds = returnedProds.map((p) => Map<String, dynamic>.from(p)).toList();
+        importedCount = newlyCreatedProds.length;
+      }
+    } catch (_) {}
+
+    // Fallback if VPS API is offline or returns empty
+    if (newlyCreatedProds.isEmpty) {
+      int tempId = DateTime.now().millisecondsSinceEpoch;
+      for (var p in productsList) {
+        final name = (p['name'] ?? '').toString().trim();
+        if (name.isEmpty) continue;
+        tempId++;
+        newlyCreatedProds.add({
+          'id': tempId,
+          'seller_username': cleanSeller,
+          'name': name,
+          'description': (p['description'] ?? '').toString().trim(),
+          'long_description': (p['long_description'] ?? '').toString().trim(),
+          'unit': (p['unit'] ?? 'Pcs').toString().trim(),
+          'category': (p['category'] ?? '').toString().trim(),
+          'section': (p['section'] ?? '').toString().trim(),
+          'qty': int.tryParse(p['qty']?.toString() ?? '1') ?? 1,
+          'rate': double.tryParse(p['rate']?.toString() ?? '0') ?? 0.0,
+          'purchase_rate': double.tryParse(p['purchase_rate']?.toString() ?? '0') ?? 0.0,
+          'image_url': (p['image_url'] ?? '').toString().trim(),
+          'button_text': 'Buy Now',
+        });
+      }
+      importedCount = newlyCreatedProds.length;
+    }
+
+    if (newlyCreatedProds.isNotEmpty) {
+      final existingProds = await getCachedSellerProducts(cleanSeller);
+      final updatedList = List<Map<String, dynamic>>.from(newlyCreatedProds)..addAll(existingProds);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('seller_products_$cleanSeller', jsonEncode(updatedList));
+    }
+
+    return importedCount;
+  }
+
   /// Update an existing Product for a Seller
   static Future<bool> updateSellerProduct({
     required int id,
