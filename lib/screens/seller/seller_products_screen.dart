@@ -2823,10 +2823,10 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                 _showManageUnitsDialog();
               } else if (value == 'search_bar_style') {
                 _showManageSearchBarDialog();
-              } else if (value == 'export_excel') {
-                _exportProductsToExcel();
-              } else if (value == 'import_excel') {
-                _importProductsFromExcel();
+              } else if (value == 'download_excel') {
+                _downloadProductsToExcel();
+              } else if (value == 'upload_excel') {
+                _uploadProductsFromExcel();
               } else if (value == 'add_product') {
                 _showAddEditProductDialog();
               } else if (value == 'refresh') {
@@ -2876,22 +2876,22 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
               ),
               const PopupMenuDivider(),
               const PopupMenuItem(
-                value: 'export_excel',
+                value: 'download_excel',
                 child: Row(
                   children: [
                     Icon(Icons.file_download_rounded, color: Color(0xFF10B981), size: 20),
                     SizedBox(width: 10),
-                    Text('Export Excel 📊', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                    Text('Download Excel 📊', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
                   ],
                 ),
               ),
               const PopupMenuItem(
-                value: 'import_excel',
+                value: 'upload_excel',
                 child: Row(
                   children: [
                     Icon(Icons.file_upload_rounded, color: Color(0xFF0284C7), size: 20),
                     SizedBox(width: 10),
-                    Text('Import Excel 📥', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                    Text('Upload Excel 📥', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
                   ],
                 ),
               ),
@@ -3282,8 +3282,8 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     );
   }
 
-  /// Export Products list as Excel / CSV file
-  void _exportProductsToExcel() {
+  /// Download Products list as Excel / CSV file
+  void _downloadProductsToExcel() {
     final StringBuffer csvBuf = StringBuffer();
     // UTF-8 BOM for Excel compatibility (so Excel opens Hindi/English cleanly)
     csvBuf.write('\uFEFF');
@@ -3321,7 +3321,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Excel file exported successfully: $fileName 📊'),
+        content: Text('Excel file downloaded successfully: $fileName 📊'),
         backgroundColor: const Color(0xFF10B981),
         behavior: SnackBarBehavior.floating,
       ),
@@ -3336,8 +3336,8 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     return str;
   }
 
-  /// Import Products from Excel / CSV file
-  Future<void> _importProductsFromExcel() async {
+  /// Upload Products from Excel / CSV file
+  Future<void> _uploadProductsFromExcel() async {
     try {
       final List<PlatformFile> files = await FilePicker.pickFiles(
         type: FileType.custom,
@@ -3441,21 +3441,21 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
         return;
       }
 
-      // Show Import Confirmation Preview Modal
-      _showImportPreviewModal(parsedProducts);
+      // Show Upload Confirmation Preview Modal
+      _showUploadPreviewModal(parsedProducts);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error importing Excel file: $e ❌'),
+          content: Text('Error uploading Excel file: $e ❌'),
           backgroundColor: const Color(0xFFEF4444),
         ),
       );
     }
   }
 
-  /// Show Import Preview & Confirmation Dialog
-  void _showImportPreviewModal(List<Map<String, dynamic>> parsedProducts) {
-    bool isImporting = false;
+  /// Show Upload Preview & Confirmation Dialog
+  void _showUploadPreviewModal(List<Map<String, dynamic>> parsedProducts) {
+    bool isUploading = false;
 
     showModalBottomSheet(
       context: context,
@@ -3486,7 +3486,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                         const Icon(Icons.file_upload_rounded, color: Color(0xFF0284C7), size: 26),
                         const SizedBox(width: 10),
                         Text(
-                          'Import Products (${parsedProducts.length}) 📊',
+                          'Upload Products (${parsedProducts.length}) 📊',
                           style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                         ),
                       ],
@@ -3551,7 +3551,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: Text(
-                      '+ ${parsedProducts.length - 5} more items ready to import...',
+                      '+ ${parsedProducts.length - 5} more items ready to upload...',
                       style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Color(0xFF64748B)),
                     ),
                   ),
@@ -3561,10 +3561,10 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton(
-                    onPressed: isImporting
+                    onPressed: isUploading
                         ? null
                         : () async {
-                            setModalState(() => isImporting = true);
+                            setModalState(() => isUploading = true);
                             final count = await AuthService.bulkAddSellerProducts(
                               sellerUsername: widget.seller.username ?? '',
                               productsList: parsedProducts,
@@ -3577,7 +3577,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: Text('Successfully imported $count products! 🎉'),
+                                  content: Text('Successfully uploaded $count products! 🎉'),
                                   backgroundColor: const Color(0xFF10B981),
                                   behavior: SnackBarBehavior.floating,
                                 ),
@@ -3589,17 +3589,17 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       elevation: 2,
                     ),
-                    child: isImporting
+                    child: isUploading
                         ? const Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
                               SizedBox(width: 10),
-                              Text('Importing Products...', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                              Text('Uploading Products...', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
                             ],
                           )
                         : Text(
-                            'Import ${parsedProducts.length} Products Now 🚀',
+                            'Upload ${parsedProducts.length} Products Now 🚀',
                             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
                           ),
                   ),
@@ -3609,6 +3609,6 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
           );
         },
       ),
-    );  
+    );
   }
 }
