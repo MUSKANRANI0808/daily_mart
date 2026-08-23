@@ -3286,27 +3286,35 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                                           Row(
                                             children: [
                                               if (pSec.isNotEmpty)
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(0xFFF3E8FF),
-                                                    borderRadius: BorderRadius.circular(4),
-                                                  ),
-                                                  child: Text(
-                                                    '🏷️ $pSec',
-                                                    style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Color(0xFF7E22CE)),
+                                                Flexible(
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFFF3E8FF),
+                                                      borderRadius: BorderRadius.circular(4),
+                                                    ),
+                                                    child: Text(
+                                                      '🏷️ $pSec',
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Color(0xFF7E22CE)),
+                                                    ),
                                                   ),
                                                 )
                                               else if (pCat.isNotEmpty)
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(0xFFE0F2FE),
-                                                    borderRadius: BorderRadius.circular(4),
-                                                  ),
-                                                  child: Text(
-                                                    '📁 $pCat',
-                                                    style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Color(0xFF0369A1)),
+                                                Flexible(
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFFE0F2FE),
+                                                      borderRadius: BorderRadius.circular(4),
+                                                    ),
+                                                    child: Text(
+                                                      '📁 $pCat',
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Color(0xFF0369A1)),
+                                                    ),
                                                   ),
                                                 ),
                                             ],
@@ -3314,54 +3322,59 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                                         ],
                                       ),
                                     ),
-                                    const SizedBox(width: 6),
+                                    const SizedBox(width: 4),
 
                                     // 3. Unit Badge e.g. [BOX]
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFFF1F5F9),
-                                        borderRadius: BorderRadius.circular(5),
+                                        borderRadius: BorderRadius.circular(4),
                                         border: Border.all(color: const Color(0xFFCBD5E1)),
                                       ),
                                       child: Text(
                                         qty > 1 ? '$unit x$qty' : unit,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(
-                                          fontSize: 10,
+                                          fontSize: 9.5,
                                           fontWeight: FontWeight.bold,
                                           color: Color(0xFF475569),
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
+                                    const SizedBox(width: 4),
 
                                     // 4. Rate / Price e.g. ₹62
                                     Text(
                                       '₹${rate.toStringAsFixed(rate.truncateToDouble() == rate ? 0 : 2)}',
                                       style: const TextStyle(
-                                        fontSize: 13.5,
+                                        fontSize: 13,
                                         fontWeight: FontWeight.w800,
                                         color: Color(0xFF059669),
                                       ),
                                     ),
-                                    const SizedBox(width: 4),
+                                    const SizedBox(width: 2),
 
-                                    // 5. Edit Button
-                                    IconButton(
-                                      icon: const Icon(Icons.edit_rounded, color: Color(0xFF8B5CF6), size: 16),
-                                      onPressed: () => _showAddEditProductDialog(productToEdit: p),
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                                      tooltip: 'Edit',
-                                    ),
-
-                                    // 6. Delete Button
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 16),
-                                      onPressed: () => _confirmDeleteProduct(p),
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                                      tooltip: 'Delete',
+                                    // 5. Edit & Delete Action Icons (Tight side-by-side)
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.edit_rounded, color: Color(0xFF8B5CF6), size: 16),
+                                          onPressed: () => _showAddEditProductDialog(productToEdit: p),
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
+                                          tooltip: 'Edit',
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 16),
+                                          onPressed: () => _confirmDeleteProduct(p),
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
+                                          tooltip: 'Delete',
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
