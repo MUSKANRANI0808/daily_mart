@@ -50,7 +50,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
   List<Map<String, dynamic>> _sellerSections = [];
   String _searchQuery = '';
   String _selectedCategoryFilter = 'All';
-  bool _isTableView = true;
+  bool _isTableView = false;
 
   @override
   void initState() {
@@ -3174,188 +3174,156 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                     : _isTableView
                         ? _buildProductTableView()
                         : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _filteredProducts.length,
-                        itemBuilder: (context, idx) {
-                          final p = _filteredProducts[idx];
-                          final name = safeString(p['name']);
-                          final desc = safeString(p['description']);
-                          final unit = safeString(p['unit'], 'Pcs');
-                          final qty = safeInt(p['qty'], 1);
-                          final rate = safeDouble(p['rate'], 0.0);
-
-                          final imgUrl = safeString(p['image_url']).trim();
-                          final imgVal = safeString(p['image']).trim();
-                          final img = imgUrl.isNotEmpty ? imgUrl : (imgVal.isNotEmpty ? imgVal : '📦');
-
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 8),
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFE2E8F0)),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.02),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                 // Row 1: Full-width Product Name & Description at TOP
-                                Row(
-                                  children: [
-                                    Container(
-                                      width: 32,
-                                      height: 32,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFEDE9FE),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: _buildProductImageWidget(img, emojiSize: 18),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        desc.isNotEmpty ? '$name ($desc)' : name,
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFF0F172A),
-                                        ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
+                            itemCount: _filteredProducts.length,
+                            itemBuilder: (context, idx) {
+                              final p = _filteredProducts[idx];
+                              final name = safeString(p['name']);
+                              final desc = safeString(p['description']);
+                              final unit = safeString(p['unit'], 'Pcs');
+                              final qty = safeInt(p['qty'], 1);
+                              final rate = safeDouble(p['rate'], 0.0);
+                              final pSec = safeString(p['section']);
+                              final pCat = safeString(p['category']);
+
+                              final imgUrl = safeString(p['image_url']).trim();
+                              final imgVal = safeString(p['image']).trim();
+                              final img = imgUrl.isNotEmpty ? imgUrl : (imgVal.isNotEmpty ? imgVal : '📦');
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.02),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 1),
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 4),
-
-                                // Section / Category Badge
-                                Builder(
-                                  builder: (ctx) {
-                                    final pSec = safeString(p['section']);
-                                    final pCat = safeString(p['category']);
-
-                                    if (pSec.isNotEmpty) {
-                                      return InkWell(
-                                        onTap: () => _showAddEditProductDialog(productToEdit: p),
-                                        child: Container(
-                                          margin: const EdgeInsets.only(bottom: 4),
-                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFF3E8FF),
-                                            borderRadius: BorderRadius.circular(6),
-                                            border: Border.all(color: const Color(0xFFD8B4FE)),
-                                          ),
-                                          child: Text(
-                                            '🏷️ Section: $pSec',
-                                            style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF7E22CE)),
-                                          ),
-                                        ),
-                                      );
-                                    } else if (pCat.isNotEmpty) {
-                                      return InkWell(
-                                        onTap: () => _showAddEditProductDialog(productToEdit: p),
-                                        child: Container(
-                                          margin: const EdgeInsets.only(bottom: 4),
-                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFE0F2FE),
-                                            borderRadius: BorderRadius.circular(6),
-                                            border: Border.all(color: const Color(0xFFBAE6FD)),
-                                          ),
-                                          child: Text(
-                                            '📁 Category: $pCat',
-                                            style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF0369A1)),
-                                          ),
-                                        ),
-                                      );
-                                    } else {
-                                      return InkWell(
-                                        onTap: () => _showAddEditProductDialog(productToEdit: p),
-                                        child: Container(
-                                          margin: const EdgeInsets.only(bottom: 4),
-                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFFEF3C7),
-                                            borderRadius: BorderRadius.circular(6),
-                                            border: Border.all(color: const Color(0xFFFDE68A)),
-                                          ),
-                                          child: const Text(
-                                            '🏷️ + Assign Section',
-                                            style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                  },
-                                ),
-
-                                // Row 2: Slim details row [Unit Badge] | [Price] | [Edit & Delete Icons]
-                                Row(
+                                child: Row(
                                   children: [
-                                    // Unit Badge
+                                    // 1. Compact Thumbnail (28x28)
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      width: 28,
+                                      height: 28,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEDE9FE),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(6),
+                                        child: _buildProductImageWidget(img, emojiSize: 15),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+
+                                    // 2. Name & Category/Section Tag Column
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            desc.isNotEmpty ? '$name ($desc)' : name,
+                                            style: const TextStyle(
+                                              fontSize: 12.5,
+                                              fontWeight: FontWeight.bold,
+                                              color: Color(0xFF0F172A),
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Row(
+                                            children: [
+                                              if (pSec.isNotEmpty)
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFFF3E8FF),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                  child: Text(
+                                                    '🏷️ $pSec',
+                                                    style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Color(0xFF7E22CE)),
+                                                  ),
+                                                )
+                                              else if (pCat.isNotEmpty)
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFFE0F2FE),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                  child: Text(
+                                                    '📁 $pCat',
+                                                    style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Color(0xFF0369A1)),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+
+                                    // 3. Unit Badge e.g. [BOX]
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFFF1F5F9),
-                                        borderRadius: BorderRadius.circular(6),
+                                        borderRadius: BorderRadius.circular(5),
                                         border: Border.all(color: const Color(0xFFCBD5E1)),
                                       ),
                                       child: Text(
-                                        qty > 1 ? '$unit (x$qty)' : unit,
+                                        qty > 1 ? '$unit x$qty' : unit,
                                         style: const TextStyle(
-                                          fontSize: 11,
+                                          fontSize: 10,
                                           fontWeight: FontWeight.bold,
                                           color: Color(0xFF475569),
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(width: 10),
+                                    const SizedBox(width: 8),
 
-                                    // Price / Rate
+                                    // 4. Rate / Price e.g. ₹62
                                     Text(
                                       '₹${rate.toStringAsFixed(rate.truncateToDouble() == rate ? 0 : 2)}',
                                       style: const TextStyle(
-                                        fontSize: 14.5,
+                                        fontSize: 13.5,
                                         fontWeight: FontWeight.w800,
                                         color: Color(0xFF059669),
                                       ),
                                     ),
-                                    const Spacer(),
+                                    const SizedBox(width: 4),
 
-                                    // Action Icons (Edit & Delete side by side)
+                                    // 5. Edit Button
                                     IconButton(
-                                      icon: const Icon(Icons.edit_rounded, color: Color(0xFF8B5CF6), size: 18),
+                                      icon: const Icon(Icons.edit_rounded, color: Color(0xFF8B5CF6), size: 16),
                                       onPressed: () => _showAddEditProductDialog(productToEdit: p),
                                       padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                      tooltip: 'Edit Product',
+                                      constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                                      tooltip: 'Edit',
                                     ),
-                                    const SizedBox(width: 4),
+
+                                    // 6. Delete Button
                                     IconButton(
-                                      icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 18),
+                                      icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 16),
                                       onPressed: () => _confirmDeleteProduct(p),
                                       padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                      tooltip: 'Delete Product',
+                                      constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                                      tooltip: 'Delete',
                                     ),
                                   ],
                                 ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
+                              );
+                            },
+                          ),
           ),
         ],
       ),
