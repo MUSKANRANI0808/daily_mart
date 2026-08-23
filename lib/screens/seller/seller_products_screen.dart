@@ -3079,87 +3079,6 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
             ),
           ),
 
-          // View Mode Switcher Header Bar (Scrollable to prevent any right overflow)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            color: const Color(0xFFF1F5F9),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  Text(
-                    '${_filteredProducts.length} Items',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
-                  ),
-                  const SizedBox(width: 12),
-                  Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE2E8F0),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        GestureDetector(
-                          onTap: () => setState(() => _isTableView = false),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: !_isTableView ? const Color(0xFF0F172A) : Colors.transparent,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.list_alt_rounded, size: 13, color: !_isTableView ? Colors.white : const Color(0xFF64748B)),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'Compact List 📑',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: !_isTableView ? Colors.white : const Color(0xFF475569),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 3),
-                        GestureDetector(
-                          onTap: () => setState(() => _isTableView = true),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: _isTableView ? const Color(0xFF0F172A) : Colors.transparent,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.table_chart_rounded, size: 13, color: _isTableView ? Colors.white : const Color(0xFF64748B)),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'Table View 📊',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: _isTableView ? Colors.white : const Color(0xFF475569),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
           // Product List Body
           Expanded(
             child: _isLoading
@@ -3204,12 +3123,10 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           ),
                         ),
                       )
-                    : _isTableView
-                        ? _buildProductTableView()
-                        : ListView.builder(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            itemCount: _filteredProducts.length,
-                            itemBuilder: (context, idx) {
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        itemCount: _filteredProducts.length,
+                        itemBuilder: (context, idx) {
                               final p = _filteredProducts[idx];
                               final name = safeString(p['name']);
                               final desc = safeString(p['description']);
