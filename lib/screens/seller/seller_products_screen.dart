@@ -29,10 +29,12 @@ String safeString(dynamic val, [String defaultValue = '']) {
 
 class SellerProductsScreen extends StatefulWidget {
   final UserModel seller;
+  final String? initialAction;
 
   const SellerProductsScreen({
     super.key,
     required this.seller,
+    this.initialAction,
   });
 
   @override
@@ -53,6 +55,30 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
   void initState() {
     super.initState();
     _loadData();
+
+    if (widget.initialAction != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _handleAction(widget.initialAction!);
+      });
+    }
+  }
+
+  void _handleAction(String action) {
+    if (action == 'category') {
+      _showManageCategoriesDialog();
+    } else if (action == 'section') {
+      _showManageSectionsDialog();
+    } else if (action == 'unit') {
+      _showManageUnitsDialog();
+    } else if (action == 'search_bar_style') {
+      _showManageSearchBarDialog();
+    } else if (action == 'download_excel') {
+      _downloadProductsToExcel();
+    } else if (action == 'upload_excel') {
+      _uploadProductsFromExcel();
+    } else if (action == 'add_product') {
+      _showAddEditProductDialog();
+    }
   }
 
   String get _sellerUsername {
@@ -2810,6 +2836,85 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
             icon: const Icon(Icons.refresh_rounded, color: Colors.white),
             tooltip: 'Refresh Products',
             onPressed: _loadData,
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+            tooltip: 'Masters Menu ⚙️',
+            onSelected: (value) => _handleAction(value),
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'category',
+                child: Row(
+                  children: [
+                    Icon(Icons.category_rounded, color: Color(0xFF0284C7), size: 20),
+                    SizedBox(width: 10),
+                    Text('Category Master 📁', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'section',
+                child: Row(
+                  children: [
+                    Icon(Icons.view_carousel_rounded, color: Color(0xFF8B5CF6), size: 20),
+                    SizedBox(width: 10),
+                    Text('Section Master 🏷️', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'unit',
+                child: Row(
+                  children: [
+                    Icon(Icons.straighten_rounded, color: Color(0xFF10B981), size: 20),
+                    SizedBox(width: 10),
+                    Text('Unit Master 📏', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'search_bar_style',
+                child: Row(
+                  children: [
+                    Icon(Icons.palette_rounded, color: Color(0xFF8B5CF6), size: 20),
+                    SizedBox(width: 10),
+                    Text('Search Bar Style 🔍', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'download_excel',
+                child: Row(
+                  children: [
+                    Icon(Icons.file_download_rounded, color: Color(0xFF10B981), size: 20),
+                    SizedBox(width: 10),
+                    Text('Download Excel 📊', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'upload_excel',
+                child: Row(
+                  children: [
+                    Icon(Icons.file_upload_rounded, color: Color(0xFF0284C7), size: 20),
+                    SizedBox(width: 10),
+                    Text('Upload Excel 📥', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'add_product',
+                child: Row(
+                  children: [
+                    Icon(Icons.add_box_rounded, color: Color(0xFFF59E0B), size: 20),
+                    SizedBox(width: 10),
+                    Text('Add New Product 📦', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
