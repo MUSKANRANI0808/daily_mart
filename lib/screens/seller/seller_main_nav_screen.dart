@@ -6,6 +6,7 @@ import '../../services/auth_service.dart';
 import '../../services/cart_service.dart';
 import '../dashboards/seller_dashboard.dart';
 import 'seller_accounts_screen.dart';
+import 'seller_masters_screen.dart';
 import 'seller_order_cart_screen.dart';
 import 'seller_products_screen.dart';
 import 'seller_profile_screen.dart';
@@ -113,7 +114,7 @@ class _SellerMainNavScreenState extends State<SellerMainNavScreen> {
     final List<Widget> pages = [
       SellerDashboard(seller: widget.seller),
       SellerAccountsScreen(seller: widget.seller),
-      SellerProductsScreen(seller: widget.seller),
+      SellerMastersScreen(seller: widget.seller),
       SellerOrderCartScreen(seller: widget.seller),
       SellerProfileScreen(seller: widget.seller),
     ];
@@ -178,9 +179,9 @@ class _SellerMainNavScreenState extends State<SellerMainNavScreen> {
                 label: 'Account',
               ),
               const BottomNavigationBarItem(
-                icon: Icon(Icons.inventory_2_rounded),
-                activeIcon: Icon(Icons.inventory_2_rounded, size: 25),
-                label: 'Products',
+                icon: Icon(Icons.grid_view_rounded),
+                activeIcon: Icon(Icons.grid_view_rounded, size: 25),
+                label: 'Master',
               ),
               BottomNavigationBarItem(
                 icon: _cartBadgeCount > 0
