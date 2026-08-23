@@ -161,6 +161,44 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     });
   }
 
+  String _getDisplaySectionName(dynamic secVal) {
+    if (secVal == null) return '';
+    String sStr = secVal.toString().trim();
+    if (sStr.isEmpty || sStr == '0' || sStr.toLowerCase() == 'null' || sStr.toLowerCase() == 'section: 0') {
+      return '';
+    }
+
+    final sId = int.tryParse(sStr);
+    if (sId != null && _sellerSections.isNotEmpty) {
+      for (var sec in _sellerSections) {
+        if (safeInt(sec['id']) == sId) {
+          return safeString(sec['name']);
+        }
+      }
+    }
+
+    return sStr;
+  }
+
+  String _getDisplayCategoryName(dynamic catVal) {
+    if (catVal == null) return '';
+    String cStr = catVal.toString().trim();
+    if (cStr.isEmpty || cStr == '0' || cStr.toLowerCase() == 'null') {
+      return '';
+    }
+
+    final cId = int.tryParse(cStr);
+    if (cId != null && _sellerCategories.isNotEmpty) {
+      for (var cat in _sellerCategories) {
+        if (safeInt(cat['id']) == cId) {
+          return safeString(cat['name']);
+        }
+      }
+    }
+
+    return cStr;
+  }
+
   /// Open Manage Categories Dialog (Category Name + Image Picker)
   void _showManageCategoriesDialog({Function(String)? onCategoryCreated}) {
     final catNameController = TextEditingController();
@@ -3052,78 +3090,84 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
             ),
           ),
 
-          // View Mode Switcher Header Bar
+          // View Mode Switcher Header Bar (Scrollable to prevent any right overflow)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             color: const Color(0xFFF1F5F9),
-            child: Row(
-              children: [
-                Text(
-                  '${_filteredProducts.length} Items Found',
-                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE2E8F0),
-                    borderRadius: BorderRadius.circular(10),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  Text(
+                    '${_filteredProducts.length} Items',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
                   ),
-                  child: Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () => setState(() => _isTableView = true),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: _isTableView ? const Color(0xFF0F172A) : Colors.transparent,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.table_chart_rounded, size: 14, color: _isTableView ? Colors.white : const Color(0xFF64748B)),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Table View 📊',
-                                style: TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.bold,
-                                  color: _isTableView ? Colors.white : const Color(0xFF475569),
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE2E8F0),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        GestureDetector(
+                          onTap: () => setState(() => _isTableView = false),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: !_isTableView ? const Color(0xFF0F172A) : Colors.transparent,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.list_alt_rounded, size: 13, color: !_isTableView ? Colors.white : const Color(0xFF64748B)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Compact List 📑',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: !_isTableView ? Colors.white : const Color(0xFF475569),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 4),
-                      GestureDetector(
-                        onTap: () => setState(() => _isTableView = false),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: !_isTableView ? const Color(0xFF0F172A) : Colors.transparent,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.grid_view_rounded, size: 14, color: !_isTableView ? Colors.white : const Color(0xFF64748B)),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Cards View 🪟',
-                                style: TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.bold,
-                                  color: !_isTableView ? Colors.white : const Color(0xFF475569),
+                        const SizedBox(width: 3),
+                        GestureDetector(
+                          onTap: () => setState(() => _isTableView = true),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _isTableView ? const Color(0xFF0F172A) : Colors.transparent,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.table_chart_rounded, size: 13, color: _isTableView ? Colors.white : const Color(0xFF64748B)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Table View 📊',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: _isTableView ? Colors.white : const Color(0xFF475569),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
 
@@ -3183,8 +3227,8 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                               final unit = safeString(p['unit'], 'Pcs');
                               final qty = safeInt(p['qty'], 1);
                               final rate = safeDouble(p['rate'], 0.0);
-                              final pSec = safeString(p['section']);
-                              final pCat = safeString(p['category']);
+                              final pSec = _getDisplaySectionName(p['section']);
+                              final pCat = _getDisplayCategoryName(p['category']);
 
                               final imgUrl = safeString(p['image_url']).trim();
                               final imgVal = safeString(p['image']).trim();
@@ -3390,8 +3434,8 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                 final name = safeString(p['name']);
                 final desc = safeString(p['description']);
                 final longDesc = safeString(p['long_description'] ?? p['details']);
-                final cat = safeString(p['category']);
-                final sec = safeString(p['section']);
+                final cat = _getDisplayCategoryName(p['category']);
+                final sec = _getDisplaySectionName(p['section']);
                 final unit = safeString(p['unit'], 'Pcs');
                 final qty = safeInt(p['qty'], 1);
                 final saleRate = safeDouble(p['rate'], 0.0);
