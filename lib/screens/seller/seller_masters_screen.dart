@@ -1766,7 +1766,7 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF0F172A),
         title: const Text(
-          'Store Master Hub 🗃️',
+          'Master Hub',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         elevation: 0,
@@ -1784,7 +1784,7 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
             // Top Master Banner Header
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
@@ -1793,37 +1793,17 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                 ),
                 borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
               ),
-              child: Column(
+              child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Store Control Center ⚡',
                     style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
                   ),
-                  const SizedBox(height: 6),
-                  const Text(
+                  SizedBox(height: 6),
+                  Text(
                     'Manage your products catalog, categories, sections, units & excel bulk tools in one place.',
                     style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, height: 1.3),
-                  ),
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.analytics_rounded, color: Color(0xFF38BDF8), size: 16),
-                        const SizedBox(width: 8),
-                        Text(
-                          '${_allProducts.length} Products | ${_sellerUnits.length} Units | ${_sellerCategories.length} Categories',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
-                        ),
-                      ],
-                    ),
                   ),
                 ],
               ),
