@@ -4397,27 +4397,38 @@ class AuthService {
     List<Map<String, dynamic>> newlyCreatedProds = [];
 
     try {
-      final res = await VpsApiService.post('bulk-add-seller-products', {
-        'seller_username': cleanSeller,
-        'products': productsList,
-      });
+      // 1. Fetch existing categories, sections, units to check if auto-creation needed
+      final existingCats = (await getSellerCategories(cleanSeller)).map((c) => (c['name'] ?? '').toString().trim().toLowerCase()).toSet();
+      final existingSecs = (await getSellerSections(cleanSeller)).map((s) => (s['name'] ?? '').toString().trim().toLowerCase()).toSet();
+      final existingUnits = (await getSellerUnits(cleanSeller)).map((u) => (u['name'] ?? '').toString().trim().toLowerCase()).toSet();
 
-      if (res != null && res['success'] == true && res['products'] != null) {
-        final List returnedProds = res['products'];
-        newlyCreatedProds = returnedProds.map((p) => Map<String, dynamic>.from(p)).toList();
-        importedCount = newlyCreatedProds.length;
+      // 2. Auto-create missing categories, sections, units on VPS database
+      for (var p in productsList) {
+        final cat = (p['category'] ?? '').toString().trim();
+        if (cat.isNotEmpty && !existingCats.contains(cat.toLowerCase())) {
+          existingCats.add(cat.toLowerCase());
+          await addSellerCategory(cleanSeller, cat, '');
+        }
+
+        final sec = (p['section'] ?? '').toString().trim();
+        if (sec.isNotEmpty && !existingSecs.contains(sec.toLowerCase())) {
+          existingSecs.add(sec.toLowerCase());
+          await addSellerSection(cleanSeller, sec);
+        }
+
+        final unit = (p['unit'] ?? '').toString().trim();
+        if (unit.isNotEmpty && !existingUnits.contains(unit.toLowerCase())) {
+          existingUnits.add(unit.toLowerCase());
+          await addSellerUnit(cleanSeller, unit);
+        }
       }
-    } catch (_) {}
 
-    // Fallback if VPS API is offline or returns empty
-    if (newlyCreatedProds.isEmpty) {
-      int tempId = DateTime.now().millisecondsSinceEpoch;
+      // 3. Insert every product into VPS MySQL database via active add-seller-product endpoint
       for (var p in productsList) {
         final name = (p['name'] ?? '').toString().trim();
         if (name.isEmpty) continue;
-        tempId++;
-        newlyCreatedProds.add({
-          'id': tempId,
+
+        final res = await VpsApiService.post('add-seller-product', {
           'seller_username': cleanSeller,
           'name': name,
           'description': (p['description'] ?? '').toString().trim(),
@@ -4431,9 +4442,29 @@ class AuthService {
           'image_url': (p['image_url'] ?? '').toString().trim(),
           'button_text': 'Buy Now',
         });
+
+        if (res != null && res['success'] == true && res['product'] != null) {
+          newlyCreatedProds.add(Map<String, dynamic>.from(res['product']));
+        } else {
+          newlyCreatedProds.add({
+            'id': DateTime.now().millisecondsSinceEpoch + importedCount,
+            'seller_username': cleanSeller,
+            'name': name,
+            'description': (p['description'] ?? '').toString().trim(),
+            'long_description': (p['long_description'] ?? '').toString().trim(),
+            'unit': (p['unit'] ?? 'Pcs').toString().trim(),
+            'category': (p['category'] ?? '').toString().trim(),
+            'section': (p['section'] ?? '').toString().trim(),
+            'qty': int.tryParse(p['qty']?.toString() ?? '1') ?? 1,
+            'rate': double.tryParse(p['rate']?.toString() ?? '0') ?? 0.0,
+            'purchase_rate': double.tryParse(p['purchase_rate']?.toString() ?? '0') ?? 0.0,
+            'image_url': (p['image_url'] ?? '').toString().trim(),
+            'button_text': 'Buy Now',
+          });
+        }
+        importedCount++;
       }
-      importedCount = newlyCreatedProds.length;
-    }
+    } catch (_) {}
 
     if (newlyCreatedProds.isNotEmpty) {
       final existingProds = await getCachedSellerProducts(cleanSeller);
