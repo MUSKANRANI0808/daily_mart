@@ -915,9 +915,9 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
     );
   }
 
-  // --- 3. UNIT MASTER DIALOG (EXACT ORIGINAL LOGIC & DESIGN) ---
-  void _showManageUnitsDialog() {
-    final unitNameController = TextEditingController();
+  // --- 3. UNIT MASTER DIALOG (EXACT ORIGINAL LOGIC & DESIGN FROM 3-DOT MENU) ---
+  void _showManageUnitsDialog({Function(String)? onUnitCreated}) {
+    final unitController = TextEditingController();
 
     showModalBottomSheet(
       context: context,
@@ -943,6 +943,7 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // Handle Bar
                   Center(
                     child: Container(
                       width: 40,
@@ -955,43 +956,65 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                   ),
                   const SizedBox(height: 14),
 
+                  // Header Title
                   Row(
                     children: [
                       const CircleAvatar(
                         radius: 18,
-                        backgroundColor: Color(0xFFD1FAE5),
-                        child: Icon(Icons.straighten_rounded, color: Color(0xFF10B981), size: 20),
+                        backgroundColor: Color(0xFFEDE9FE),
+                        child: Icon(Icons.straighten_rounded, color: Color(0xFF8B5CF6), size: 20),
                       ),
                       const SizedBox(width: 10),
-                      const Text(
-                        'Manage Product Units 📏',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A)),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Manage Store Units 🏷️',
+                              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Add, edit or delete custom store units',
+                              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B), size: 22),
+                        onPressed: () => Navigator.pop(ctx),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                  const Divider(height: 20),
 
+                  // Add New Unit Row
                   Row(
                     children: [
                       Expanded(
                         child: TextField(
-                          controller: unitNameController,
+                          controller: unitController,
                           decoration: InputDecoration(
-                            hintText: 'Enter Unit Name (e.g. Kg, Pcs, Ltr, Box)',
+                            hintText: 'Enter unit name (e.g. 100g, 1 Kg, 1 L, 1 Pcs)',
                             hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
                             isDense: true,
                             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 2),
+                            ),
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       ElevatedButton(
                         onPressed: () async {
-                          final uName = unitNameController.text.trim();
+                          final uName = unitController.text.trim();
                           if (uName.isEmpty) return;
 
-                          unitNameController.clear();
+                          unitController.clear();
                           await AuthService.addSellerUnit(username, uName);
                           final updatedUnits = await AuthService.getSellerUnits(username);
 
@@ -1001,34 +1024,41 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                           setState(() {
                             _sellerUnits = updatedUnits;
                           });
+
+                          if (onUnitCreated != null) {
+                            onUnitCreated(uName);
+                          }
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF10B981),
+                          backgroundColor: const Color(0xFF8B5CF6),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          elevation: 0,
                         ),
                         child: const Text('Add Unit', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
-                  const Text('Existing Measurement Units:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
-                  const SizedBox(height: 8),
 
+                  // Custom Units List
+                  const Text('Your Created Units:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                  const SizedBox(height: 8),
                   ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 250),
+                    constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.35),
                     child: _sellerUnits.isEmpty
                         ? Container(
                             padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF8FAFC),
                               borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
                             ),
                             child: const Center(
                               child: Text(
-                                'No custom units yet.\nAdd units above.',
+                                'No units created yet. Type above and click "Add Unit" to create your first store unit!',
                                 textAlign: TextAlign.center,
-                                style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                                style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
                               ),
                             ),
                           )
@@ -1038,7 +1068,7 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                             itemBuilder: (context, idx) {
                               final uMap = _sellerUnits[idx];
                               final uId = safeInt(uMap['id']);
-                              final uName = safeString(uMap['name']);
+                              final uName = safeString(uMap['unit_name']);
 
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 6),
@@ -1050,25 +1080,35 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                                 child: ListTile(
                                   dense: true,
                                   title: Text(uName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Color(0xFF0F172A))),
-                                  trailing: IconButton(
-                                    icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 18),
-                                    onPressed: () async {
-                                      await AuthService.deleteSellerUnit(uId, username, uName);
-                                      final updatedUnits = await AuthService.getSellerUnits(username);
-                                      setModalState(() {
-                                        _sellerUnits = updatedUnits;
-                                      });
-                                      setState(() {
-                                        _sellerUnits = updatedUnits;
-                                      });
-                                    },
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.edit_rounded, color: Color(0xFF3B82F6), size: 18),
+                                        onPressed: () {
+                                          _showEditUnitPrompt(ctx, uId, uName, setModalState);
+                                        },
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 18),
+                                        onPressed: () async {
+                                          await AuthService.deleteSellerUnit(uId, username, uName);
+                                          final updatedUnits = await AuthService.getSellerUnits(username);
+                                          setModalState(() {
+                                            _sellerUnits = updatedUnits;
+                                          });
+                                          setState(() {
+                                            _sellerUnits = updatedUnits;
+                                          });
+                                        },
+                                      ),
+                                    ],
                                   ),
                                 ),
                               );
                             },
                           ),
                   ),
-
                   const SizedBox(height: 12),
                   ElevatedButton(
                     onPressed: () => Navigator.pop(ctx),
@@ -1084,6 +1124,49 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  void _showEditUnitPrompt(BuildContext parentCtx, int unitId, String currentName, StateSetter parentSetModalState) {
+    final editController = TextEditingController(text: currentName);
+    showDialog(
+      context: parentCtx,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Edit Unit Name', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        content: TextField(
+          controller: editController,
+          decoration: InputDecoration(
+            isDense: true,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B5CF6)),
+            onPressed: () async {
+              final newName = editController.text.trim();
+              if (newName.isNotEmpty) {
+                final username = _sellerUsername;
+                Navigator.pop(ctx);
+                await AuthService.updateSellerUnit(unitId, username, newName);
+                final updatedUnits = await AuthService.getSellerUnits(username);
+                parentSetModalState(() {
+                  _sellerUnits = updatedUnits;
+                });
+                setState(() {
+                  _sellerUnits = updatedUnits;
+                });
+              }
+            },
+            child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
     );
   }
