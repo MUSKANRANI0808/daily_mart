@@ -50,6 +50,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
   List<Map<String, dynamic>> _sellerSections = [];
   String _searchQuery = '';
   String _selectedCategoryFilter = 'All';
+  bool _isTableView = true;
 
   @override
   void initState() {
@@ -3051,6 +3052,81 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
             ),
           ),
 
+          // View Mode Switcher Header Bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: const Color(0xFFF1F5F9),
+            child: Row(
+              children: [
+                Text(
+                  '${_filteredProducts.length} Items Found',
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => setState(() => _isTableView = true),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: _isTableView ? const Color(0xFF0F172A) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.table_chart_rounded, size: 14, color: _isTableView ? Colors.white : const Color(0xFF64748B)),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Table View 📊',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: _isTableView ? Colors.white : const Color(0xFF475569),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      GestureDetector(
+                        onTap: () => setState(() => _isTableView = false),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: !_isTableView ? const Color(0xFF0F172A) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.grid_view_rounded, size: 14, color: !_isTableView ? Colors.white : const Color(0xFF64748B)),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Cards View 🪟',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: !_isTableView ? Colors.white : const Color(0xFF475569),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
           // Product List Body
           Expanded(
             child: _isLoading
@@ -3095,7 +3171,9 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           ),
                         ),
                       )
-                    : ListView.builder(
+                    : _isTableView
+                        ? _buildProductTableView()
+                        : ListView.builder(
                         padding: const EdgeInsets.all(16),
                         itemCount: _filteredProducts.length,
                         itemBuilder: (context, idx) {
@@ -3286,6 +3364,201 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
         backgroundColor: const Color(0xFF8B5CF6),
         icon: const Icon(Icons.add_rounded, color: Colors.white),
         label: const Text('Add Product', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+      ),
+    );
+  }
+
+  Widget _buildProductTableView() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.vertical,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Container(
+          margin: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+            border: Border.all(color: const Color(0xFFCBD5E1)),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: DataTable(
+              headingRowColor: WidgetStateProperty.all(const Color(0xFF0F172A)),
+              headingTextStyle: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 12.5,
+              ),
+              dataRowMinHeight: 48,
+              dataRowMaxHeight: 60,
+              horizontalMargin: 14,
+              columnSpacing: 18,
+              border: const TableBorder(
+                horizontalInside: BorderSide(color: Color(0xFFE2E8F0), width: 1),
+              ),
+              columns: const [
+                DataColumn(label: Text('#')),
+                DataColumn(label: Text('Product Item 📦')),
+                DataColumn(label: Text('Short Description')),
+                DataColumn(label: Text('Long Description')),
+                DataColumn(label: Text('Category 📁')),
+                DataColumn(label: Text('Section 🏷️')),
+                DataColumn(label: Text('Unit 📏')),
+                DataColumn(label: Text('Qty')),
+                DataColumn(label: Text('Sale Rate (₹)')),
+                DataColumn(label: Text('Purchase Rate (₹)')),
+                DataColumn(label: Text('Profit Margin')),
+                DataColumn(label: Text('Actions ⚙️')),
+              ],
+              rows: List.generate(_filteredProducts.length, (idx) {
+                final p = _filteredProducts[idx];
+                final name = safeString(p['name']);
+                final desc = safeString(p['description']);
+                final longDesc = safeString(p['long_description'] ?? p['details']);
+                final cat = safeString(p['category']);
+                final sec = safeString(p['section']);
+                final unit = safeString(p['unit'], 'Pcs');
+                final qty = safeInt(p['qty'], 1);
+                final saleRate = safeDouble(p['rate'], 0.0);
+                final purRate = safeDouble(p['purchase_rate'] ?? p['purchase_price'], 0.0);
+                final margin = saleRate - purRate;
+
+                final imgUrl = safeString(p['image_url']).trim();
+                final imgVal = safeString(p['image']).trim();
+                final img = imgUrl.isNotEmpty ? imgUrl : (imgVal.isNotEmpty ? imgVal : '📦');
+
+                final isEven = idx % 2 == 0;
+
+                return DataRow(
+                  color: WidgetStateProperty.all(isEven ? Colors.white : const Color(0xFFF8FAFC)),
+                  cells: [
+                    DataCell(Text('${idx + 1}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF64748B)))),
+                    DataCell(
+                      InkWell(
+                        onTap: () => _showAddEditProductDialog(productToEdit: p),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEDE9FE),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFFDDD6FE)),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: _buildProductImageWidget(img, emojiSize: 16),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              name,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    DataCell(
+                      Text(
+                        desc.isNotEmpty ? desc : '-',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    DataCell(
+                      Text(
+                        longDesc.isNotEmpty ? longDesc : '-',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    DataCell(
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE0F2FE),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFBAE6FD)),
+                        ),
+                        child: Text(cat.isNotEmpty ? cat : 'General', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF0369A1))),
+                      ),
+                    ),
+                    DataCell(
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3E8FF),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFD8B4FE)),
+                        ),
+                        child: Text(sec.isNotEmpty ? sec : 'General', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF7E22CE))),
+                      ),
+                    ),
+                    DataCell(
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFCBD5E1)),
+                        ),
+                        child: Text(unit, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
+                      ),
+                    ),
+                    DataCell(Text('$qty', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A)))),
+                    DataCell(
+                      Text(
+                        '₹${saleRate.toStringAsFixed(2)}',
+                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: Color(0xFF059669)),
+                      ),
+                    ),
+                    DataCell(
+                      Text(
+                        purRate > 0 ? '₹${purRate.toStringAsFixed(2)}' : '-',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                      ),
+                    ),
+                    DataCell(
+                      Text(
+                        purRate > 0 ? '+₹${margin.toStringAsFixed(2)}' : '-',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: margin >= 0 ? const Color(0xFF10B981) : const Color(0xFFEF4444)),
+                      ),
+                    ),
+                    DataCell(
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit_rounded, color: Color(0xFF8B5CF6), size: 18),
+                            tooltip: 'Edit Product',
+                            onPressed: () => _showAddEditProductDialog(productToEdit: p),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 18),
+                            tooltip: 'Delete Product',
+                            onPressed: () => _confirmDeleteProduct(p),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              }),
+            ),
+          ),
+        ),
       ),
     );
   }
