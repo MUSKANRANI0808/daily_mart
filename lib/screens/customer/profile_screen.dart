@@ -380,7 +380,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
               Expanded(
                 child: Row(
                   children: [
-                    const Text('🏵️', style: TextStyle(fontSize: 13)),
+                    const Text('🎁', style: TextStyle(fontSize: 13)),
                     const SizedBox(width: 5),
                     Flexible(
                       child: Text(
@@ -462,7 +462,13 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                     ),
                     child: Center(
                       child: isFilled
-                          ? const Text('🏵️', style: TextStyle(fontSize: 18))
+                          ? Image.asset(
+                              'assets/images/gift_box.png',
+                              width: 24,
+                              height: 24,
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) => const Text('🎁', style: TextStyle(fontSize: 18)),
+                            )
                           : Text(
                               '$stampNum',
                               style: const TextStyle(
@@ -475,9 +481,9 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    isFilled ? 'Delivered ✅' : 'Blank $stampNum',
+                    isFilled ? 'Gift $stampNum' : 'Blank $stampNum',
                     style: TextStyle(
-                      color: isFilled ? const Color(0xFF059669) : const Color(0xFF94A3B8),
+                      color: isFilled ? const Color(0xFFD97706) : const Color(0xFF94A3B8),
                       fontSize: 9.5,
                       fontWeight: isFilled ? FontWeight.bold : FontWeight.w500,
                     ),
@@ -574,7 +580,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: const [
-                              Text('🏵️', style: TextStyle(fontSize: 11)),
+                              Text('🎁', style: TextStyle(fontSize: 11)),
                               SizedBox(width: 4),
                               Flexible(
                                 child: Text(
@@ -723,7 +729,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                           ),
                         ),
                         child: Text(
-                          _giftsEarned > 0 ? '${_giftsEarned} GIFT UNLOCKED 🎁' : '${_filledStamps}/5 STAMPS 🏵️',
+                          _giftsEarned > 0 ? '${_giftsEarned} GIFT UNLOCKED 🎁' : '${_filledStamps}/5 STAMPS 🎁',
                           style: TextStyle(
                             color: _giftsEarned > 0 ? const Color(0xFF047857) : const Color(0xFFB45309),
                             fontSize: 10,
