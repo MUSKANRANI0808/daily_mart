@@ -2429,50 +2429,77 @@ class _DeliveryOrderDetailsScreenState extends State<DeliveryOrderDetailsScreen>
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: isPaid
-                      ? Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFDCFCE7),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFF86EFAC), width: 1.2),
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Row(
-                                children: [
-                                  Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 18),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'PAID ✅',
-                                    style: TextStyle(color: Color(0xFF15803D), fontWeight: FontWeight.w900, fontSize: 14),
-                                  ),
-                                ],
-                              ),
-                              if (paymentUtr.isNotEmpty)
-                                Text(
-                                  'Ref: $paymentUtr',
-                                  style: const TextStyle(color: Color(0xFF166534), fontSize: 10.5),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                            ],
-                          ),
-                        )
-                      : ElevatedButton.icon(
+                  child: !isOut
+                      ? ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF0F172A),
+                            backgroundColor: const Color(0xFFEA580C),
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             elevation: 2,
                           ),
-                          icon: const Icon(Icons.payments_rounded, color: Colors.white, size: 20),
+                          icon: const Icon(Icons.local_shipping_rounded, color: Colors.white, size: 20),
                           label: const Text(
-                            'Collect Payment 💳',
+                            'Pick Up 📦',
                             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                           onPressed: () {
+                            widget.onUpdateDeliveryStatus('Out for Delivery');
+                            setState(() {
+                              order['delivery_status'] = 'Out for Delivery';
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Order Picked Up! Status set to Out for Delivery 🚚'),
+                                backgroundColor: Color(0xFF10B981),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                        )
+                      : isPaid
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFDCFCE7),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFF86EFAC), width: 1.2),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Row(
+                                    children: [
+                                      Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 18),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'PAID ✅',
+                                        style: TextStyle(color: Color(0xFF15803D), fontWeight: FontWeight.w900, fontSize: 14),
+                                      ),
+                                    ],
+                                  ),
+                                  if (paymentUtr.isNotEmpty)
+                                    Text(
+                                      'Ref: $paymentUtr',
+                                      style: const TextStyle(color: Color(0xFF166534), fontSize: 10.5),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                ],
+                              ),
+                            )
+                          : ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0F172A),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                elevation: 2,
+                              ),
+                              icon: const Icon(Icons.payments_rounded, color: Colors.white, size: 20),
+                              label: const Text(
+                                'Collect Payment 💳',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                              onPressed: () {
                             showModalBottomSheet(
                               context: context,
                               shape: const RoundedRectangleBorder(

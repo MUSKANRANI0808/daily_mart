@@ -2329,46 +2329,49 @@ class _SellerOrderCartScreenState extends State<SellerOrderCartScreen> {
     );
   }
 
-  /// Mark Order as Ready & Notify Customer + Delivery Boys
+  /// Mark Order as Ready & Notify Customer + Delivery Boys (Instant 0ms UI Response)
   Future<void> _markOrderAsReady(Map<String, dynamic> order) async {
     final rawMsgId = order['id'] ?? order['message_id'];
     final msgId = int.tryParse(rawMsgId.toString()) ?? 0;
     final custMobile = (order['customer_mobile'] ?? order['mobile'] ?? '').toString().trim();
-    final custName = (order['customer_name'] ?? order['name'] ?? 'Customer').toString().trim();
     final orderIdStr = (order['order_id'] ?? '#DM-1001').toString();
 
     if (msgId == 0) return;
 
+    // 1. INSTANT 0ms UI State Update
+    if (mounted) {
+      setState(() {
+        order['order_status'] = 'Ready';
+        order['status'] = 'Ready';
+        order['delivery_status'] = 'Ready';
+      });
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Marking $orderIdStr as READY... 📦'),
-        duration: const Duration(seconds: 1),
-        backgroundColor: const Color(0xFF10B981),
+        content: Text('Order $orderIdStr is READY! Added to Delivery Boy list 📦✔️'),
+        duration: const Duration(seconds: 2),
+        backgroundColor: const Color(0xFF059669),
       ),
     );
 
-    // 1. Update order status to 'Ready'
-    await AuthService.updateOrderStatus(messageId: msgId, orderStatus: 'Ready');
-
-    // 2. Notify customer & delivery boys
-    await NotificationService.notifyOrderReady(
-      customerMobile: custMobile,
-      sellerUsername: _sellerUsername,
-      sellerName: widget.seller.name ?? _sellerUsername,
-      orderId: orderIdStr,
-    );
-
-    // 3. Reload cart & orders list
-    await _loadCart();
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Order $orderIdStr is READY! Added to Delivery Boy list 📦✔️'),
-          backgroundColor: const Color(0xFF059669),
+    // 2. Background async network sync & notifications (non-blocking)
+    try {
+      await Future.wait([
+        AuthService.updateOrderStatus(messageId: msgId, orderStatus: 'Ready'),
+        NotificationService.notifyOrderReady(
+          customerMobile: custMobile,
+          sellerUsername: _sellerUsername,
+          sellerName: widget.seller.name ?? _sellerUsername,
+          orderId: orderIdStr,
         ),
-      );
+      ]);
+    } catch (e) {
+      debugPrint('Error syncing order ready status: $e');
     }
+
+    // 3. Background cache revalidation
+    _loadCart();
   }
 
   /// Cancel Order Dialog with Preset & Custom Reasons
