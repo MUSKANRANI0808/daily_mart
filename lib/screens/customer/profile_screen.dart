@@ -39,6 +39,8 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
   void initState() {
     super.initState();
     _currentName = widget.customer.name.isNotEmpty ? widget.customer.name : 'Customer';
+    _loadFastCachedStamps();
+    _calculateOrderStamps();
     _loadProfileAndAddress();
 
     _flipController = AnimationController(
@@ -130,13 +132,37 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
         debugPrint('Error parsing profile address subtitle: $e');
       }
     }
-
-    await _calculateOrderStamps();
   }
 
   int _totalDeliveredOrders = 0;
   int _filledStamps = 0;
   int _giftsEarned = 0;
+
+  Future<void> _loadFastCachedStamps() async {
+    final mobile = (widget.customer.mobile ?? '').trim();
+    if (mobile.isEmpty) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedCount = prefs.getInt('cached_delivered_orders_$mobile');
+      if (cachedCount != null && cachedCount >= 0) {
+        final gifts = cachedCount ~/ 5;
+        int stamps = 0;
+        if (cachedCount > 0) {
+          final rem = cachedCount % 5;
+          stamps = (rem == 0) ? 5 : rem;
+        }
+
+        if (mounted) {
+          setState(() {
+            _totalDeliveredOrders = cachedCount;
+            _filledStamps = stamps;
+            _giftsEarned = gifts;
+          });
+        }
+      }
+    } catch (_) {}
+  }
 
   Future<void> _calculateOrderStamps() async {
     final mobile = (widget.customer.mobile ?? '').trim();
@@ -146,29 +172,9 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
       final Set<String> processedOrderIds = {};
       int deliveredCount = 0;
 
-      // 1. Fetch orders from VPS Database / merged placed orders
-      try {
-        final dbOrders = await AuthService.getCustomerPlacedOrders(mobile);
-        for (var o in dbOrders) {
-          final idStr = (o['id'] ?? o['order_id'] ?? '').toString();
-          final delStat = (o['delivery_status'] ?? '').toString().toLowerCase();
-          final ordStat = (o['status'] ?? o['order_status'] ?? '').toString().toLowerCase();
-
-          final bool isDelivered = delStat == 'delivered' || ordStat == 'delivered';
-          final bool isCancelled = delStat == 'cancelled' || ordStat == 'cancelled' || ordStat == 'deleted';
-
-          if (isDelivered && !isCancelled) {
-            final key = idStr.isNotEmpty ? idStr : (o['timestamp'] ?? o['date'] ?? '').toString();
-            if (key.isNotEmpty && !processedOrderIds.contains(key)) {
-              processedOrderIds.add(key);
-              deliveredCount++;
-            }
-          }
-        }
-      } catch (_) {}
-
-      // 2. Scan persistent saved_delivery_statuses from SharedPreferences
       final prefs = await SharedPreferences.getInstance();
+
+      // 1. Fast local check from SharedPreferences
       Map<String, dynamic> savedDeliveryStatuses = {};
       try {
         final dStr = prefs.getString('saved_delivery_statuses');
@@ -190,45 +196,75 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
         }
       });
 
-      // 3. Fallback scan local chat keys if needed
-      if (processedOrderIds.isEmpty) {
-        final allKeys = prefs.getKeys().toList();
-        final msgKeys = allKeys.where((k) => (k.startsWith('msgs_') || k.startsWith('messages_')) && k.contains(mobile)).toList();
+      final allKeys = prefs.getKeys().toList();
+      final msgKeys = allKeys.where((k) => (k.startsWith('msgs_') || k.startsWith('messages_')) && k.contains(mobile)).toList();
 
-        for (var key in msgKeys) {
-          final str = prefs.getString(key);
-          if (str != null && str.isNotEmpty) {
-            try {
-              final List decoded = jsonDecode(str);
-              for (var m in decoded) {
-                if (m is! Map) continue;
-                final msgIdStr = (m['id'] ?? m['order_id'] ?? m['_calculated_order_id'] ?? '').toString();
-                if (msgIdStr.isEmpty) continue;
+      for (var key in msgKeys) {
+        final str = prefs.getString(key);
+        if (str != null && str.isNotEmpty) {
+          try {
+            final List decoded = jsonDecode(str);
+            for (var m in decoded) {
+              if (m is! Map) continue;
+              final msgIdStr = (m['id'] ?? m['order_id'] ?? m['_calculated_order_id'] ?? '').toString();
+              if (msgIdStr.isEmpty) continue;
 
-                String delStat = (m['delivery_status'] ?? '').toString().toLowerCase();
-                String ordStat = (m['order_status'] ?? '').toString().toLowerCase();
+              String delStat = (m['delivery_status'] ?? '').toString().toLowerCase();
+              String ordStat = (m['order_status'] ?? '').toString().toLowerCase();
 
-                if (savedDeliveryStatuses.containsKey(msgIdStr)) {
-                  final val = savedDeliveryStatuses[msgIdStr];
-                  if (val is Map) {
-                    delStat = (val['delivery_status'] ?? delStat).toString().toLowerCase();
-                  } else if (val != null) {
-                    delStat = val.toString().toLowerCase();
-                  }
-                }
-
-                final bool isDelivered = delStat == 'delivered' || ordStat == 'delivered';
-                final bool isCancelled = delStat == 'cancelled' || ordStat == 'cancelled';
-
-                if (isDelivered && !isCancelled && !processedOrderIds.contains(msgIdStr)) {
-                  processedOrderIds.add(msgIdStr);
-                  deliveredCount++;
+              if (savedDeliveryStatuses.containsKey(msgIdStr)) {
+                final val = savedDeliveryStatuses[msgIdStr];
+                if (val is Map) {
+                  delStat = (val['delivery_status'] ?? delStat).toString().toLowerCase();
+                } else if (val != null) {
+                  delStat = val.toString().toLowerCase();
                 }
               }
-            } catch (_) {}
-          }
+
+              final bool isDelivered = delStat == 'delivered' || ordStat == 'delivered';
+              final bool isCancelled = delStat == 'cancelled' || ordStat == 'cancelled';
+
+              if (isDelivered && !isCancelled && !processedOrderIds.contains(msgIdStr)) {
+                processedOrderIds.add(msgIdStr);
+                deliveredCount++;
+              }
+            }
+          } catch (_) {}
         }
       }
+
+      if (deliveredCount > 0) {
+        final gifts = deliveredCount ~/ 5;
+        int stamps = (deliveredCount % 5 == 0) ? 5 : (deliveredCount % 5);
+        if (mounted) {
+          setState(() {
+            _totalDeliveredOrders = deliveredCount;
+            _filledStamps = stamps;
+            _giftsEarned = gifts;
+          });
+        }
+      }
+
+      // 2. Fetch latest orders from VPS Database in background
+      try {
+        final dbOrders = await AuthService.getCustomerPlacedOrders(mobile);
+        for (var o in dbOrders) {
+          final idStr = (o['id'] ?? o['order_id'] ?? '').toString();
+          final delStat = (o['delivery_status'] ?? '').toString().toLowerCase();
+          final ordStat = (o['status'] ?? o['order_status'] ?? '').toString().toLowerCase();
+
+          final bool isDelivered = delStat == 'delivered' || ordStat == 'delivered';
+          final bool isCancelled = delStat == 'cancelled' || ordStat == 'cancelled' || ordStat == 'deleted';
+
+          if (isDelivered && !isCancelled) {
+            final key = idStr.isNotEmpty ? idStr : (o['timestamp'] ?? o['date'] ?? '').toString();
+            if (key.isNotEmpty && !processedOrderIds.contains(key)) {
+              processedOrderIds.add(key);
+              deliveredCount++;
+            }
+          }
+        }
+      } catch (_) {}
 
       final gifts = deliveredCount ~/ 5;
       int stamps = 0;
@@ -236,6 +272,8 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
         final rem = deliveredCount % 5;
         stamps = (rem == 0) ? 5 : rem;
       }
+
+      await prefs.setInt('cached_delivered_orders_$mobile', deliveredCount);
 
       if (mounted) {
         setState(() {
