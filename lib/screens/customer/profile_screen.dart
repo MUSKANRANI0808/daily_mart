@@ -377,15 +377,20 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  const Text('🏵️', style: TextStyle(fontSize: 13)),
-                  const SizedBox(width: 5),
-                  Text(
-                    'Order Stamp Card (${_filledStamps}/5)',
-                    style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 12),
-                  ),
-                ],
+              Expanded(
+                child: Row(
+                  children: [
+                    const Text('🏵️', style: TextStyle(fontSize: 13)),
+                    const SizedBox(width: 5),
+                    Flexible(
+                      child: Text(
+                        'Order Stamp Card (${_filledStamps}/5)',
+                        style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               if (_giftsEarned > 0)
                 Container(
@@ -558,26 +563,33 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFECFDF5),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFA7F3D0)),
-                        ),
-                        child: Row(
-                          children: const [
-                            Text('🏵️', style: TextStyle(fontSize: 12)),
-                            SizedBox(width: 4),
-                            Text(
-                              'DIGITAL STAMP REWARDS',
-                              style: TextStyle(color: Color(0xFF047857), fontSize: 10.5, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                            ),
-                          ],
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFECFDF5),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFA7F3D0)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Text('🏵️', style: TextStyle(fontSize: 11)),
+                              SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  'DIGITAL STAMP REWARDS',
+                                  style: TextStyle(color: Color(0xFF047857), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.3),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
+                      const SizedBox(width: 6),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(12),
@@ -586,9 +598,9 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.flip_camera_android_rounded, size: 12, color: Color(0xFF475569)),
-                            SizedBox(width: 4),
-                            Text('Tap to Flip 🔄', style: TextStyle(color: Color(0xFF334155), fontSize: 10.5, fontWeight: FontWeight.bold)),
+                            Icon(Icons.flip_camera_android_rounded, size: 11, color: Color(0xFF475569)),
+                            SizedBox(width: 3),
+                            Text('Tap to Flip 🔄', style: TextStyle(color: Color(0xFF334155), fontSize: 10, fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ),
@@ -785,22 +797,27 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Scan at Merchant Store to Redeem Gifts 🎁',
-                        style: TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.bold),
+                      const Expanded(
+                        child: Text(
+                          'Scan at Merchant Store to Redeem Gifts 🎁',
+                          style: TextStyle(color: Color(0xFF64748B), fontSize: 9.5, fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
+                      const SizedBox(width: 6),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
                         child: const Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.flip_camera_android_rounded, size: 12, color: Color(0xFF475569)),
-                            SizedBox(width: 4),
-                            Text('Tap to Flip Back 🔄', style: TextStyle(color: Color(0xFF334155), fontSize: 10.5, fontWeight: FontWeight.bold)),
+                            Icon(Icons.flip_camera_android_rounded, size: 11, color: Color(0xFF475569)),
+                            SizedBox(width: 3),
+                            Text('Tap to Flip Back 🔄', style: TextStyle(color: Color(0xFF334155), fontSize: 10, fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ),
