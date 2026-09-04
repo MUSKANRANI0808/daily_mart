@@ -147,11 +147,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
       final cachedCount = prefs.getInt('cached_delivered_orders_$mobile');
       if (cachedCount != null && cachedCount >= 0) {
         final gifts = cachedCount ~/ 5;
-        int stamps = 0;
-        if (cachedCount > 0) {
-          final rem = cachedCount % 5;
-          stamps = (rem == 0) ? 5 : rem;
-        }
+        final stamps = cachedCount % 5;
 
         if (mounted) {
           setState(() {
@@ -235,7 +231,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
 
       if (deliveredCount > 0) {
         final gifts = deliveredCount ~/ 5;
-        int stamps = (deliveredCount % 5 == 0) ? 5 : (deliveredCount % 5);
+        final stamps = deliveredCount % 5;
         if (mounted) {
           setState(() {
             _totalDeliveredOrders = deliveredCount;
@@ -267,11 +263,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
       } catch (_) {}
 
       final gifts = deliveredCount ~/ 5;
-      int stamps = 0;
-      if (deliveredCount > 0) {
-        final rem = deliveredCount % 5;
-        stamps = (rem == 0) ? 5 : rem;
-      }
+      final stamps = deliveredCount % 5;
 
       await prefs.setInt('cached_delivered_orders_$mobile', deliveredCount);
 
@@ -418,11 +410,17 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
               Expanded(
                 child: Row(
                   children: [
-                    const Text('🎁', style: TextStyle(fontSize: 13)),
+                    Image.asset(
+                      'assets/images/gift_box.png',
+                      width: 18,
+                      height: 18,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) => const Text('🎁', style: TextStyle(fontSize: 13)),
+                    ),
                     const SizedBox(width: 5),
                     Flexible(
                       child: Text(
-                        'Order Stamp Card (${_filledStamps}/5)',
+                        _giftsEarned > 0 ? 'Order Stamp Gift $_giftsEarned' : 'Order Stamp Gift',
                         style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 12),
                         overflow: TextOverflow.ellipsis,
                       ),
