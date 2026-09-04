@@ -367,9 +367,9 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.28),
+        color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -383,7 +383,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                   const SizedBox(width: 5),
                   Text(
                     'Order Stamp Card (${_filledStamps}/5)',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                    style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                 ],
               ),
@@ -394,7 +394,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                     gradient: const LinearGradient(colors: [Color(0xFFF59E0B), Color(0xFF10B981)]),
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
-                      BoxShadow(color: const Color(0xFFF59E0B).withValues(alpha: 0.4), blurRadius: 6),
+                      BoxShadow(color: const Color(0xFFF59E0B).withValues(alpha: 0.25), blurRadius: 6),
                     ],
                   ),
                   child: Row(
@@ -412,7 +412,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
               else
                 Text(
                   'Delivered: ${_totalDeliveredOrders}',
-                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5, fontWeight: FontWeight.w600),
+                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 10.5, fontWeight: FontWeight.w600),
                 ),
             ],
           ),
@@ -440,16 +440,16 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                               end: Alignment.bottomRight,
                             )
                           : null,
-                      color: isFilled ? null : Colors.white.withValues(alpha: 0.08),
+                      color: isFilled ? null : const Color(0xFFF1F5F9),
                       border: Border.all(
-                        color: isFilled ? const Color(0xFFFDE047) : Colors.white.withValues(alpha: 0.25),
+                        color: isFilled ? const Color(0xFFF59E0B) : const Color(0xFFCBD5E1),
                         width: isFilled ? 2 : 1.5,
                       ),
                       boxShadow: isFilled
                           ? [
                               BoxShadow(
-                                color: const Color(0xFF10B981).withValues(alpha: 0.4),
-                                blurRadius: 8,
+                                color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                                blurRadius: 6,
                                 offset: const Offset(0, 2),
                               )
                             ]
@@ -460,8 +460,8 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                           ? const Text('🏵️', style: TextStyle(fontSize: 18))
                           : Text(
                               '$stampNum',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.4),
+                              style: const TextStyle(
+                                color: Color(0xFF64748B),
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
                               ),
@@ -472,7 +472,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                   Text(
                     isFilled ? 'Filled ✅' : 'Blank $stampNum',
                     style: TextStyle(
-                      color: isFilled ? const Color(0xFF34D399) : Colors.white38,
+                      color: isFilled ? const Color(0xFF059669) : const Color(0xFF94A3B8),
                       fontSize: 9.5,
                       fontWeight: isFilled ? FontWeight.bold : FontWeight.w500,
                     ),
@@ -488,14 +488,14 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: const Color(0xFFFEF3C7).withValues(alpha: 0.15),
+                color: const Color(0xFFFEF3C7),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.3)),
+                border: Border.all(color: const Color(0xFFFCD34D)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text('Earned Rewards: ', style: TextStyle(color: Color(0xFFFDE047), fontSize: 11, fontWeight: FontWeight.bold)),
+                  const Text('Earned Rewards: ', style: TextStyle(color: Color(0xFFB45309), fontSize: 11, fontWeight: FontWeight.bold)),
                   ...List.generate(
                     _giftsEarned > 5 ? 5 : _giftsEarned,
                     (_) => const Padding(
@@ -504,7 +504,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                     ),
                   ),
                   if (_giftsEarned > 5)
-                    Text(' x${_giftsEarned}', style: const TextStyle(color: Color(0xFFFDE047), fontSize: 11, fontWeight: FontWeight.bold)),
+                    Text(' x${_giftsEarned}', style: const TextStyle(color: Color(0xFFB45309), fontSize: 11, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -520,16 +520,18 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
       clipBehavior: Clip.antiAlias,
       child: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
             colors: [
-              Color(0xFF0F172A), // Dark Slate Navy
-              Color(0xFF065F46), // Deep Emerald
-              Color(0xFF10B981), // Bright Emerald
+              Color(0xFFFFFFFF), // Pure White
+              Color(0xFFF0FDF4), // Mint Snow
+              Color(0xFFECFDF5), // Light Emerald Pearl
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: const Color(0xFFA7F3D0), width: 1.5),
         ),
         child: Stack(
           children: [
@@ -542,26 +544,14 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                 height: 120,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.08),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: -30,
-              left: -10,
-              child: Container(
-                width: 130,
-                height: 130,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.05),
+                  color: const Color(0xFF10B981).withValues(alpha: 0.06),
                 ),
               ),
             ),
 
-            // Card Main Content
+            // Card Main Content (Clean Light Layout)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20.0, horizontal: 18.0),
+              padding: const EdgeInsets.symmetric(vertical: 18.0, horizontal: 16.0),
               child: Column(
                 children: [
                   // Top Header Bar
@@ -571,9 +561,9 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                          color: const Color(0xFFECFDF5),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
+                          border: Border.all(color: const Color(0xFFA7F3D0)),
                         ),
                         child: Row(
                           children: const [
@@ -581,7 +571,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                             SizedBox(width: 4),
                             Text(
                               'DIGITAL STAMP REWARDS',
-                              style: TextStyle(color: Color(0xFFFDE047), fontSize: 10.5, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                              style: TextStyle(color: Color(0xFF047857), fontSize: 10.5, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                             ),
                           ],
                         ),
@@ -589,15 +579,16 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
+                          color: const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.flip_camera_android_rounded, size: 12, color: Colors.white70),
+                            Icon(Icons.flip_camera_android_rounded, size: 12, color: Color(0xFF475569)),
                             SizedBox(width: 4),
-                            Text('Tap to Flip 🔄', style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                            Text('Tap to Flip 🔄', style: TextStyle(color: Color(0xFF334155), fontSize: 10.5, fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ),
@@ -613,13 +604,13 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                         decoration: const BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: LinearGradient(
-                            colors: [Color(0xFFF59E0B), Color(0xFF10B981), Colors.white],
+                            colors: [Color(0xFFF59E0B), Color(0xFF10B981)],
                           ),
                         ),
                         child: const CircleAvatar(
-                          radius: 28,
+                          radius: 26,
                           backgroundColor: Color(0xFF0F172A),
-                          child: Icon(Icons.person_rounded, size: 34, color: Colors.white),
+                          child: Icon(Icons.person_rounded, size: 32, color: Colors.white),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -632,21 +623,21 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                                 Flexible(
                                   child: Text(
                                     _currentName,
-                                    style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Colors.white),
+                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 const SizedBox(width: 6),
                                 InkWell(
                                   onTap: _editCustomerName,
-                                  child: const Icon(Icons.edit_rounded, size: 15, color: Color(0xFFA7F3D0)),
+                                  child: const Icon(Icons.edit_rounded, size: 15, color: Color(0xFF059669)),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 2),
                             Text(
                               'Mobile: +91 ${widget.customer.mobile ?? ''}',
-                              style: const TextStyle(fontSize: 12.5, color: Colors.white70),
+                              style: const TextStyle(fontSize: 12.5, color: Color(0xFF475569), fontWeight: FontWeight.w500),
                             ),
                           ],
                         ),
@@ -658,40 +649,6 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                   // 5 Digital Stamp Widget
                   _buildStampProgressWidget(),
                 ],
-              ),
-            ),
-
-            // Continuous Glass Sheen Light Sweep Beam
-            Positioned.fill(
-              child: IgnorePointer(
-                child: AnimatedBuilder(
-                  animation: _shimmerController,
-                  builder: (context, child) {
-                    final progress = _shimmerController.value;
-                    final double left = -1.5 + (progress * 4.0);
-
-                    return FractionallySizedBox(
-                      widthFactor: 0.35,
-                      alignment: Alignment(left, 0),
-                      child: Transform(
-                        transform: Matrix4.skewX(-0.35),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.white.withValues(alpha: 0.0),
-                                Colors.white.withValues(alpha: 0.08),
-                                Colors.white.withValues(alpha: 0.35),
-                                Colors.white.withValues(alpha: 0.08),
-                                Colors.white.withValues(alpha: 0.0),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
               ),
             ),
           ],
@@ -706,33 +663,23 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
       clipBehavior: Clip.antiAlias,
       child: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
             colors: [
-              Color(0xFF0F172A), // Dark Slate Navy
-              Color(0xFF1E293B), // Midnight Slate
-              Color(0xFF0F172A), // Dark Slate Navy
+              Color(0xFFFFFFFF), // Pure White
+              Color(0xFFF8FAFC), // Slate Snow
+              Color(0xFFECFDF5), // Light Mint
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: const Color(0xFFA7F3D0), width: 1.5),
         ),
         child: Stack(
           children: [
-            Positioned(
-              top: -30,
-              right: -30,
-              child: Container(
-                width: 140,
-                height: 140,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                ),
-              ),
-            ),
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 18.0, horizontal: 18.0),
+              padding: const EdgeInsets.symmetric(vertical: 18.0, horizontal: 16.0),
               child: Column(
                 children: [
                   Row(
@@ -741,13 +688,13 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                       const Expanded(
                         child: Row(
                           children: [
-                            Icon(Icons.military_tech_rounded, color: Color(0xFFF59E0B), size: 18),
+                            Icon(Icons.military_tech_rounded, color: Color(0xFFD97706), size: 18),
                             SizedBox(width: 4),
                             Expanded(
                               child: Text(
                                 'DIGITAL STAMP REWARDS 🎁',
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.3),
+                                style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.3),
                               ),
                             ),
                           ],
@@ -757,20 +704,16 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: _giftsEarned > 0
-                              ? const Color(0xFF10B981).withValues(alpha: 0.25)
-                              : const Color(0xFFF59E0B).withValues(alpha: 0.25),
+                          color: _giftsEarned > 0 ? const Color(0xFFECFDF5) : const Color(0xFFFEF3C7),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: _giftsEarned > 0
-                                ? const Color(0xFF10B981).withValues(alpha: 0.5)
-                                : const Color(0xFFF59E0B).withValues(alpha: 0.5),
+                            color: _giftsEarned > 0 ? const Color(0xFFA7F3D0) : const Color(0xFFFCD34D),
                           ),
                         ),
                         child: Text(
                           _giftsEarned > 0 ? '${_giftsEarned} GIFT UNLOCKED 🎁' : '${_filledStamps}/5 STAMPS 🏵️',
                           style: TextStyle(
-                            color: _giftsEarned > 0 ? const Color(0xFF6EE7B7) : const Color(0xFFFDE047),
+                            color: _giftsEarned > 0 ? const Color(0xFF047857) : const Color(0xFFB45309),
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
                           ),
@@ -778,7 +721,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
                   Row(
                     children: [
                       Container(
@@ -786,15 +729,16 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFA7F3D0)),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.25),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
+                              color: Colors.black.withValues(alpha: 0.06),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
                             ),
                           ],
                         ),
-                        child: const Icon(Icons.qr_code_2_rounded, size: 68, color: Color(0xFF0F172A)),
+                        child: const Icon(Icons.qr_code_2_rounded, size: 64, color: Color(0xFF0F172A)),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -803,31 +747,31 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                           children: [
                             Text(
                               _currentName,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17),
+                              style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 17),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 3),
                             Text(
                               'ID: DM-CUST-${widget.customer.mobile ?? '812885'}',
-                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5, fontWeight: FontWeight.w600),
+                              style: const TextStyle(color: Color(0xFF64748B), fontSize: 11.5, fontWeight: FontWeight.w600),
                             ),
                             const SizedBox(height: 5),
                             Text(
                               'Total Delivered Orders: ${_totalDeliveredOrders}',
                               style: const TextStyle(
-                                color: Color(0xFF34D399),
-                                fontSize: 11.5,
+                                color: Color(0xFF047857),
+                                fontSize: 12,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                             const SizedBox(height: 3),
                             Text(
                               _giftsEarned > 0
-                                  ? '🎁 ${_giftsEarned} Gift Icon${_giftsEarned > 1 ? 's' : ''} Earned! (DB Verified)'
+                                  ? '🎁 ${_giftsEarned} Gift Icon${_giftsEarned > 1 ? 's' : ''} Unlocked!'
                                   : 'Need 5 delivered orders for 1 Gift Icon (${_filledStamps}/5 Delivered)',
                               style: TextStyle(
-                                color: _giftsEarned > 0 ? const Color(0xFFFBBF24) : const Color(0xFF94A3B8),
+                                color: _giftsEarned > 0 ? const Color(0xFFD97706) : const Color(0xFF64748B),
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -837,66 +781,32 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  _buildStampProgressWidget(),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
                         'Scan at Merchant Store to Redeem Gifts 🎁',
-                        style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.bold),
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
+                          color: const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
                         child: const Row(
                           children: [
-                            Icon(Icons.flip_camera_android_rounded, size: 12, color: Colors.white),
+                            Icon(Icons.flip_camera_android_rounded, size: 12, color: Color(0xFF475569)),
                             SizedBox(width: 4),
-                            Text('Tap to Flip Back 🔄', style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                            Text('Tap to Flip Back 🔄', style: TextStyle(color: Color(0xFF334155), fontSize: 10.5, fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ),
                     ],
                   ),
                 ],
-              ),
-            ),
-            // Continuous Glass Sheen Light Sweep Beam
-            Positioned.fill(
-              child: IgnorePointer(
-                child: AnimatedBuilder(
-                  animation: _shimmerController,
-                  builder: (context, child) {
-                    final progress = _shimmerController.value;
-                    final double left = -1.5 + (progress * 4.0);
-
-                    return FractionallySizedBox(
-                      widthFactor: 0.35,
-                      alignment: Alignment(left, 0),
-                      child: Transform(
-                        transform: Matrix4.skewX(-0.35),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.white.withValues(alpha: 0.0),
-                                Colors.white.withValues(alpha: 0.08),
-                                Colors.white.withValues(alpha: 0.35),
-                                Colors.white.withValues(alpha: 0.08),
-                                Colors.white.withValues(alpha: 0.0),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
               ),
             ),
           ],
