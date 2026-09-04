@@ -1061,497 +1061,31 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
     });
   }
 
-  void _showCustomerDetailsBottomSheet(Map<String, dynamic> order) {
-    try {
-      final customerMobile = (order['customer_mobile'] ?? '').toString();
-      String customerName = (order['customer_name'] ?? order['name'] ?? customerMobile).toString();
-      final msgId = int.tryParse(order['id']?.toString() ?? '') ?? (order['id'] is num ? (order['id'] as num).toInt() : 0);
-      final rawOrderId = (order['order_id'] ?? order['_calculated_order_id'] ?? msgId.toString()).toString();
-      final cleanOrderId = rawOrderId.replaceAll('#', '').replaceAll('Order', '').trim();
-
-      double orderAmount = double.tryParse(order['order_amount']?.toString() ?? '') ??
-          double.tryParse(order['amount']?.toString() ?? '') ?? 0.0;
-
-      if (orderAmount <= 0) {
-        final itemsRaw = order['items_json'];
-        if (itemsRaw != null) {
-          try {
-            dynamic decoded = itemsRaw is String ? jsonDecode(itemsRaw) : itemsRaw;
-            List list = [];
-            if (decoded is List) {
-              list = decoded;
-            } else if (decoded is Map) {
-              list = [decoded];
-            }
-            for (var item in list) {
-              if (item is Map) {
-                final price = double.tryParse(item['price']?.toString() ?? '') ?? double.tryParse(item['rate']?.toString() ?? '') ?? 0.0;
-                final qty = int.tryParse(item['qty']?.toString() ?? '') ?? int.tryParse(item['quantity']?.toString() ?? '') ?? 1;
-                orderAmount += price * qty;
-              }
-            }
-          } catch (_) {}
-        }
-      }
-      final String amtStr = (orderAmount % 1 == 0) ? orderAmount.toInt().toString() : orderAmount.toStringAsFixed(2);
-
-      // Initial direct address check from order object
-      Map<String, dynamic>? initialAddressMap;
-      if (order['address'] is Map) {
-        initialAddressMap = Map<String, dynamic>.from(order['address']);
-      } else if (order['selected_address'] is Map) {
-        initialAddressMap = Map<String, dynamic>.from(order['selected_address']);
-      } else if (order['delivery_address'] is Map) {
-        initialAddressMap = Map<String, dynamic>.from(order['delivery_address']);
-      }
-
-      bool prefDetailsLoaded = false;
-      Map<String, dynamic>? chosenAddressMap = initialAddressMap;
-      String? orderDistance;
-
-      showDialog(
-        context: context,
-        barrierDismissible: true,
-        builder: (dialogCtx) => StatefulBuilder(
-          builder: (sheetContext, setSheetState) {
-            if (!prefDetailsLoaded) {
-              prefDetailsLoaded = true;
-              // 1. Primary: Fetch customer profile & address directly from MySQL Database API
-              AuthService.getCustomerProfile(customerMobile).then((profile) {
-                try {
-                  if (profile != null) {
-                    final dbName = (profile['name'] ?? '').toString().trim();
-                    if (dbName.isNotEmpty && dbName != 'Customer') {
-                      if (customerName == customerMobile || customerName.isEmpty || customerName == 'Customer Profile') {
-                        customerName = dbName;
-                      }
-                    }
-                    final rawAddrJson = profile['address_json'];
-                    if (rawAddrJson != null && rawAddrJson.toString().isNotEmpty) {
-                      try {
-                        dynamic decoded = rawAddrJson is String ? jsonDecode(rawAddrJson) : rawAddrJson;
-                        if (decoded is List && decoded.isNotEmpty) {
-                          final firstAddr = decoded.firstWhere((a) => a['isDefault'] == true, orElse: () => decoded.first);
-                          if (firstAddr is Map) {
-                            chosenAddressMap = Map<String, dynamic>.from(firstAddr);
-                          }
-                        } else if (decoded is Map) {
-                          chosenAddressMap = Map<String, dynamic>.from(decoded);
-                        }
-                      } catch (_) {}
-                    }
-                  }
-                } catch (_) {}
-
-                // 2. Secondary fallback: Check SharedPreferences if chosenAddressMap is still null
-                if (chosenAddressMap == null) {
-                  SharedPreferences.getInstance().then((prefs) {
-                    try {
-                      final String key = 'customer_addresses_$customerMobile';
-                      final String? addressesJson = prefs.getString(key);
-                      List<Map<String, dynamic>> savedAddresses = [];
-                      if (addressesJson != null && addressesJson.isNotEmpty) {
-                        try {
-                          final List<dynamic> decoded = jsonDecode(addressesJson);
-                          savedAddresses = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
-                        } catch (_) {}
-                      }
-
-                      Map<String, dynamic> deliveryDetailsMap = {};
-                      try {
-                        final str = prefs.getString('saved_order_delivery_details');
-                        if (str != null && str.isNotEmpty) {
-                          deliveryDetailsMap = Map<String, dynamic>.from(jsonDecode(str));
-                        }
-                      } catch (_) {}
-
-                      Map<String, dynamic>? specificOrderDetails;
-                      if (deliveryDetailsMap.containsKey(cleanOrderId) && deliveryDetailsMap[cleanOrderId] is Map) {
-                        specificOrderDetails = Map<String, dynamic>.from(deliveryDetailsMap[cleanOrderId]);
-                      } else if (deliveryDetailsMap.containsKey(rawOrderId) && deliveryDetailsMap[rawOrderId] is Map) {
-                        specificOrderDetails = Map<String, dynamic>.from(deliveryDetailsMap[rawOrderId]);
-                      } else if (deliveryDetailsMap.containsKey(msgId.toString()) && deliveryDetailsMap[msgId.toString()] is Map) {
-                        specificOrderDetails = Map<String, dynamic>.from(deliveryDetailsMap[msgId.toString()]);
-                      }
-
-                      orderDistance = specificOrderDetails?['distance']?.toString();
-
-                      if (chosenAddressMap == null) {
-                        if (specificOrderDetails?['address'] is Map) {
-                          chosenAddressMap = Map<String, dynamic>.from(specificOrderDetails!['address']);
-                        } else if (savedAddresses.isNotEmpty) {
-                          chosenAddressMap = savedAddresses.firstWhere((a) => a['isDefault'] == true, orElse: () => savedAddresses.first);
-                        }
-                      }
-                    } catch (_) {}
-                    if (sheetContext.mounted) {
-                      setSheetState(() {});
-                    }
-                  });
-                } else {
-                  if (sheetContext.mounted) {
-                    setSheetState(() {});
-                  }
-                }
-              });
-            }
-
-            bool isPaid = (order['payment_status'] ?? '').toString().toLowerCase() == 'paid';
-            String paymentUtr = (order['payment_utr'] ?? '').toString();
-
-            return Dialog(
-              backgroundColor: Colors.white,
-              insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 20),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // 1. Sleek Header Bar
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF0F172A),
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.receipt_long_rounded, color: Color(0xFF38BDF8), size: 22),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Order Details #$cleanOrderId',
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                            ),
-                          ],
-                        ),
-                        InkWell(
-                          onTap: () => Navigator.pop(dialogCtx),
-                          child: const CircleAvatar(
-                            radius: 13,
-                            backgroundColor: Colors.white24,
-                            child: Icon(Icons.close_rounded, color: Colors.white, size: 16),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // 2. Scrollable Body Content
-                  Flexible(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Customer Profile Card
-                          Row(
-                            children: [
-                              const CircleAvatar(
-                                radius: 24,
-                                backgroundColor: Color(0xFF8B5CF6),
-                                child: Icon(Icons.person_rounded, color: Colors.white, size: 28),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      customerName.isNotEmpty ? customerName : 'Customer Profile',
-                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Mobile: +91 $customerMobile',
-                                      style: const TextStyle(fontSize: 13, color: Colors.black54),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              if (customerMobile.isNotEmpty)
-                                Material(
-                                  color: const Color(0xFFDCFCE7),
-                                  shape: const CircleBorder(),
-                                  child: InkWell(
-                                    customBorder: const CircleBorder(),
-                                    onTap: () => _makePhoneCall(customerMobile),
-                                    child: const Padding(
-                                      padding: EdgeInsets.all(8),
-                                      child: Icon(Icons.phone_rounded, color: Color(0xFF16A34A), size: 18),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                          const Divider(height: 1, color: Color(0xFFE2E8F0)),
-                          const SizedBox(height: 14),
-
-                          // Action Buttons Row: [ Delivered ✅ ] | [ Cancel Order ❌ ]
-                          Row(
-                            children: [
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: isPaid ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
-                                    padding: const EdgeInsets.symmetric(vertical: 11),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    elevation: isPaid ? 2 : 0,
-                                  ),
-                                  icon: Icon(
-                                    isPaid ? Icons.check_circle_rounded : Icons.lock_outline_rounded,
-                                    color: Colors.white,
-                                    size: 18,
-                                  ),
-                                  label: Text(
-                                    isPaid ? 'Delivered ✅' : 'Delivered 🔒',
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                  ),
-                                  onPressed: isPaid
-                                      ? () {
-                                          Navigator.pop(dialogCtx);
-                                          _requireCustomerOtpAndProceed(
-                                            order: order,
-                                            actionTitle: 'Delivery',
-                                            onVerified: () async => _updateDeliveryStatus(order, 'Delivered'),
-                                          );
-                                        }
-                                      : () {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text('⚠️ Payment of ₹ $amtStr is pending! Please collect payment first before delivering.'),
-                                              backgroundColor: const Color(0xFFEA580C),
-                                              duration: const Duration(seconds: 3),
-                                            ),
-                                          );
-                                        },
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFFEF4444),
-                                    padding: const EdgeInsets.symmetric(vertical: 11),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    elevation: 1,
-                                  ),
-                                  icon: const Icon(Icons.cancel_rounded, color: Colors.white, size: 18),
-                                  label: const Text('Cancel Order ❌', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                                  onPressed: () {
-                                    Navigator.pop(dialogCtx);
-                                    _showCancelOrderDialog(order);
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-
-                          // Distance Badge (If Distance was entered when sending order)
-                          if (orderDistance != null && orderDistance!.isNotEmpty) ...[
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFF7ED),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: const Color(0xFFFDBA74)),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.straighten_rounded, color: Color(0xFFC2410C), size: 16),
-                                  const SizedBox(width: 6),
-                                  const Text('Distance to Seller:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFFC2410C))),
-                                  const SizedBox(width: 6),
-                                  Text(orderDistance!, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Color(0xFF9A3412))),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                          ],
-
-                          // Customer Delivery Address Section
-                          const Text('Customer Delivery Address 📍', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                          const SizedBox(height: 6),
-
-                          if (chosenAddressMap != null) ...[
-                            Builder(builder: (context) {
-                              final addr = chosenAddressMap!;
-                              final houseNo = (addr['houseNo'] ?? '').toString();
-                              final building = (addr['building'] ?? '').toString();
-                              final locality = (addr['locality'] ?? '').toString();
-                              final landmark = (addr['landmark'] ?? '').toString();
-                              final city = (addr['city'] ?? '').toString();
-                              final pincode = (addr['pincode'] ?? '').toString();
-                              final receiver = (addr['receiverName'] ?? addr['name'] ?? customerName).toString();
-                              final phone = (addr['mobile'] ?? customerMobile).toString();
-
-                              final fullAddressString = (addr['fullAddressString'] ?? '').toString();
-
-                              final fullAddress = fullAddressString.isNotEmpty
-                                  ? fullAddressString
-                                  : [
-                                      if (houseNo.isNotEmpty) houseNo,
-                                      if (building.isNotEmpty) building,
-                                      if (locality.isNotEmpty) locality,
-                                      if (landmark.isNotEmpty) 'Near $landmark',
-                                      if (city.isNotEmpty) city,
-                                      if (pincode.isNotEmpty) 'PIN: $pincode',
-                                    ].join(', ');
-
-                              return Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF8FAFC),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: const Color(0xFFCBD5E1)),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (receiver.isNotEmpty)
-                                      Text(receiver, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
-                                    const SizedBox(height: 2),
-                                    Text(fullAddress, style: const TextStyle(fontSize: 12, color: Color(0xFF334155))),
-                                    if (phone.isNotEmpty) ...[
-                                      const SizedBox(height: 4),
-                                      Text('Phone: +91 $phone', style: const TextStyle(fontSize: 11.5, color: Colors.black54, fontWeight: FontWeight.w600)),
-                                    ],
-                                  ],
-                                ),
-                              );
-                            }),
-                          ] else
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF8FAFC),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                              ),
-                              child: const Text('No delivery address found for this order.', style: TextStyle(fontSize: 12, color: Colors.black54)),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // 3. STICKY BOTTOM BAR (THE 2 BUTTONS / CARDS REQUESTED BY USER!)
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
-                      border: Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 1.2)),
-                    ),
-                    child: Row(
-                      children: [
-                        // Left Box: Amount Display
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text(
-                                  'TOTAL BILL',
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
-                                ),
-                                const SizedBox(height: 1),
-                                Text(
-                                  '₹ $amtStr',
-                                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-
-                        // Right Box: Paid Status vs Collect Payment Button
-                        Expanded(
-                          child: isPaid
-                              ? Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFDCFCE7),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: const Color(0xFF86EFAC), width: 1.2),
-                                  ),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 16),
-                                          SizedBox(width: 4),
-                                          Text(
-                                            'PAID ✅',
-                                            style: TextStyle(color: Color(0xFF15803D), fontWeight: FontWeight.w900, fontSize: 13),
-                                          ),
-                                        ],
-                                      ),
-                                      if (paymentUtr.isNotEmpty)
-                                        Text(
-                                          'Ref: $paymentUtr',
-                                          style: const TextStyle(color: Color(0xFF166534), fontSize: 10),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                    ],
-                                  ),
-                                )
-                              : ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF0F172A), // Dark Slate Black
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    elevation: 2,
-                                  ),
-                                  icon: const Icon(Icons.payments_rounded, color: Colors.white, size: 18),
-                                  label: const Text(
-                                    'Collect Payment 💳',
-                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                                  ),
-                                  onPressed: () {
-                                    _showPaymentChoiceModal(
-                                      order: order,
-                                      orderAmount: orderAmount,
-                                      amtStr: amtStr,
-                                      customerMobile: customerMobile,
-                                      msgId: msgId,
-                                      onPaid: (utr) {
-                                        setSheetState(() {
-                                          isPaid = true;
-                                          paymentUtr = utr;
-                                        });
-                                        if (mounted) setState(() {});
-                                      },
-                                    );
-                                  },
-                                ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
+  void _openFullOrderDetailsPage(Map<String, dynamic> order) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (ctx) => DeliveryOrderDetailsScreen(
+          order: order,
+          sellerName: widget.sellerName,
+          sellerMobile: widget.sellerMobile,
+          deliveryBoyUsername: widget.deliveryBoyUsername,
+          customerNameMap: _customerNamesMap,
+          onUpdateDeliveryStatus: (status) => _updateDeliveryStatus(order, status),
+          onCollectCashPayment: (amt) => _collectCashPayment(order, amt),
+          onShowUpiQrPayment: (amt) => _showUpiQrPaymentModal(order, amt),
+          onCancelOrder: () => _showCancelOrderDialog(order),
+          onRequireOtpAndProceed: (title, onVerified) => _requireCustomerOtpAndProceed(
+            order: order,
+            actionTitle: title,
+            onVerified: onVerified,
+          ),
+          onMakePhoneCall: _makePhoneCall,
         ),
-      );
-    } catch (e) {
-      debugPrint('Error opening order details popup: $e');
+      ),
+    );
+    if (mounted) {
+      setState(() {});
     }
   }
 
@@ -2169,7 +1703,7 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
                     : (customerMobile.isNotEmpty ? '+91 $customerMobile' : 'Customer');
 
                 return InkWell(
-                  onTap: () => _showCustomerDetailsBottomSheet(order),
+                  onTap: () => _openFullOrderDetailsPage(order),
                   borderRadius: BorderRadius.circular(14),
                   child: Container(
                     margin: const EdgeInsets.only(bottom: 8),
@@ -2186,12 +1720,12 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
                       ],
                     ),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                       child: Row(
                         children: [
                           // Order # Badge
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                             decoration: BoxDecoration(
                               color: const Color(0xFFFFF7ED),
                               borderRadius: BorderRadius.circular(8),
@@ -2199,12 +1733,12 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
                             ),
                             child: Text(
                               '#$cleanOrderId',
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFFC2410C)),
+                              style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900, color: Color(0xFFC2410C)),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
 
-                          // Customer Info & Status Column
+                          // Customer Info & Status Column (Overflow Fixed with Flexible)
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2213,7 +1747,7 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
                                 Text(
                                   displayName,
                                   style: const TextStyle(
-                                    fontSize: 14,
+                                    fontSize: 13.5,
                                     fontWeight: FontWeight.bold,
                                     color: Color(0xFF0F172A),
                                   ),
@@ -2224,21 +1758,24 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
                                   Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const Text(
-                                        'Out for Delivery',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: Color(0xFF2563EB),
-                                          fontWeight: FontWeight.w600,
+                                      Flexible(
+                                        child: Text(
+                                          'Out for Delivery',
+                                          style: const TextStyle(
+                                            fontSize: 10.5,
+                                            color: Color(0xFF2563EB),
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
-                                      const SizedBox(width: 4),
+                                      const SizedBox(width: 3),
                                       Image.asset(
                                         'assets/images/Pickup_boy.png',
-                                        width: 16,
-                                        height: 16,
+                                        width: 14,
+                                        height: 14,
                                         fit: BoxFit.contain,
-                                        errorBuilder: (ctx, err, stack) => const Text('🚚', style: TextStyle(fontSize: 11)),
+                                        errorBuilder: (ctx, err, stack) => const Text('🚚', style: TextStyle(fontSize: 10)),
                                       ),
                                     ],
                                   )
@@ -2246,16 +1783,17 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
                                   const Text(
                                     'Ready for Pickup 📦',
                                     style: TextStyle(
-                                      fontSize: 11,
+                                      fontSize: 10.5,
                                       color: Color(0xFFEA580C),
                                       fontWeight: FontWeight.w600,
                                     ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                               ],
                             ),
                           ),
 
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 4),
 
                           // Green Circular Call Icon Button (1-tap direct call)
                           if (customerMobile.isNotEmpty)
@@ -2266,19 +1804,19 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
                                 customBorder: const CircleBorder(),
                                 onTap: () => _makePhoneCall(customerMobile),
                                 child: const Padding(
-                                  padding: EdgeInsets.all(7),
-                                  child: Icon(Icons.phone_rounded, color: Color(0xFF16A34A), size: 16),
+                                  padding: EdgeInsets.all(6),
+                                  child: Icon(Icons.phone_rounded, color: Color(0xFF16A34A), size: 15),
                                 ),
                               ),
                             ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 5),
 
                           // Compact Pick Up / Delivered Action Button
                           if (!isOut)
                             ElevatedButton(
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFFEA580C), // Vibrant Warm Orange
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                                 minimumSize: const Size(0, 32),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                 elevation: 1,
@@ -2286,7 +1824,7 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
                               onPressed: () => _updateDeliveryStatus(order, 'Out for Delivery'),
                               child: const Text(
                                 'Pick Up 📦',
-                                style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold),
+                                style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                               ),
                             )
                           else
@@ -2295,15 +1833,15 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
                                 backgroundColor: ((order['payment_status'] ?? '').toString().toLowerCase() == 'paid')
                                     ? const Color(0xFF10B981)
                                     : const Color(0xFF94A3B8),
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                                 minimumSize: const Size(0, 32),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                 elevation: ((order['payment_status'] ?? '').toString().toLowerCase() == 'paid') ? 1 : 0,
                               ),
-                              onPressed: () => _showCustomerDetailsBottomSheet(order),
+                              onPressed: () => _openFullOrderDetailsPage(order),
                               child: Text(
                                 ((order['payment_status'] ?? '').toString().toLowerCase() == 'paid') ? 'Delivered ✅' : 'Delivered 🔒',
-                                style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold),
+                                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                               ),
                             ),
                         ],
@@ -2316,3 +1854,714 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
     );
   }
 }
+
+/// FULL SCREEN: Delivery Order Details Page
+class DeliveryOrderDetailsScreen extends StatefulWidget {
+  final Map<String, dynamic> order;
+  final String sellerName;
+  final String sellerMobile;
+  final String deliveryBoyUsername;
+  final Map<String, String> customerNameMap;
+  final Function(String status) onUpdateDeliveryStatus;
+  final Function(double amt) onCollectCashPayment;
+  final Function(double amt) onShowUpiQrPayment;
+  final VoidCallback onCancelOrder;
+  final Function(String title, Future<void> Function() onVerified) onRequireOtpAndProceed;
+  final Function(String phone) onMakePhoneCall;
+
+  const DeliveryOrderDetailsScreen({
+    super.key,
+    required this.order,
+    required this.sellerName,
+    required this.sellerMobile,
+    required this.deliveryBoyUsername,
+    required this.customerNameMap,
+    required this.onUpdateDeliveryStatus,
+    required this.onCollectCashPayment,
+    required this.onShowUpiQrPayment,
+    required this.onCancelOrder,
+    required this.onRequireOtpAndProceed,
+    required this.onMakePhoneCall,
+  });
+
+  @override
+  State<DeliveryOrderDetailsScreen> createState() => _DeliveryOrderDetailsScreenState();
+}
+
+class _DeliveryOrderDetailsScreenState extends State<DeliveryOrderDetailsScreen> {
+  Map<String, dynamic>? _chosenAddressMap;
+  bool _isLoadingAddress = true;
+  String? _orderDistance;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAddressDetails();
+  }
+
+  void _loadAddressDetails() async {
+    final order = widget.order;
+    final customerMobile = (order['customer_mobile'] ?? '').toString().trim();
+    final msgId = int.tryParse(order['id']?.toString() ?? '') ?? (order['id'] is num ? (order['id'] as num).toInt() : 0);
+    final rawOrderId = (order['order_id'] ?? order['_calculated_order_id'] ?? msgId.toString()).toString();
+    final cleanOrderId = rawOrderId.replaceAll('#', '').replaceAll('Order', '').trim();
+
+    Map<String, dynamic>? initialAddr;
+    if (order['address'] is Map) {
+      initialAddr = Map<String, dynamic>.from(order['address']);
+    } else if (order['selected_address'] is Map) {
+      initialAddr = Map<String, dynamic>.from(order['selected_address']);
+    } else if (order['delivery_address'] is Map) {
+      initialAddr = Map<String, dynamic>.from(order['delivery_address']);
+    }
+
+    if (initialAddr != null) {
+      if (mounted) {
+        setState(() {
+          _chosenAddressMap = initialAddr;
+          _isLoadingAddress = false;
+        });
+      }
+      return;
+    }
+
+    try {
+      final profile = await AuthService.getCustomerProfile(customerMobile);
+      if (profile != null && profile['address_json'] != null) {
+        final rawAddrJson = profile['address_json'];
+        dynamic decoded = rawAddrJson is String ? jsonDecode(rawAddrJson) : rawAddrJson;
+        if (decoded is List && decoded.isNotEmpty) {
+          final firstAddr = decoded.firstWhere((a) => a['isDefault'] == true, orElse: () => decoded.first);
+          if (firstAddr is Map) {
+            initialAddr = Map<String, dynamic>.from(firstAddr);
+          }
+        } else if (decoded is Map) {
+          initialAddr = Map<String, dynamic>.from(decoded);
+        }
+      }
+    } catch (_) {}
+
+    if (initialAddr == null) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final String key = 'customer_addresses_$customerMobile';
+        final String? addressesJson = prefs.getString(key);
+        if (addressesJson != null && addressesJson.isNotEmpty) {
+          final List<dynamic> decoded = jsonDecode(addressesJson);
+          if (decoded.isNotEmpty) {
+            final firstAddr = decoded.firstWhere((a) => a['isDefault'] == true, orElse: () => decoded.first);
+            if (firstAddr is Map) {
+              initialAddr = Map<String, dynamic>.from(firstAddr);
+            }
+          }
+        }
+        final str = prefs.getString('saved_order_delivery_details');
+        if (str != null && str.isNotEmpty) {
+          final Map<String, dynamic> deliveryDetailsMap = Map<String, dynamic>.from(jsonDecode(str));
+          Map<String, dynamic>? specificOrderDetails;
+          if (deliveryDetailsMap.containsKey(cleanOrderId) && deliveryDetailsMap[cleanOrderId] is Map) {
+            specificOrderDetails = Map<String, dynamic>.from(deliveryDetailsMap[cleanOrderId]);
+          } else if (deliveryDetailsMap.containsKey(rawOrderId) && deliveryDetailsMap[rawOrderId] is Map) {
+            specificOrderDetails = Map<String, dynamic>.from(deliveryDetailsMap[rawOrderId]);
+          }
+          _orderDistance = specificOrderDetails?['distance']?.toString();
+          if (initialAddr == null && specificOrderDetails?['address'] is Map) {
+            initialAddr = Map<String, dynamic>.from(specificOrderDetails!['address']);
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (mounted) {
+      setState(() {
+        _chosenAddressMap = initialAddr;
+        _isLoadingAddress = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final order = widget.order;
+    final customerMobile = (order['customer_mobile'] ?? '').toString();
+    final msgId = int.tryParse(order['id']?.toString() ?? '') ?? (order['id'] is num ? (order['id'] as num).toInt() : 0);
+    final rawOrderId = (order['order_id'] ?? order['_calculated_order_id'] ?? msgId.toString()).toString();
+    final cleanOrderId = rawOrderId.replaceAll('#', '').replaceAll('Order', '').trim();
+    final rawCustomerName = (order['customer_name'] ?? order['name'] ?? order['receiver_name'] ?? '').toString().trim();
+
+    String resolvedName = rawCustomerName.isNotEmpty && rawCustomerName != customerMobile ? rawCustomerName : '';
+    if (resolvedName.isEmpty) {
+      resolvedName = (widget.customerNameMap[cleanOrderId] ??
+          widget.customerNameMap[rawOrderId] ??
+          widget.customerNameMap[msgId.toString()] ??
+          widget.customerNameMap[customerMobile] ??
+          '').trim();
+    }
+    final String displayName = resolvedName.isNotEmpty ? resolvedName : (customerMobile.isNotEmpty ? '+91 $customerMobile' : 'Customer');
+
+    double orderAmount = double.tryParse(order['order_amount']?.toString() ?? '') ??
+        double.tryParse(order['amount']?.toString() ?? '') ?? 0.0;
+
+    List parsedItems = [];
+    final itemsRaw = order['items_json'] ?? order['items'];
+    if (itemsRaw != null) {
+      try {
+        dynamic decoded = itemsRaw is String ? jsonDecode(itemsRaw) : itemsRaw;
+        if (decoded is List) {
+          parsedItems = decoded;
+        } else if (decoded is Map) {
+          parsedItems = [decoded];
+        }
+      } catch (_) {}
+    }
+
+    if (orderAmount <= 0) {
+      for (var item in parsedItems) {
+        if (item is Map) {
+          final price = double.tryParse(item['price']?.toString() ?? '') ?? double.tryParse(item['rate']?.toString() ?? '') ?? 0.0;
+          final qty = int.tryParse(item['qty']?.toString() ?? '') ?? int.tryParse(item['quantity']?.toString() ?? '') ?? 1;
+          orderAmount += price * qty;
+        }
+      }
+    }
+    final String amtStr = (orderAmount % 1 == 0) ? orderAmount.toInt().toString() : orderAmount.toStringAsFixed(2);
+
+    final bool isPaid = (order['payment_status'] ?? '').toString().toLowerCase() == 'paid';
+    final String paymentUtr = (order['payment_utr'] ?? '').toString();
+    final String delStatus = (order['delivery_status'] ?? 'Pending').toString();
+    final bool isOut = delStatus.toLowerCase() == 'out for delivery';
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF0F172A),
+        elevation: 2,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Order Details #$cleanOrderId',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+            Text(
+              'Seller: ${widget.sellerName}',
+              style: const TextStyle(fontSize: 11, color: Color(0xFF38BDF8), fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: isOut ? const Color(0xFFDBEAFE) : const Color(0xFFFFF7ED),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: isOut ? const Color(0xFF93C5FD) : const Color(0xFFFDBA74)),
+            ),
+            child: Text(
+              isOut ? 'Out for Delivery 🛵' : 'Ready Pickup 📦',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: isOut ? const Color(0xFF1E40AF) : const Color(0xFFC2410C),
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Customer Profile Card
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.03),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        const CircleAvatar(
+                          radius: 26,
+                          backgroundColor: Color(0xFF8B5CF6),
+                          child: Icon(Icons.person_rounded, color: Colors.white, size: 30),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                displayName,
+                                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'Mobile: +91 $customerMobile',
+                                style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (customerMobile.isNotEmpty)
+                          Material(
+                            color: const Color(0xFFDCFCE7),
+                            shape: const CircleBorder(),
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: () => widget.onMakePhoneCall(customerMobile),
+                              child: const Padding(
+                                padding: EdgeInsets.all(10),
+                                child: Icon(Icons.phone_rounded, color: Color(0xFF16A34A), size: 20),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // Distance Badge
+                  if (_orderDistance != null && _orderDistance!.isNotEmpty) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF7ED),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFFDBA74)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.straighten_rounded, color: Color(0xFFC2410C), size: 18),
+                          const SizedBox(width: 8),
+                          const Text('Distance to Seller:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFFC2410C))),
+                          const SizedBox(width: 6),
+                          Text(_orderDistance!, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Color(0xFF9A3412))),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+
+                  // Customer Delivery Address Section
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.03),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.location_on_rounded, color: Color(0xFFEF4444), size: 20),
+                            SizedBox(width: 6),
+                            Text(
+                              'Customer Delivery Address',
+                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        if (_isLoadingAddress)
+                          const Center(child: Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator(color: Color(0xFFEA580C))))
+                        else if (_chosenAddressMap != null) ...[
+                          Builder(builder: (context) {
+                            final addr = _chosenAddressMap!;
+                            final houseNo = (addr['houseNo'] ?? '').toString();
+                            final building = (addr['building'] ?? '').toString();
+                            final locality = (addr['locality'] ?? '').toString();
+                            final landmark = (addr['landmark'] ?? '').toString();
+                            final city = (addr['city'] ?? '').toString();
+                            final pincode = (addr['pincode'] ?? '').toString();
+                            final receiver = (addr['receiverName'] ?? addr['name'] ?? displayName).toString();
+                            final phone = (addr['mobile'] ?? customerMobile).toString();
+
+                            final fullAddressString = (addr['fullAddressString'] ?? '').toString();
+                            final fullAddress = fullAddressString.isNotEmpty
+                                ? fullAddressString
+                                : [
+                                    if (houseNo.isNotEmpty) houseNo,
+                                    if (building.isNotEmpty) building,
+                                    if (locality.isNotEmpty) locality,
+                                    if (landmark.isNotEmpty) 'Near $landmark',
+                                    if (city.isNotEmpty) city,
+                                    if (pincode.isNotEmpty) 'PIN: $pincode',
+                                  ].join(', ');
+
+                            return Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFCBD5E1)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (receiver.isNotEmpty)
+                                    Text(receiver, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A))),
+                                  const SizedBox(height: 3),
+                                  Text(fullAddress, style: const TextStyle(fontSize: 13, color: Color(0xFF334155), height: 1.3)),
+                                  if (phone.isNotEmpty) ...[
+                                    const SizedBox(height: 6),
+                                    Text('Phone: +91 $phone', style: const TextStyle(fontSize: 12.5, color: Color(0xFF475569), fontWeight: FontWeight.w600)),
+                                  ],
+                                ],
+                              ),
+                            );
+                          }),
+                        ] else
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: const Text('No delivery address found for this order.', style: TextStyle(fontSize: 12.5, color: Colors.black54)),
+                          ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // Order Items List Card (If items exist)
+                  if (parsedItems.isNotEmpty) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.03),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.shopping_bag_rounded, color: Color(0xFFEA580C), size: 20),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Ordered Items (${parsedItems.length})',
+                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          ...parsedItems.map((item) {
+                            if (item is! Map) return const SizedBox.shrink();
+                            final name = (item['name'] ?? item['title'] ?? 'Item').toString();
+                            final price = double.tryParse(item['price']?.toString() ?? '') ?? double.tryParse(item['rate']?.toString() ?? '') ?? 0.0;
+                            final qty = int.tryParse(item['qty']?.toString() ?? '') ?? int.tryParse(item['quantity']?.toString() ?? '') ?? 1;
+                            final total = price * qty;
+                            final priceStr = (price % 1 == 0) ? price.toInt().toString() : price.toStringAsFixed(2);
+                            final totalStr = (total % 1 == 0) ? total.toInt().toString() : total.toStringAsFixed(2);
+
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      '$name  x$qty',
+                                      style: const TextStyle(fontSize: 13, color: Color(0xFF1E293B), fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                  Text(
+                                    '₹ $totalStr',
+                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+
+                  // Action Buttons Row: [ Delivered ✅ ] | [ Cancel Order ❌ ]
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isPaid ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            elevation: isPaid ? 2 : 0,
+                          ),
+                          icon: Icon(
+                            isPaid ? Icons.check_circle_rounded : Icons.lock_outline_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          label: Text(
+                            isPaid ? 'Delivered ✅' : 'Delivered 🔒',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          onPressed: isPaid
+                              ? () {
+                                  widget.onRequireOtpAndProceed(
+                                    'Delivery',
+                                    () async {
+                                      widget.onUpdateDeliveryStatus('Delivered');
+                                      if (mounted) Navigator.pop(context);
+                                    },
+                                  );
+                                }
+                              : () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('⚠️ Payment of ₹ $amtStr is pending! Please collect payment first before delivering.'),
+                                      backgroundColor: const Color(0xFFEA580C),
+                                      duration: const Duration(seconds: 3),
+                                    ),
+                                  );
+                                },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFEF4444),
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            elevation: 1,
+                          ),
+                          icon: const Icon(Icons.cancel_rounded, color: Colors.white, size: 20),
+                          label: const Text('Cancel Order ❌', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                          onPressed: () {
+                            widget.onCancelOrder();
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Bottom Bar (Total Bill + Collect Payment / Paid Status)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 10,
+                  offset: Offset(0, -2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'TOTAL BILL',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          '₹ $amtStr',
+                          style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: isPaid
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDCFCE7),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFF86EFAC), width: 1.2),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 18),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'PAID ✅',
+                                    style: TextStyle(color: Color(0xFF15803D), fontWeight: FontWeight.w900, fontSize: 14),
+                                  ),
+                                ],
+                              ),
+                              if (paymentUtr.isNotEmpty)
+                                Text(
+                                  'Ref: $paymentUtr',
+                                  style: const TextStyle(color: Color(0xFF166534), fontSize: 10.5),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                            ],
+                          ),
+                        )
+                      : ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0F172A),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            elevation: 2,
+                          ),
+                          icon: const Icon(Icons.payments_rounded, color: Colors.white, size: 20),
+                          label: const Text(
+                            'Collect Payment 💳',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          onPressed: () {
+                            showModalBottomSheet(
+                              context: context,
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                              ),
+                              backgroundColor: Colors.white,
+                              builder: (choiceCtx) {
+                                return Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Center(
+                                        child: Container(
+                                          width: 40,
+                                          height: 4,
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey.shade300,
+                                            borderRadius: BorderRadius.circular(2),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      const Text(
+                                        'Select Payment Method 💳',
+                                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                                      ),
+                                      Text(
+                                        'Amount to Collect: ₹ $amtStr',
+                                        style: const TextStyle(fontSize: 13, color: Colors.black54),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      ListTile(
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                        tileColor: const Color(0xFFF0FDF4),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(14),
+                                          side: const BorderSide(color: Color(0xFF86EFAC), width: 1.2),
+                                        ),
+                                        leading: const CircleAvatar(
+                                          backgroundColor: Color(0xFF16A34A),
+                                          child: Icon(Icons.money_rounded, color: Colors.white, size: 22),
+                                        ),
+                                        title: const Text('Cash Payment 💵', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF15803D), fontSize: 14.5)),
+                                        subtitle: const Text('Customer paid in cash', style: TextStyle(fontSize: 12, color: Color(0xFF166534))),
+                                        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Color(0xFF16A34A)),
+                                        onTap: () {
+                                          Navigator.pop(choiceCtx);
+                                          widget.onCollectCashPayment(orderAmount);
+                                          setState(() {});
+                                        },
+                                      ),
+                                      const SizedBox(height: 12),
+                                      ListTile(
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                        tileColor: const Color(0xFFF0F9FF),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(14),
+                                          side: const BorderSide(color: Color(0xFF7DD3FC), width: 1.2),
+                                        ),
+                                        leading: const CircleAvatar(
+                                          backgroundColor: Color(0xFF0284C7),
+                                          child: Icon(Icons.qr_code_2_rounded, color: Colors.white, size: 22),
+                                        ),
+                                        title: const Text('Online QR Code 📱', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0369A1), fontSize: 14.5)),
+                                        subtitle: const Text('Show UPI QR code for GPay/PhonePe/Paytm', style: TextStyle(fontSize: 12, color: Color(0xFF075985))),
+                                        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Color(0xFF0284C7)),
+                                        onTap: () {
+                                          Navigator.pop(choiceCtx);
+                                          widget.onShowUpiQrPayment(orderAmount);
+                                          setState(() {});
+                                        },
+                                      ),
+                                      const SizedBox(height: 10),
+                                    ],
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+

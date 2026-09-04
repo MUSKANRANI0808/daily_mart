@@ -529,33 +529,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
             }),
           ),
 
-          // Gift Unlocked Banner if earned
-          if (_giftsEarned > 0) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFEF3C7),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFFCD34D)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('Earned Rewards: ', style: TextStyle(color: Color(0xFFB45309), fontSize: 11, fontWeight: FontWeight.bold)),
-                  ...List.generate(
-                    _giftsEarned > 5 ? 5 : _giftsEarned,
-                    (_) => const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 2),
-                      child: Text('🎁', style: TextStyle(fontSize: 14)),
-                    ),
-                  ),
-                  if (_giftsEarned > 5)
-                    Text(' x${_giftsEarned}', style: const TextStyle(color: Color(0xFFB45309), fontSize: 11, fontWeight: FontWeight.bold)),
-                ],
-              ),
-            ),
-          ],
+          // Stamp Badges Row completed
         ],
       ),
     );
@@ -601,55 +575,6 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
               padding: const EdgeInsets.symmetric(vertical: 18.0, horizontal: 16.0),
               child: Column(
                 children: [
-                  // Top Header Bar
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Flexible(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFECFDF5),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFA7F3D0)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: const [
-                              Text('🎁', style: TextStyle(fontSize: 11)),
-                              SizedBox(width: 4),
-                              Flexible(
-                                child: Text(
-                                  'DIGITAL STAMP REWARDS',
-                                  style: TextStyle(color: Color(0xFF047857), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.3),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.flip_camera_android_rounded, size: 11, color: Color(0xFF475569)),
-                            SizedBox(width: 3),
-                            Text('Tap to Flip 🔄', style: TextStyle(color: Color(0xFF334155), fontSize: 10, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-
                   // Avatar + Name + Phone Row
                   Row(
                     children: [
