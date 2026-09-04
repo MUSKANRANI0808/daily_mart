@@ -131,154 +131,122 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
       }
     }
 
-    await _calculateVipPassStatus();
+    await _calculateOrderStamps();
   }
 
-  bool _isVipActive = false;
-  int _deliveredCountInMonth = 0;
+  int _totalDeliveredOrders = 0;
+  int _filledStamps = 0;
+  int _giftsEarned = 0;
 
-  Future<void> _calculateVipPassStatus() async {
+  Future<void> _calculateOrderStamps() async {
     final mobile = (widget.customer.mobile ?? '').trim();
     if (mobile.isEmpty) return;
 
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final Set<String> processedOrderIds = {};
+      int deliveredCount = 0;
 
-      // Load persistent saved delivery and order statuses
+      // 1. Fetch orders from VPS Database / merged placed orders
+      try {
+        final dbOrders = await AuthService.getCustomerPlacedOrders(mobile);
+        for (var o in dbOrders) {
+          final idStr = (o['id'] ?? o['order_id'] ?? '').toString();
+          final delStat = (o['delivery_status'] ?? '').toString().toLowerCase();
+          final ordStat = (o['status'] ?? o['order_status'] ?? '').toString().toLowerCase();
+
+          final bool isDelivered = delStat == 'delivered' || ordStat == 'delivered';
+          final bool isCancelled = delStat == 'cancelled' || ordStat == 'cancelled' || ordStat == 'deleted';
+
+          if (isDelivered && !isCancelled) {
+            final key = idStr.isNotEmpty ? idStr : (o['timestamp'] ?? o['date'] ?? '').toString();
+            if (key.isNotEmpty && !processedOrderIds.contains(key)) {
+              processedOrderIds.add(key);
+              deliveredCount++;
+            }
+          }
+        }
+      } catch (_) {}
+
+      // 2. Scan persistent saved_delivery_statuses from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
       Map<String, dynamic> savedDeliveryStatuses = {};
-      Map<String, dynamic> savedOrderStatuses = {};
       try {
         final dStr = prefs.getString('saved_delivery_statuses');
         if (dStr != null && dStr.isNotEmpty) {
           savedDeliveryStatuses = Map<String, dynamic>.from(jsonDecode(dStr));
         }
-        final oStr = prefs.getString('saved_order_statuses');
-        if (oStr != null && oStr.isNotEmpty) {
-          savedOrderStatuses = Map<String, dynamic>.from(jsonDecode(oStr));
-        }
       } catch (_) {}
 
-      int prevMonthDeliveredCount = 0;
-      int currMonthDeliveredCount = 0;
-
-      final now = DateTime.now();
-      final currYear = now.year;
-      final currMonth = now.month;
-
-      final prevMonthDate = DateTime(now.year, now.month - 1, 1);
-      final prevYear = prevMonthDate.year;
-      final prevMonth = prevMonthDate.month;
-
-      final Set<String> processedMsgIds = {};
-
-      void processDeliveredRecord(String msgIdStr, String deliveryStatus, String orderStatus, String dateStr) {
-        if (msgIdStr.isEmpty || processedMsgIds.contains(msgIdStr)) return;
-
-        final isDelivered = deliveryStatus.toLowerCase() == 'delivered' || orderStatus.toLowerCase() == 'delivered';
-        if (!isDelivered) return;
-
-        processedMsgIds.add(msgIdStr);
-
-        DateTime? dt;
-        if (dateStr.isNotEmpty) {
-          dt = DateTime.tryParse(dateStr.replaceAll(' ', 'T'));
-        }
-
-        if (dt != null) {
-          if (dt.year == currYear && dt.month == currMonth) {
-            currMonthDeliveredCount++;
-          } else if (dt.year == prevYear && dt.month == prevMonth) {
-            prevMonthDeliveredCount++;
-          }
-        } else {
-          currMonthDeliveredCount++;
-        }
-      }
-
-      // 1. Scan persistent saved_delivery_statuses map directly first (survives chat/cache deletion)
       savedDeliveryStatuses.forEach((msgId, data) {
         if (data is Map) {
           final custMob = (data['customer_mobile'] ?? '').toString().trim();
           if (custMob.isEmpty || custMob == mobile) {
-            final delStat = (data['delivery_status'] ?? '').toString();
-            final dateStr = (data['delivered_at'] ?? data['updated_at'] ?? '').toString();
-            processDeliveredRecord(msgId, delStat, '', dateStr);
+            final delStat = (data['delivery_status'] ?? '').toString().toLowerCase();
+            if (delStat == 'delivered' && !processedOrderIds.contains(msgId)) {
+              processedOrderIds.add(msgId);
+              deliveredCount++;
+            }
           }
         }
       });
 
-      // 2. Scan local SharedPreferences chat keys (msgs_ & messages_)
-      final allKeys = prefs.getKeys().toList();
-      final msgKeys = allKeys.where((k) => (k.startsWith('msgs_') || k.startsWith('messages_')) && k.contains(mobile)).toList();
+      // 3. Fallback scan local chat keys if needed
+      if (processedOrderIds.isEmpty) {
+        final allKeys = prefs.getKeys().toList();
+        final msgKeys = allKeys.where((k) => (k.startsWith('msgs_') || k.startsWith('messages_')) && k.contains(mobile)).toList();
 
-      for (var key in msgKeys) {
-        final str = prefs.getString(key);
-        if (str != null && str.isNotEmpty) {
-          try {
-            final List decoded = jsonDecode(str);
-            for (var m in decoded) {
-              if (m is! Map) continue;
-              final msgIdStr = (m['id'] ?? m['order_id'] ?? m['_calculated_order_id'] ?? '').toString();
-              if (msgIdStr.isEmpty) continue;
+        for (var key in msgKeys) {
+          final str = prefs.getString(key);
+          if (str != null && str.isNotEmpty) {
+            try {
+              final List decoded = jsonDecode(str);
+              for (var m in decoded) {
+                if (m is! Map) continue;
+                final msgIdStr = (m['id'] ?? m['order_id'] ?? m['_calculated_order_id'] ?? '').toString();
+                if (msgIdStr.isEmpty) continue;
 
-              String delStat = (m['delivery_status'] ?? '').toString();
-              String ordStat = (m['order_status'] ?? '').toString();
+                String delStat = (m['delivery_status'] ?? '').toString().toLowerCase();
+                String ordStat = (m['order_status'] ?? '').toString().toLowerCase();
 
-              if (savedDeliveryStatuses.containsKey(msgIdStr)) {
-                final val = savedDeliveryStatuses[msgIdStr];
-                if (val is Map) {
-                  delStat = (val['delivery_status'] ?? delStat).toString();
-                } else if (val != null) {
-                  delStat = val.toString();
+                if (savedDeliveryStatuses.containsKey(msgIdStr)) {
+                  final val = savedDeliveryStatuses[msgIdStr];
+                  if (val is Map) {
+                    delStat = (val['delivery_status'] ?? delStat).toString().toLowerCase();
+                  } else if (val != null) {
+                    delStat = val.toString().toLowerCase();
+                  }
+                }
+
+                final bool isDelivered = delStat == 'delivered' || ordStat == 'delivered';
+                final bool isCancelled = delStat == 'cancelled' || ordStat == 'cancelled';
+
+                if (isDelivered && !isCancelled && !processedOrderIds.contains(msgIdStr)) {
+                  processedOrderIds.add(msgIdStr);
+                  deliveredCount++;
                 }
               }
-
-              if (savedOrderStatuses.containsKey(msgIdStr)) {
-                ordStat = (savedOrderStatuses[msgIdStr] ?? ordStat).toString();
-              }
-
-              String dtStr = (m['delivered_at'] ?? m['created_at'] ?? m['status_time'] ?? '').toString();
-              if (savedDeliveryStatuses.containsKey(msgIdStr) && savedDeliveryStatuses[msgIdStr] is Map) {
-                final val = savedDeliveryStatuses[msgIdStr];
-                final dAt = (val['delivered_at'] ?? val['updated_at'] ?? '').toString();
-                if (dAt.isNotEmpty) dtStr = dAt;
-              }
-
-              processDeliveredRecord(msgIdStr, delStat, ordStat, dtStr);
-            }
-          } catch (_) {}
+            } catch (_) {}
+          }
         }
       }
 
-      // 3. Fallback: If local storage has 0 processed records, query VPS Database for connected sellers
-      if (processedMsgIds.isEmpty) {
-        try {
-          final sellers = await AuthService.getCachedSellersList();
-          for (var s in sellers) {
-            final sellerUname = (s['username'] ?? '').toString().trim();
-            if (sellerUname.isNotEmpty) {
-              final msgs = await AuthService.getMessages(sellerUsername: sellerUname, customerMobile: mobile);
-              for (var m in msgs) {
-                final msgIdStr = (m['id'] ?? m['order_id'] ?? '').toString();
-                String delStat = (m['delivery_status'] ?? '').toString();
-                String ordStat = (m['order_status'] ?? '').toString();
-                String dtStr = (m['delivered_at'] ?? m['created_at'] ?? '').toString();
-                processDeliveredRecord(msgIdStr, delStat, ordStat, dtStr);
-              }
-            }
-          }
-        } catch (_) {}
+      final gifts = deliveredCount ~/ 5;
+      int stamps = 0;
+      if (deliveredCount > 0) {
+        final rem = deliveredCount % 5;
+        stamps = (rem == 0) ? 5 : rem;
       }
-
-      final isActive = prevMonthDeliveredCount >= 3 || currMonthDeliveredCount >= 3;
 
       if (mounted) {
         setState(() {
-          _isVipActive = isActive;
-          _deliveredCountInMonth = currMonthDeliveredCount;
+          _totalDeliveredOrders = deliveredCount;
+          _filledStamps = stamps;
+          _giftsEarned = gifts;
         });
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Error calculating order stamps: $e');
+    }
   }
 
   void _deleteSeller() async {
@@ -395,6 +363,157 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
     }
   }
 
+  Widget _buildStampProgressWidget() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.28),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Text('🏵️', style: TextStyle(fontSize: 13)),
+                  const SizedBox(width: 5),
+                  Text(
+                    'Order Stamp Card (${_filledStamps}/5)',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ],
+              ),
+              if (_giftsEarned > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [Color(0xFFF59E0B), Color(0xFF10B981)]),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(color: const Color(0xFFF59E0B).withValues(alpha: 0.4), blurRadius: 6),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('🎁', style: TextStyle(fontSize: 11)),
+                      const SizedBox(width: 3),
+                      Text(
+                        '${_giftsEarned} Gift${_giftsEarned > 1 ? 's' : ''} Earned!',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10.5),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Text(
+                  'Delivered: ${_totalDeliveredOrders}',
+                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5, fontWeight: FontWeight.w600),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // 5 Digital Stamp Badges Row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: List.generate(5, (idx) {
+              final bool isFilled = idx < _filledStamps;
+              final int stampNum = idx + 1;
+
+              return Column(
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: isFilled
+                          ? const LinearGradient(
+                              colors: [Color(0xFFF59E0B), Color(0xFF10B981)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            )
+                          : null,
+                      color: isFilled ? null : Colors.white.withValues(alpha: 0.08),
+                      border: Border.all(
+                        color: isFilled ? const Color(0xFFFDE047) : Colors.white.withValues(alpha: 0.25),
+                        width: isFilled ? 2 : 1.5,
+                      ),
+                      boxShadow: isFilled
+                          ? [
+                              BoxShadow(
+                                color: const Color(0xFF10B981).withValues(alpha: 0.4),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              )
+                            ]
+                          : [],
+                    ),
+                    child: Center(
+                      child: isFilled
+                          ? const Text('🏵️', style: TextStyle(fontSize: 18))
+                          : Text(
+                              '$stampNum',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.4),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    isFilled ? 'Filled ✅' : 'Blank $stampNum',
+                    style: TextStyle(
+                      color: isFilled ? const Color(0xFF34D399) : Colors.white38,
+                      fontSize: 9.5,
+                      fontWeight: isFilled ? FontWeight.bold : FontWeight.w500,
+                    ),
+                  ),
+                ],
+              );
+            }),
+          ),
+
+          // Gift Unlocked Banner if earned
+          if (_giftsEarned > 0) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF3C7).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('Earned Rewards: ', style: TextStyle(color: Color(0xFFFDE047), fontSize: 11, fontWeight: FontWeight.bold)),
+                  ...List.generate(
+                    _giftsEarned > 5 ? 5 : _giftsEarned,
+                    (_) => const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 2),
+                      child: Text('🎁', style: TextStyle(fontSize: 14)),
+                    ),
+                  ),
+                  if (_giftsEarned > 5)
+                    Text(' x${_giftsEarned}', style: const TextStyle(color: Color(0xFFFDE047), fontSize: 11, fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildCardFront() {
     return Card(
       elevation: 4,
@@ -440,142 +559,108 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
               ),
             ),
 
-            // Card Main Content (Bigger & Taller Layout)
+            // Card Main Content
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 26.0, horizontal: 20.0),
+              padding: const EdgeInsets.symmetric(vertical: 20.0, horizontal: 18.0),
               child: Column(
                 children: [
-                  // Top Flip Badge Hint
-                  Align(
-                    alignment: Alignment.topRight,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.flip_camera_android_rounded, size: 12, color: Colors.white70),
-                          SizedBox(width: 4),
-                          Text('Tap to Flip 🔄', style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-
-                  // Larger Avatar with Dynamic Status Ring & Badge
-                  Stack(
+                  // Top Header Bar
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(4),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
+                        ),
+                        child: Row(
+                          children: const [
+                            Text('🏵️', style: TextStyle(fontSize: 12)),
+                            SizedBox(width: 4),
+                            Text(
+                              'DIGITAL STAMP REWARDS',
+                              style: TextStyle(color: Color(0xFFFDE047), fontSize: 10.5, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.flip_camera_android_rounded, size: 12, color: Colors.white70),
+                            SizedBox(width: 4),
+                            Text('Tap to Flip 🔄', style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Avatar + Name + Phone Row
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: LinearGradient(
-                            colors: _isVipActive
-                                ? [const Color(0xFFF59E0B), const Color(0xFF10B981), Colors.white]
-                                : [const Color(0xFF94A3B8), const Color(0xFF64748B), Colors.white],
+                            colors: [Color(0xFFF59E0B), Color(0xFF10B981), Colors.white],
                           ),
                         ),
                         child: const CircleAvatar(
-                          radius: 42,
+                          radius: 28,
                           backgroundColor: Color(0xFF0F172A),
-                          child: Icon(Icons.person_rounded, size: 52, color: Colors.white),
+                          child: Icon(Icons.person_rounded, size: 34, color: Colors.white),
                         ),
                       ),
-                      Positioned(
-                        bottom: 2,
-                        right: 2,
-                        child: Container(
-                          padding: const EdgeInsets.all(4.5),
-                          decoration: BoxDecoration(
-                            color: _isVipActive ? const Color(0xFF10B981) : const Color(0xFF64748B),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            _isVipActive ? Icons.verified_rounded : Icons.person_rounded,
-                            size: 20,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Customer Name & Edit Pencil
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          _currentName,
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            letterSpacing: 0.3,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      InkWell(
-                        onTap: _editCustomerName,
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          padding: const EdgeInsets.all(6.5),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.edit_rounded, size: 17, color: Color(0xFFA7F3D0)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    _currentName,
+                                    style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Colors.white),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                InkWell(
+                                  onTap: _editCustomerName,
+                                  child: const Icon(Icons.edit_rounded, size: 15, color: Color(0xFFA7F3D0)),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Mobile: +91 ${widget.customer.mobile ?? ''}',
+                              style: const TextStyle(fontSize: 12.5, color: Colors.white70),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 12),
 
-                  // Mobile Number Text
-                  Text(
-                    'Mobile: +91 ${widget.customer.mobile ?? ''}',
-                    style: const TextStyle(fontSize: 14.5, color: Colors.white70, fontWeight: FontWeight.w500),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Glassmorphic Dynamic Account Pill Tag
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: _isVipActive ? Colors.white.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: _isVipActive ? Colors.white.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.15),
-                        width: 1.0,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _isVipActive ? Icons.workspace_premium_rounded : Icons.person_outline_rounded,
-                          size: 18,
-                          color: _isVipActive ? const Color(0xFFFBBF24) : const Color(0xFFCBD5E1),
-                        ),
-                        const SizedBox(width: 7),
-                        Text(
-                          _isVipActive ? 'Verified VIP Account' : 'Standard Account',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5, letterSpacing: 0.3),
-                        ),
-                      ],
-                    ),
-                  ),
+                  // 5 Digital Stamp Widget
+                  _buildStampProgressWidget(),
                 ],
               ),
             ),
+
             // Continuous Glass Sheen Light Sweep Beam
             Positioned.fill(
               child: IgnorePointer(
@@ -647,7 +732,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 20.0),
+              padding: const EdgeInsets.symmetric(vertical: 18.0, horizontal: 18.0),
               child: Column(
                 children: [
                   Row(
@@ -656,11 +741,11 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                       const Expanded(
                         child: Row(
                           children: [
-                            Icon(Icons.badge_rounded, color: Color(0xFF34D399), size: 18),
+                            Icon(Icons.military_tech_rounded, color: Color(0xFFF59E0B), size: 18),
                             SizedBox(width: 4),
                             Expanded(
                               child: Text(
-                                'DAILY MART VIP PASS 💳',
+                                'DIGITAL STAMP REWARDS 🎁',
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.3),
                               ),
@@ -672,20 +757,20 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: _isVipActive
+                          color: _giftsEarned > 0
                               ? const Color(0xFF10B981).withValues(alpha: 0.25)
-                              : const Color(0xFFEF4444).withValues(alpha: 0.25),
+                              : const Color(0xFFF59E0B).withValues(alpha: 0.25),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: _isVipActive
+                            color: _giftsEarned > 0
                                 ? const Color(0xFF10B981).withValues(alpha: 0.5)
-                                : const Color(0xFFEF4444).withValues(alpha: 0.5),
+                                : const Color(0xFFF59E0B).withValues(alpha: 0.5),
                           ),
                         ),
                         child: Text(
-                          _isVipActive ? 'ACTIVE ✅' : 'INACTIVE ❌',
+                          _giftsEarned > 0 ? '${_giftsEarned} GIFT UNLOCKED 🎁' : '${_filledStamps}/5 STAMPS 🏵️',
                           style: TextStyle(
-                            color: _isVipActive ? const Color(0xFF6EE7B7) : const Color(0xFFFCA5A5),
+                            color: _giftsEarned > 0 ? const Color(0xFF6EE7B7) : const Color(0xFFFDE047),
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
                           ),
@@ -693,14 +778,14 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(14),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withValues(alpha: 0.25),
@@ -709,44 +794,42 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                             ),
                           ],
                         ),
-                        child: const Icon(Icons.qr_code_2_rounded, size: 76, color: Color(0xFF0F172A)),
+                        child: const Icon(Icons.qr_code_2_rounded, size: 68, color: Color(0xFF0F172A)),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               _currentName,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 3),
                             Text(
                               'ID: DM-CUST-${widget.customer.mobile ?? '812885'}',
-                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.w600),
+                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5, fontWeight: FontWeight.w600),
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 5),
                             Text(
-                              _isVipActive ? 'Member Tier: VIP Platinum 💎' : 'Member Tier: Standard Member 👤',
-                              style: TextStyle(
-                                color: _isVipActive ? const Color(0xFFFBBF24) : const Color(0xFF94A3B8),
+                              'Total Delivered Orders: ${_totalDeliveredOrders}',
+                              style: const TextStyle(
+                                color: Color(0xFF34D399),
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 3),
                             Text(
-                              _isVipActive
-                                  ? (_deliveredCountInMonth == 3
-                                      ? 'Monthly Target Met (3/3 delivered) 🎉'
-                                      : 'Priority Express Support')
-                                  : 'Need 3 delivered orders/mo (${_deliveredCountInMonth > 3 ? 3 : _deliveredCountInMonth}/3 delivered)',
+                              _giftsEarned > 0
+                                  ? '🎁 ${_giftsEarned} Gift Icon${_giftsEarned > 1 ? 's' : ''} Earned! (DB Verified)'
+                                  : 'Need 5 delivered orders for 1 Gift Icon (${_filledStamps}/5 Delivered)',
                               style: TextStyle(
-                                color: _isVipActive ? const Color(0xFF34D399) : const Color(0xFFF87171),
-                                fontSize: 11,
-                                fontWeight: _isVipActive ? FontWeight.bold : FontWeight.w600,
+                                color: _giftsEarned > 0 ? const Color(0xFFFBBF24) : const Color(0xFF94A3B8),
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
@@ -754,16 +837,18 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                       ),
                     ],
                   ),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 12),
+                  _buildStampProgressWidget(),
+                  const SizedBox(height: 10),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
-                        'Scan at Merchant Store',
-                        style: TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold),
+                        'Scan at Merchant Store to Redeem Gifts 🎁',
+                        style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(12),
@@ -772,7 +857,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                           children: [
                             Icon(Icons.flip_camera_android_rounded, size: 12, color: Colors.white),
                             SizedBox(width: 4),
-                            Text('Tap to Flip Back 🔄', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                            Text('Tap to Flip Back 🔄', style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ),
