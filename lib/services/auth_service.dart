@@ -523,11 +523,12 @@ class AuthService {
     final cleanSeller = sellerUsername.trim();
     final cleanCust = customerMobile.trim();
 
-    // 1. Fetch deletion-proof sequential Order ID directly from MySQL Database
+    // 1. Fetch deletion-proof sequential Order ID directly from MySQL Database (with 300ms fast timeout)
     try {
       final encSeller = Uri.encodeComponent(cleanSeller);
       final encCust = Uri.encodeComponent(cleanCust);
-      final res = await VpsApiService.get('get-next-order-id&seller_username=$encSeller&customer_mobile=$encCust');
+      final res = await VpsApiService.get('get-next-order-id&seller_username=$encSeller&customer_mobile=$encCust')
+          .timeout(const Duration(milliseconds: 300));
       if (res != null && res['success'] == true && res['next_order_id'] != null) {
         final serverOrdId = res['next_order_id'].toString().trim();
         if (serverOrdId.isNotEmpty) {
@@ -693,6 +694,26 @@ class AuthService {
       }
       existing.add(payload);
       await prefs.setString(localKey, jsonEncode(existing));
+
+      // Instantly populate Seller Customer Order Cache
+      _updateSellerOrderCache(sellerUsername, {
+        'id': payload['id'].toString(),
+        'order_id': orderTag ?? '',
+        'order_number': orderTag ?? '',
+        'seller_username': sellerUsername.trim(),
+        'customer_mobile': customerMobile.trim(),
+        'customer_name': 'Customer',
+        'items': [],
+        'total_amount': amt,
+        'order_amount': amt,
+        'total_count': 1,
+        'order_status': 'Pending',
+        'status': 'Pending',
+        'delivery_status': 'Pending',
+        'payment_status': 'unpaid',
+        'created_at': DateTime.now().toIso8601String(),
+        'date': DateTime.now().toIso8601String(),
+      });
 
       // Post to VPS API in background
       final res = await VpsApiService.post('send-message', payload);
@@ -3547,17 +3568,12 @@ class AuthService {
     final cleanSeller = sellerUsername.trim();
     if (cleanSeller.isEmpty) return [];
 
-    // 1. Instant local cache load if available
     try {
-      final cached = await getCachedSellerCustomerOrders(cleanSeller);
-      if (cached.isNotEmpty) {
-        // Run background fetch asynchronously without blocking
-        _refreshSellerCustomerOrdersInBackground(cleanSeller);
-        return cached;
-      }
+      final fresh = await _refreshSellerCustomerOrdersInBackground(cleanSeller);
+      if (fresh.isNotEmpty) return fresh;
     } catch (_) {}
 
-    return await _refreshSellerCustomerOrdersInBackground(cleanSeller);
+    return await getCachedSellerCustomerOrders(cleanSeller);
   }
 
   static Future<List<Map<String, dynamic>>> _refreshSellerCustomerOrdersInBackground(String cleanSeller) async {
@@ -4981,6 +4997,10 @@ class AuthService {
 
     // 1. ALWAYS Save locally first so order is NEVER lost!
     await _appendOrderToLocalHistory(custMobile, finalOrder, prefs);
+    final sellerUser = (orderPayload['seller_username'] ?? '').toString().trim();
+    if (sellerUser.isNotEmpty) {
+      await _updateSellerOrderCache(sellerUser, finalOrder);
+    }
 
     // 2. Sync to VPS MySQL Database (customer_orders + messages tables)
     try {
@@ -4989,9 +5009,11 @@ class AuthService {
         final Map<String, dynamic> remoteOrder = Map<String, dynamic>.from(res['order']);
         finalOrder = remoteOrder;
         await _appendOrderToLocalHistory(custMobile, finalOrder, prefs, overwriteExistingId: localOrderId);
+        if (sellerUser.isNotEmpty) {
+          await _updateSellerOrderCache(sellerUser, finalOrder);
+        }
       } else {
         // Fallback: Also post as a message order to messages table
-        final sellerUser = (orderPayload['seller_username'] ?? '').toString().trim();
         if (sellerUser.isNotEmpty && custMobile.isNotEmpty) {
           final items = List.from(orderPayload['items'] ?? []);
           final totalCount = (orderPayload['total_count'] as num?)?.toInt() ?? items.length;
@@ -5017,6 +5039,29 @@ class AuthService {
     }
 
     return finalOrder;
+  }
+
+  static Future<void> _updateSellerOrderCache(String sellerUsername, Map<String, dynamic> newOrder) async {
+    try {
+      final cleanSeller = sellerUsername.trim().toLowerCase();
+      if (cleanSeller.isEmpty) return;
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'cache_seller_cust_orders_$cleanSeller';
+      final str = prefs.getString(key);
+      List<Map<String, dynamic>> existing = [];
+      if (str != null && str.isNotEmpty) {
+        try {
+          final List decoded = jsonDecode(str);
+          existing = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+        } catch (_) {}
+      }
+
+      final ordId = (newOrder['order_id'] ?? newOrder['id'] ?? '').toString();
+      existing.removeWhere((o) => (o['order_id'] ?? o['id'] ?? '').toString() == ordId);
+      existing.insert(0, newOrder);
+
+      await prefs.setString(key, jsonEncode(existing));
+    } catch (_) {}
   }
 
   static Future<void> _appendOrderToLocalHistory(String custMobile, Map<String, dynamic> order, SharedPreferences prefs, {String? overwriteExistingId}) async {

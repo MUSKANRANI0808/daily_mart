@@ -944,21 +944,18 @@ class _SellerOrderCartScreenState extends State<SellerOrderCartScreen> {
       'timestamp': DateTime.now().millisecondsSinceEpoch,
     };
 
-    // 1. Save Placed Order in MySQL Server Database
-    final savedOrder = await AuthService.saveCustomerPlacedOrder(orderData);
-    final finalOrderData = savedOrder ?? orderData;
-
-    // 2. Clear Active Cart
-    await CartService.clearCart(_sellerUsername);
+    // 1. Fire background save (non-blocking) & clear cart
+    AuthService.saveCustomerPlacedOrder(orderData);
+    CartService.clearCart(_sellerUsername);
 
     if (!mounted) return;
 
-    // 3. Push OrderSuccessScreen Celebration Screen with MySQL Order ID!
+    // 2. Push OrderSuccessScreen Celebration Screen IMMEDIATELY (0ms delay!)
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => OrderSuccessScreen(
-          order: finalOrderData,
+          order: orderData,
           customer: customer,
         ),
       ),
