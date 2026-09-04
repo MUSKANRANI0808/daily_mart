@@ -464,8 +464,8 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                       child: isFilled
                           ? Image.asset(
                               'assets/images/gift_box.png',
-                              width: 24,
-                              height: 24,
+                              width: 26,
+                              height: 26,
                               fit: BoxFit.contain,
                               errorBuilder: (context, error, stackTrace) => const Text('🎁', style: TextStyle(fontSize: 18)),
                             )
