@@ -475,7 +475,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    isFilled ? 'Filled ✅' : 'Blank $stampNum',
+                    isFilled ? 'Delivered ✅' : 'Blank $stampNum',
                     style: TextStyle(
                       color: isFilled ? const Color(0xFF059669) : const Color(0xFF94A3B8),
                       fontSize: 9.5,
