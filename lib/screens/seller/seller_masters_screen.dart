@@ -2308,64 +2308,7 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // Preset Animations Chips
-                  const Text('Quick Add Presets:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF64748B))),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      {
-                        'label': '🚀 Daily Mart Express',
-                        'url': 'assets/lottie/express_flash.json',
-                      },
-                      {
-                        'label': '🇮🇳 Freedom Sale',
-                        'url': 'assets/lottie/freedom_sale.json',
-                      },
-                      {
-                        'label': '🪔 Diwali Lights',
-                        'url': 'assets/lottie/diwali_lights.json',
-                      },
-                      {
-                        'label': '🥦 Grocery Shopping',
-                        'url': 'assets/lottie/grocery_shopping.json',
-                      },
-                      {
-                        'label': '⚡ Flash Sale',
-                        'url': 'assets/lottie/express_flash.json',
-                      },
-                      {
-                        'label': '🌧️ Monsoon Rain',
-                        'url': 'assets/lottie/monsoon_rain.json',
-                      },
-                      {
-                        'label': '🎉 New Year',
-                        'url': 'assets/lottie/new_year.json',
-                      },
-                    ].map((preset) {
-                      final isAdded = animationsList.contains(preset['url']);
-                      return ActionChip(
-                        avatar: Icon(
-                          isAdded ? Icons.check_circle_rounded : Icons.add_circle_outline_rounded,
-                          size: 16,
-                          color: isAdded ? const Color(0xFF10B981) : const Color(0xFF8B5CF6),
-                        ),
-                        label: Text(
-                          preset['label']!,
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.bold,
-                            color: isAdded ? const Color(0xFF047857) : const Color(0xFF4C1D95),
-                          ),
-                        ),
-                        backgroundColor: isAdded ? const Color(0xFFD1FAE5) : const Color(0xFFF3E8FF),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                        onPressed: () => _addPresetAnimation(preset['url']!),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 16),
+
 
                   // Uploaded Animations List
                   Text(
