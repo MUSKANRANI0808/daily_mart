@@ -11,6 +11,7 @@ import '../../widgets/color_picker_dialog.dart';
 import '../../utils/csv_exporter.dart';
 import '../../utils/image_border_helper.dart';
 import '../../utils/header_theme_helper.dart';
+import '../../utils/json_picker.dart';
 import '../../widgets/product_border_wrapper.dart';
 import 'seller_products_screen.dart';
 
@@ -2071,49 +2072,30 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
           Future<void> _pickLottieJsonFile() async {
             try {
               setModalState(() => isProcessing = true);
-              final List<PlatformFile> files = await FilePicker.pickFiles(
-                type: FileType.any,
-              );
+              final String? jsonStr = await JsonPickerHelper.pickJsonString();
 
-              if (files.isNotEmpty) {
-                final file = files.first;
-                final bytes = await file.readAsBytes();
-
-                if (bytes.isNotEmpty) {
-                  final jsonStr = utf8.decode(bytes, allowMalformed: true).trim();
-                  if (jsonStr.isNotEmpty) {
-                    try {
-                      jsonDecode(jsonStr);
-                      setModalState(() {
-                        animationsList.add(jsonStr);
-                      });
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('✓ Lottie JSON animation added successfully! 🎉'),
-                            backgroundColor: Color(0xFF10B981),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      }
-                    } catch (err) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('File is not a valid Lottie JSON format ❌'),
-                            backgroundColor: Colors.red,
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      }
-                    }
-                  }
-                } else {
+              if (jsonStr != null && jsonStr.trim().isNotEmpty) {
+                final cleanJson = jsonStr.trim();
+                try {
+                  jsonDecode(cleanJson);
+                  setModalState(() {
+                    animationsList.add(cleanJson);
+                  });
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Could not read file data. Try pasting JSON text below! ❌'),
-                        backgroundColor: Colors.orange,
+                        content: Text('✓ Lottie JSON animation added successfully! 🎉'),
+                        backgroundColor: Color(0xFF10B981),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                } catch (err) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Selected file is not a valid Lottie JSON format ❌'),
+                        backgroundColor: Colors.red,
                         behavior: SnackBarBehavior.floating,
                       ),
                     );
@@ -2124,7 +2106,7 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Upload error: $e ❌ (Try pasting JSON code below!)'),
+                    content: Text('Upload error: $e ❌'),
                     backgroundColor: Colors.red,
                     behavior: SnackBarBehavior.floating,
                   ),
