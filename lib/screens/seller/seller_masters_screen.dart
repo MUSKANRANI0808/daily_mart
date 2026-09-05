@@ -2317,7 +2317,7 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                     children: [
                       {
                         'label': '🚀 Daily Mart Express',
-                        'url': 'assets/lottie/daily_mart_exclusive.json',
+                        'url': 'assets/lottie/express_flash.json',
                       },
                       {
                         'label': '🇮🇳 Freedom Sale',

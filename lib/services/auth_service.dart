@@ -5831,21 +5831,21 @@ class AuthService {
 
   static List<String> _parseAnimationsList(dynamic raw) {
     if (raw == null) return [];
+    List<String> list = [];
     if (raw is List) {
-      return raw.map((e) => e.toString()).where((s) => s.trim().isNotEmpty).toList();
-    }
-    if (raw is String && raw.trim().isNotEmpty) {
+      list = raw.map((e) => e.toString()).where((s) => s.trim().isNotEmpty).toList();
+    } else if (raw is String && raw.trim().isNotEmpty) {
       final str = raw.trim();
       if (str.startsWith('[') && str.endsWith(']')) {
         try {
           final List decoded = jsonDecode(str);
-          return decoded.map((e) => e.toString()).where((s) => s.trim().isNotEmpty).toList();
+          list = decoded.map((e) => e.toString()).where((s) => s.trim().isNotEmpty).toList();
         } catch (_) {}
       } else {
-        return [str];
+        list = [str];
       }
     }
-    return [];
+    return list.where((item) => !item.contains('daily_mart_exclusive.json')).toList();
   }
 
   /// Get Cached Seller Header Animations List (Instant Memory / Cache)

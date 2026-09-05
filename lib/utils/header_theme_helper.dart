@@ -11,7 +11,7 @@ class HeaderThemeHelper {
       'id': 'daily_mart_express',
       'name': 'Daily Mart Express Order & Safe Pickup 🚀',
       'title': 'EXPRESS ORDER & SAFE PICKUP ⚡',
-      'url': 'assets/lottie/daily_mart_exclusive.json',
+      'url': 'assets/lottie/express_flash.json',
       'color1': '#0F172A',
       'color2': '#1E1B4B',
       'color3': '#312E81',
@@ -315,7 +315,7 @@ class _ContinuousShiningGlassBeamWidgetState extends State<ContinuousShiningGlas
 /// Helper method to build single Lottie animation from URL, Asset, JSON string or Base64 memory
 Widget buildSingleLottieItem(String rawData, {BoxFit fit = BoxFit.cover}) {
   final clean = rawData.trim();
-  if (clean.isEmpty) return const SizedBox.shrink();
+  if (clean.isEmpty || clean.contains('daily_mart_exclusive.json')) return const SizedBox.shrink();
 
   if (clean.startsWith('http://') || clean.startsWith('https://')) {
     return Lottie.network(
@@ -450,8 +450,10 @@ class _HeaderLottieCarouselWidgetState extends State<HeaderLottieCarouselWidget>
     if (!mounted) return;
     _timer?.cancel();
 
+    final validAnims = anims.where((a) => a.trim().isNotEmpty && !a.contains('daily_mart_exclusive.json')).toList();
+
     setState(() {
-      _animations = anims;
+      _animations = validAnims;
       _currentPage = 0;
     });
 
