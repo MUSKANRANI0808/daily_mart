@@ -2053,14 +2053,14 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
   }
 
   // --- 9. HEADER LOTTIE ANIMATIONS MASTER DIALOG ---
-  void _showManageHeaderAnimationsDialog() async {
+  void _showManageHeaderAnimationsDialog() {
     final username = _sellerUsername;
     final urlController = TextEditingController();
     final jsonCodeController = TextEditingController();
     
-    // Load existing cached animations and ensure each item is a Map<String, dynamic>
-    final rawList = await AuthService.getSellerHeaderAnimations(username);
-    List<Map<String, dynamic>> animationsList = rawList.map((item) {
+    // Instant memory cache load (0.01s - ZERO DELAY!)
+    final cachedRaw = AuthService.getCachedSellerHeaderAnimations(username) ?? [];
+    List<Map<String, dynamic>> animationsList = cachedRaw.map((item) {
       if (item is Map) {
         return Map<String, dynamic>.from(item);
       }
@@ -2074,11 +2074,13 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
 
     int selectedIndex = 0;
     bool isProcessing = false;
+    bool isLoadedFromNetwork = false;
 
-    final initialHeaderConfig = await AuthService.getHeaderThemeConfig();
-    Map<String, dynamic> headerTheme = Map<String, dynamic>.from(initialHeaderConfig);
-
-    if (!mounted) return;
+    Map<String, dynamic> headerTheme = {
+      'color1': '#0F172A',
+      'color2': '#1E1B4B',
+      'color3': '#312E81',
+    };
 
     showModalBottomSheet(
       context: context,
@@ -2086,6 +2088,32 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
+          if (!isLoadedFromNetwork) {
+            isLoadedFromNetwork = true;
+            Future.microtask(() async {
+              final rawList = await AuthService.getSellerHeaderAnimations(username);
+              final freshConfig = await AuthService.getHeaderThemeConfig();
+              if (ctx.mounted) {
+                setModalState(() {
+                  headerTheme = Map<String, dynamic>.from(freshConfig);
+                  if (rawList.isNotEmpty) {
+                    animationsList = rawList.map((item) {
+                      if (item is Map) {
+                        return Map<String, dynamic>.from(item);
+                      }
+                      return <String, dynamic>{
+                        'url': item.toString(),
+                        'color1': freshConfig['color1']?.toString() ?? '#0F172A',
+                        'color2': freshConfig['color2']?.toString() ?? '#1E1B4B',
+                        'color3': freshConfig['color3']?.toString() ?? '#312E81',
+                      };
+                    }).toList();
+                  }
+                });
+              }
+            });
+          }
+
           if (selectedIndex >= animationsList.length && animationsList.isNotEmpty) {
             selectedIndex = animationsList.length - 1;
           }
@@ -2104,7 +2132,6 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                       'url': cleanJson,
                       'color1': headerTheme['color1']?.toString() ?? '#0F172A',
                       'color2': headerTheme['color2']?.toString() ?? '#1E1B4B',
-                      'color3': headerTheme['color3']?.toString() ?? '#312E81',
                     });
                     selectedIndex = animationsList.length - 1;
                   });
@@ -2154,7 +2181,6 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                   'url': text,
                   'color1': headerTheme['color1']?.toString() ?? '#0F172A',
                   'color2': headerTheme['color2']?.toString() ?? '#1E1B4B',
-                  'color3': headerTheme['color3']?.toString() ?? '#312E81',
                 });
                 selectedIndex = animationsList.length - 1;
                 jsonCodeController.clear();
@@ -2195,7 +2221,6 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                 'url': url,
                 'color1': headerTheme['color1']?.toString() ?? '#0F172A',
                 'color2': headerTheme['color2']?.toString() ?? '#1E1B4B',
-                'color3': headerTheme['color3']?.toString() ?? '#312E81',
               });
               selectedIndex = animationsList.length - 1;
               urlController.clear();
@@ -2385,7 +2410,6 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                           final isSelected = idx == selectedIndex;
                           final c1 = animMap['color1']?.toString() ?? '#0F172A';
                           final c2 = animMap['color2']?.toString() ?? '#1E1B4B';
-                          final c3 = animMap['color3']?.toString() ?? c2;
 
                           return GestureDetector(
                             onTap: () {
@@ -2400,7 +2424,6 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                               decoration: HeaderThemeHelper.buildDecoration({
                                 'color1': c1,
                                 'color2': c2,
-                                'color3': c3,
                               }).copyWith(
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
@@ -2513,7 +2536,9 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                                       onColorSelected: (selectedHex) {
                                         setModalState(() {
                                           activeAnimMap['color1'] = selectedHex;
+                                          activeAnimMap.remove('color3'); // Ensure strictly 2 colors
                                           headerTheme['color1'] = selectedHex;
+                                          headerTheme.remove('color3');
                                         });
                                       },
                                     );
@@ -2561,7 +2586,9 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                                       onColorSelected: (selectedHex) {
                                         setModalState(() {
                                           activeAnimMap['color2'] = selectedHex;
+                                          activeAnimMap.remove('color3'); // Ensure strictly 2 colors
                                           headerTheme['color2'] = selectedHex;
+                                          headerTheme.remove('color3');
                                         });
                                       },
                                     );
@@ -2612,7 +2639,7 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                   const SizedBox(height: 8),
                   Container(
                     height: 110,
-                    decoration: BoxDecoration(
+                    decoration: HeaderThemeHelper.buildDecoration(activeAnimMap).copyWith(
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: const Color(0xFF8B5CF6), width: 1.5),
                     ),
@@ -2620,7 +2647,7 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                       borderRadius: BorderRadius.circular(16),
                       child: HeaderLottieCarouselWidget(
                         overrideAnimations: animationsList,
-                        config: headerTheme,
+                        config: activeAnimMap,
                       ),
                     ),
                   ),
@@ -2632,12 +2659,12 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                     height: 46,
                     child: ElevatedButton(
                       onPressed: () async {
-                        // Serialize list to String/Map format
                         final List<String> serialized = animationsList.map((item) => jsonEncode(item)).toList();
                         await AuthService.saveSellerHeaderAnimations(username, serialized);
                         if (animationsList.isNotEmpty && selectedIndex < animationsList.length) {
                           headerTheme['color1'] = animationsList[selectedIndex]['color1'];
                           headerTheme['color2'] = animationsList[selectedIndex]['color2'];
+                          headerTheme.remove('color3');
                         }
                         await AuthService.saveHeaderThemeConfig(headerTheme);
                         if (ctx.mounted) Navigator.pop(ctx);

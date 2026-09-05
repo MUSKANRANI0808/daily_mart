@@ -198,13 +198,19 @@ class HeaderThemeHelper {
   static BoxDecoration buildDecoration(Map<String, dynamic> config) {
     final c1 = hexToColor(config['color1']?.toString() ?? '#0F172A');
     final c2 = hexToColor(config['color2']?.toString() ?? '#1E1B4B');
-    final c3Str = config['color3']?.toString() ?? '';
-    final c3 = c3Str.isNotEmpty ? hexToColor(c3Str) : c2;
+    final c3Str = config['color3']?.toString();
+
+    List<Color> colors = [c1, c2];
+    if (c3Str != null && c3Str.trim().isNotEmpty && c3Str.trim() != config['color2']?.toString().trim()) {
+      final c3 = hexToColor(c3Str);
+      if (c3 != c2 && c3 != c1) {
+        colors = [c1, c2, c3];
+      }
+    }
 
     final dir = (config['direction'] ?? 'diagonal').toString().toLowerCase();
     final shading = (config['shading'] ?? 'dark').toString().toLowerCase();
 
-    List<Color> colors = [c1, c2, c3];
     if (shading == 'light') {
       colors = colors.map((c) => Color.alphaBlend(Colors.white.withValues(alpha: 0.18), c)).toList();
     } else if (shading == 'ultra_dark') {
@@ -489,7 +495,11 @@ class _HeaderLottieCarouselWidgetState extends State<HeaderLottieCarouselWidget>
     final double lottieOpacity = (widget.config['lottie_opacity'] as num?)?.toDouble() ?? 0.85;
 
     if (_animations.isEmpty) {
-      return const SizedBox.shrink();
+      return AnimatedContainer(
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.easeInOut,
+        decoration: HeaderThemeHelper.buildDecoration(widget.config),
+      );
     }
 
     final currentItem = _animations[_currentPage % _animations.length];
