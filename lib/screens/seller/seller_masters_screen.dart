@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
@@ -7,6 +9,7 @@ import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/color_picker_dialog.dart';
 import '../../utils/csv_exporter.dart';
+import '../../utils/image_border_helper.dart';
 import '../../widgets/product_border_wrapper.dart';
 import 'seller_products_screen.dart';
 
@@ -1764,6 +1767,7 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
   void _showManageProductBorderDialog() {
     String currentBorder = AuthService.getCachedSellerProductBorderImage(_sellerUsername) ?? '';
     final urlController = TextEditingController(text: currentBorder.startsWith('http') ? currentBorder : '');
+    bool isProcessing = false;
 
     showModalBottomSheet(
       context: context,
@@ -1773,18 +1777,68 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
         builder: (context, setModalState) {
           final username = _sellerUsername;
 
+          Future<void> _processAndSetImage(Uint8List bytes) async {
+            setModalState(() {
+              isProcessing = true;
+            });
+            try {
+              final transparentPngBase64 = await ImageBorderHelper.makeWhiteBackgroundTransparent(bytes);
+              setModalState(() {
+                currentBorder = transparentPngBase64;
+                isProcessing = false;
+              });
+            } catch (_) {
+              setModalState(() {
+                currentBorder = 'data:image/png;base64,${base64Encode(bytes)}';
+                isProcessing = false;
+              });
+            }
+          }
+
           Future<void> _pickBorderImage() async {
             try {
               final picker = ImagePicker();
-              final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+              final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
               if (picked != null) {
                 final bytes = await picked.readAsBytes();
-                final base64Str = 'data:image/png;base64,${base64Encode(bytes)}';
-                setModalState(() {
-                  currentBorder = base64Str;
-                });
+                await _processAndSetImage(bytes);
               }
             } catch (_) {}
+          }
+
+          Future<void> _removeWhiteFromCurrentBorder() async {
+            if (currentBorder.isEmpty) return;
+            setModalState(() {
+              isProcessing = true;
+            });
+
+            try {
+              Uint8List? inputBytes;
+              if (currentBorder.startsWith('http://') || currentBorder.startsWith('https://')) {
+                final res = await http.get(Uri.parse(currentBorder)).timeout(const Duration(seconds: 8));
+                if (res.statusCode == 200) {
+                  inputBytes = res.bodyBytes;
+                }
+              } else {
+                String base64Str = currentBorder;
+                if (currentBorder.contains(',')) {
+                  base64Str = currentBorder.split(',').last.trim();
+                }
+                inputBytes = base64Decode(base64Str);
+              }
+
+              if (inputBytes != null) {
+                final transparentPngBase64 = await ImageBorderHelper.makeWhiteBackgroundTransparent(inputBytes);
+                setModalState(() {
+                  currentBorder = transparentPngBase64;
+                  isProcessing = false;
+                });
+              } else {
+                setModalState(() => isProcessing = false);
+              }
+            } catch (_) {
+              setModalState(() => isProcessing = false);
+            }
           }
 
           return Container(
@@ -1833,7 +1887,7 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Upload a PNG border image (transparent in center). All products in your shop will display inside this custom border frame!',
+                    'Upload any border image (JPG or PNG). White background is automatically removed to make a transparent PNG border frame!',
                     style: TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.3),
                   ),
                   const SizedBox(height: 16),
@@ -1843,9 +1897,14 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                     children: [
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: _pickBorderImage,
-                          icon: const Icon(Icons.upload_file_rounded, size: 18),
-                          label: const Text('Pick PNG Image', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          onPressed: isProcessing ? null : _pickBorderImage,
+                          icon: isProcessing
+                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.upload_file_rounded, size: 18),
+                          label: Text(
+                            isProcessing ? 'Processing PNG...' : 'Pick Border Image 📁',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFEC4899),
                             foregroundColor: Colors.white,
@@ -1857,12 +1916,14 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                       if (currentBorder.isNotEmpty) ...[
                         const SizedBox(width: 10),
                         OutlinedButton.icon(
-                          onPressed: () {
-                            setModalState(() {
-                              currentBorder = '';
-                              urlController.clear();
-                            });
-                          },
+                          onPressed: isProcessing
+                              ? null
+                              : () {
+                                  setModalState(() {
+                                    currentBorder = '';
+                                    urlController.clear();
+                                  });
+                                },
                           icon: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 18),
                           label: const Text('Clear', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13)),
                           style: OutlinedButton.styleFrom(
@@ -1885,43 +1946,65 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                       });
                     },
                     decoration: InputDecoration(
-                      labelText: 'Or Paste PNG Image URL',
+                      labelText: 'Or Paste Image URL',
                       hintText: 'https://example.com/border.png',
                       isDense: true,
                       prefixIcon: const Icon(Icons.link_rounded, size: 20),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
+                  const SizedBox(height: 10),
+
+                  // Auto Remove White BG Action Button
+                  if (currentBorder.isNotEmpty)
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: isProcessing ? null : _removeWhiteFromCurrentBorder,
+                        icon: const Icon(Icons.auto_fix_high_rounded, color: Color(0xFF8B5CF6), size: 18),
+                        label: const Text(
+                          'Auto-Remove White Background ✨ (Make Center Transparent)',
+                          style: TextStyle(color: Color(0xFF8B5CF6), fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFF8B5CF6)),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+
                   const SizedBox(height: 16),
 
                   // Live Preview Card
-                  const Text('Live Preview:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                  const Text('Live Preview (Product inside Border):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
                   const SizedBox(height: 8),
                   Container(
-                    height: 140,
+                    height: 150,
                     decoration: BoxDecoration(
                       color: const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
                     child: Center(
-                      child: ProductBorderWrapper(
-                        borderImage: currentBorder,
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          width: 100,
-                          height: 100,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade200,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                      child: Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: ProductBorderWrapper(
+                          borderImage: currentBorder,
+                          borderRadius: BorderRadius.circular(16),
                           child: const Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Text('📦', style: TextStyle(fontSize: 32)),
+                                Text('🧼', style: TextStyle(fontSize: 36)),
                                 SizedBox(height: 4),
-                                Text('Sample Product', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+                                Text('Sabun', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                                Text('₹5 / Pcs', style: TextStyle(fontSize: 10, color: Color(0xFF10B981), fontWeight: FontWeight.bold)),
                               ],
                             ),
                           ),
@@ -1936,19 +2019,21 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                     width: double.infinity,
                     height: 46,
                     child: ElevatedButton(
-                      onPressed: () async {
-                        await AuthService.saveSellerProductBorderImage(username, currentBorder);
-                        if (ctx.mounted) Navigator.pop(ctx);
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(currentBorder.isNotEmpty ? '✓ Product border saved successfully! 🎉' : '✓ Product border removed!'),
-                              backgroundColor: const Color(0xFF10B981),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        }
-                      },
+                      onPressed: isProcessing
+                          ? null
+                          : () async {
+                              await AuthService.saveSellerProductBorderImage(username, currentBorder);
+                              if (ctx.mounted) Navigator.pop(ctx);
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(currentBorder.isNotEmpty ? '✓ Transparent PNG product border saved! 🎉' : '✓ Product border removed!'),
+                                    backgroundColor: const Color(0xFF10B981),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF0F172A),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
