@@ -183,7 +183,7 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
     }).toList();
   }
 
-  Widget _buildProductImageWidget(String rawImg, {double emojiSize = 50}) {
+  Widget _buildProductImageWidget(String rawImg, {double emojiSize = 50, BoxFit fit = BoxFit.contain}) {
     final img = rawImg.trim();
     if (img.isEmpty) {
       return Center(child: Text('📦', style: TextStyle(fontSize: emojiSize)));
@@ -192,7 +192,7 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
     if (img.startsWith('http://') || img.startsWith('https://')) {
       return Image.network(
         img,
-        fit: BoxFit.cover,
+        fit: fit,
         gaplessPlayback: true,
         width: double.infinity,
         height: double.infinity,
@@ -213,7 +213,7 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
         final bytes = base64Decode(base64Str);
         return Image.memory(
           bytes,
-          fit: BoxFit.cover,
+          fit: fit,
           gaplessPlayback: true,
           width: double.infinity,
           height: double.infinity,
@@ -286,13 +286,14 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                       ClipRRect(
                         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                         child: Container(
-                          height: 340,
+                          height: 400,
                           width: double.infinity,
                           color: const Color(0xFFF8FAFC),
                           child: ProductBorderWrapper(
                             sellerUsername: widget.sellerUsername,
                             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                            child: _buildProductImageWidget(img, emojiSize: 120),
+                            padding: const EdgeInsets.only(top: 42, bottom: 20, left: 16, right: 16),
+                            child: _buildProductImageWidget(img, emojiSize: 140, fit: BoxFit.contain),
                           ),
                         ),
                       ),
