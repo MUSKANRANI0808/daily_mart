@@ -2069,16 +2069,15 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
           Future<void> _pickLottieJsonFile() async {
             try {
               setModalState(() => isProcessing = true);
-              final FilePickerResult? result = await FilePicker.platform.pickFiles(
+              final List<PlatformFile> files = await FilePicker.pickFiles(
                 type: FileType.custom,
                 allowedExtensions: ['json'],
-                withData: true,
               );
 
-              if (result != null && result.files.isNotEmpty) {
-                final file = result.files.first;
-                final bytes = file.bytes;
-                if (bytes != null && bytes.isNotEmpty) {
+              if (files.isNotEmpty) {
+                final file = files.first;
+                final bytes = await file.readAsBytes();
+                if (bytes.isNotEmpty) {
                   final jsonStr = utf8.decode(bytes, allowMalformed: true).trim();
                   if (jsonStr.isNotEmpty) {
                     try {
