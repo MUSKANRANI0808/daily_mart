@@ -4922,7 +4922,7 @@ class AuthService {
       'particle_opacity': 0.0,
       'is_festival_active': true,
       'festival_title': '',
-      'lottie_url': 'assets/lottie/daily_mart_exclusive.json',
+      'lottie_url': '',
       'lottie_opacity': 0.85,
     };
 
@@ -4931,8 +4931,8 @@ class AuthService {
       final res = await VpsApiService.get('get-header-theme');
       if (res != null && res['success'] == true && res['theme'] != null) {
         final serverConfig = Map<String, dynamic>.from(res['theme']);
-        if ((serverConfig['lottie_url'] ?? '').toString().contains('lottiefiles.com')) {
-          serverConfig['lottie_url'] = 'assets/lottie/daily_mart_exclusive.json';
+        if ((serverConfig['lottie_url'] ?? '').toString().contains('lottiefiles.com') || (serverConfig['lottie_url'] ?? '').toString().contains('daily_mart_exclusive.json')) {
+          serverConfig['lottie_url'] = '';
         }
         await prefs.setString(_keyGlobalHeaderTheme, jsonEncode(serverConfig));
         return serverConfig;
@@ -4944,8 +4944,8 @@ class AuthService {
     if (str != null && str.isNotEmpty) {
       try {
         final cached = Map<String, dynamic>.from(jsonDecode(str));
-        if ((cached['lottie_url'] ?? '').toString().contains('lottiefiles.com')) {
-          cached['lottie_url'] = 'assets/lottie/daily_mart_exclusive.json';
+        if ((cached['lottie_url'] ?? '').toString().contains('lottiefiles.com') || (cached['lottie_url'] ?? '').toString().contains('daily_mart_exclusive.json')) {
+          cached['lottie_url'] = '';
         }
         return cached;
       } catch (_) {}

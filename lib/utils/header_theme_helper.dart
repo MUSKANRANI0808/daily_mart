@@ -321,11 +321,7 @@ Widget buildSingleLottieItem(String rawData, {BoxFit fit = BoxFit.cover}) {
     return Lottie.network(
       clean,
       fit: fit,
-      errorBuilder: (_, __, ___) => Lottie.asset(
-        'assets/lottie/daily_mart_exclusive.json',
-        fit: fit,
-        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-      ),
+      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
     );
   }
 
@@ -333,11 +329,7 @@ Widget buildSingleLottieItem(String rawData, {BoxFit fit = BoxFit.cover}) {
     return Lottie.asset(
       clean,
       fit: fit,
-      errorBuilder: (_, __, ___) => Lottie.asset(
-        'assets/lottie/daily_mart_exclusive.json',
-        fit: fit,
-        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-      ),
+      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
     );
   }
 
@@ -378,8 +370,8 @@ class FestivalLottieHeaderWidget extends StatelessWidget {
     String lottieUrl = (config['lottie_url'] ?? '').toString().trim();
     final double lottieOpacity = (config['lottie_opacity'] as num?)?.toDouble() ?? 0.85;
 
-    if (lottieUrl.isEmpty || lottieUrl.contains('lottiefiles.com')) {
-      lottieUrl = 'assets/lottie/daily_mart_exclusive.json';
+    if (lottieUrl.isEmpty || lottieUrl.contains('daily_mart_exclusive.json') || lottieUrl.contains('lottiefiles.com')) {
+      return const SizedBox.shrink();
     }
 
     return IgnorePointer(
@@ -489,9 +481,9 @@ class _HeaderLottieCarouselWidgetState extends State<HeaderLottieCarouselWidget>
   Widget build(BuildContext context) {
     final double lottieOpacity = (widget.config['lottie_opacity'] as num?)?.toDouble() ?? 0.85;
 
-    // Fallback to default festival animation if no custom animations uploaded
+    // If no custom animations uploaded, show nothing (only show seller uploaded animations)
     if (_animations.isEmpty) {
-      return FestivalLottieHeaderWidget(config: widget.config);
+      return const SizedBox.shrink();
     }
 
     // Single Animation
