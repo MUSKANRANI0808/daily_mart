@@ -1110,7 +1110,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                             // Floating Translucent Grocery Icons Background Particles
                             Positioned.fill(
                               child: GroceryFloatingBackgroundParticles(
-                                particleOpacity: (_headerThemeConfig['particle_opacity'] as num?)?.toDouble() ?? 0.9,
+                                particleOpacity: (_headerThemeConfig['particle_opacity'] as num?)?.toDouble() ?? 0.0,
                               ),
                             ),
 
@@ -2674,6 +2674,7 @@ class _GroceryFloatingBackgroundParticlesState extends State<GroceryFloatingBack
 
   @override
   Widget build(BuildContext context) {
+    if (widget.particleOpacity <= 0.05) return const SizedBox.shrink();
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {

@@ -4919,7 +4919,7 @@ class AuthService {
       'direction': 'diagonal', // 'horizontal', 'vertical', 'diagonal', 'radial'
       'shading': 'dark', // 'light', 'medium', 'dark', 'ultra_dark'
       'enable_shining': true,
-      'particle_opacity': 0.9,
+      'particle_opacity': 0.0,
       'is_festival_active': true,
       'festival_title': '',
       'lottie_url': 'assets/lottie/daily_mart_exclusive.json',
