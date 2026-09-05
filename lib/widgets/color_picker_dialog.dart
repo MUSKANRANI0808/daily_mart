@@ -45,6 +45,7 @@ class _FullColorPickerDialogState extends State<FullColorPickerDialog> {
     _hue = hsv.hue;
     _saturation = hsv.saturation;
     _value = hsv.value;
+    _opacity = (initialColor.a * 1.0).clamp(0.0, 1.0);
 
     _hexController = TextEditingController(text: _formatHex(initialColor));
     _hexController.addListener(_onHexInputChanged);
@@ -73,9 +74,14 @@ class _FullColorPickerDialogState extends State<FullColorPickerDialog> {
   }
 
   String _formatHex(Color color) {
-    final r = (color.r * 255.0).round().clamp(0, 255).toRadixString(16).padLeft(2, '0');
-    final g = (color.g * 255.0).round().clamp(0, 255).toRadixString(16).padLeft(2, '0');
-    final b = (color.b * 255.0).round().clamp(0, 255).toRadixString(16).padLeft(2, '0');
+    final a = (color.a * 255.0).round().clamp(0, 255).toRadixString(16).padLeft(2, '0').toUpperCase();
+    final r = (color.r * 255.0).round().clamp(0, 255).toRadixString(16).padLeft(2, '0').toUpperCase();
+    final g = (color.g * 255.0).round().clamp(0, 255).toRadixString(16).padLeft(2, '0').toUpperCase();
+    final b = (color.b * 255.0).round().clamp(0, 255).toRadixString(16).padLeft(2, '0').toUpperCase();
+
+    if (_opacity < 0.99) {
+      return '#$a$r$g$b';
+    }
     return '#$r$g$b';
   }
 
@@ -83,13 +89,14 @@ class _FullColorPickerDialogState extends State<FullColorPickerDialog> {
     if (_isInternalTextUpdate) return;
     final text = _hexController.text.trim();
     String hex = text.replaceAll('#', '');
-    if (hex.length == 6) {
+    if (hex.length == 6 || hex.length == 8) {
       final newColor = _parseHexColor(hex);
       final hsv = HSVColor.fromColor(newColor);
       setState(() {
         _hue = hsv.hue;
         _saturation = hsv.saturation;
         _value = hsv.value;
+        _opacity = (newColor.a * 1.0).clamp(0.0, 1.0);
       });
     }
   }
@@ -106,8 +113,10 @@ class _FullColorPickerDialogState extends State<FullColorPickerDialog> {
   }
 
   Color get _currentColor {
-    return HSVColor.fromAHSV(1.0, _hue, _saturation, _value).toColor();
+    return HSVColor.fromAHSV(_opacity, _hue, _saturation, _value).toColor();
   }
+
+  late double _opacity;
 
   @override
   Widget build(BuildContext context) {
@@ -172,7 +181,7 @@ class _FullColorPickerDialogState extends State<FullColorPickerDialog> {
               height: 160,
               child: Row(
                 children: [
-                  // Left Solid Color Preview Box
+                  // Left Solid/Translucent Color Preview Box
                   Expanded(
                     flex: 1,
                     child: Container(
@@ -375,6 +384,114 @@ class _FullColorPickerDialogState extends State<FullColorPickerDialog> {
                 const SizedBox(width: 6),
                 Expanded(child: _buildMetricCard('HSL', hslStr)),
               ],
+            ),
+            const SizedBox(height: 12),
+
+            // Opacity / Transparency Scale Slider Bar
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.opacity_rounded, size: 16, color: Color(0xFF8B5CF6)),
+                          SizedBox(width: 6),
+                          Text(
+                            'Color Opacity / Transparency',
+                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${(_opacity * 100).round()}%',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF7C3AED)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    height: 24,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final width = constraints.maxWidth;
+                        final solidColor = HSVColor.fromAHSV(1.0, _hue, _saturation, _value).toColor();
+
+                        return GestureDetector(
+                          onPanDown: (details) {
+                            final newOpacity = (details.localPosition.dx / width).clamp(0.0, 1.0);
+                            setState(() {
+                              _opacity = newOpacity;
+                              _isInternalTextUpdate = true;
+                              _hexController.text = _formatHex(_currentColor);
+                              _isInternalTextUpdate = false;
+                            });
+                          },
+                          onPanUpdate: (details) {
+                            final newOpacity = (details.localPosition.dx / width).clamp(0.0, 1.0);
+                            setState(() {
+                              _opacity = newOpacity;
+                              _isInternalTextUpdate = true;
+                              _hexController.text = _formatHex(_currentColor);
+                              _isInternalTextUpdate = false;
+                            });
+                          },
+                          child: Stack(
+                            alignment: Alignment.centerLeft,
+                            children: [
+                              // Gradient Track from Transparent to Solid Color
+                              Container(
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(6),
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      solidColor.withValues(alpha: 0.0),
+                                      solidColor.withValues(alpha: 1.0),
+                                    ],
+                                  ),
+                                  border: Border.all(color: Colors.black12),
+                                ),
+                              ),
+                              // Draggable Thumb Circle
+                              Positioned(
+                                left: (_opacity * width - 12).clamp(0.0, width - 24),
+                                child: Container(
+                                  width: 24,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    color: _currentColor,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white, width: 2.5),
+                                    boxShadow: const [
+                                      BoxShadow(color: Colors.black38, blurRadius: 4),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 16),
 
