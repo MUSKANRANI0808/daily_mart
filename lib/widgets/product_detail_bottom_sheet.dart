@@ -568,13 +568,18 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                     ),
                     const SizedBox(height: 10),
 
-                    // Related Items Horizontal Scroll Carousel (Matching Home Page Card Structure!)
-                    SizedBox(
-                      height: 195,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        physics: const BouncingScrollPhysics(),
+                    // Related Items 2-Column Grid Layout (2 products per row)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                          childAspectRatio: 0.76,
+                        ),
                         itemCount: relatedList.length,
                         itemBuilder: (ctx, idx) {
                           final relProd = relatedList[idx];
@@ -590,8 +595,6 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                               : 'Buy Now';
 
                           return Container(
-                            width: 135,
-                            margin: const EdgeInsets.only(right: 10),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(16),
@@ -612,46 +615,48 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                               },
                               borderRadius: BorderRadius.circular(16),
                               child: Padding(
-                                padding: const EdgeInsets.all(8.0),
+                                padding: const EdgeInsets.all(10.0),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     // 1. Related Product Image Box
-                                    Container(
-                                      height: 85,
-                                      width: double.infinity,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFF8FAFC),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: _buildProductImageWidget(rImg, emojiSize: 36),
+                                    Expanded(
+                                      child: Container(
+                                        width: double.infinity,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF8FAFC),
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: _buildProductImageWidget(rImg, emojiSize: 45, fit: BoxFit.contain),
+                                        ),
                                       ),
                                     ),
-                                    const SizedBox(height: 6),
+                                    const SizedBox(height: 8),
 
                                     // 2. Item Name
                                     Text(
                                       rName,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: Color(0xFF0F172A)),
+                                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF0F172A)),
                                     ),
+                                    const SizedBox(height: 2),
 
-                                    // 3. Rate & Unit in Subtle Gray
+                                    // 3. Rate & Unit
                                     Text(
                                       '₹$rRateStr / $rUnit',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11, color: Color(0xFF64748B)),
+                                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11.5, color: Color(0xFF64748B)),
                                     ),
-                                    const SizedBox(height: 6),
+                                    const SizedBox(height: 8),
 
                                     // 4. Seller Custom Button / Buy Now Button
                                     SizedBox(
                                       width: double.infinity,
-                                      height: 28,
+                                      height: 32,
                                       child: ElevatedButton(
                                         onPressed: () async {
                                           await CartService.addToCart(
@@ -680,7 +685,7 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                                         ),
                                         child: Text(
                                           rBtnText,
-                                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                          style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold),
                                         ),
                                       ),
                                     ),
