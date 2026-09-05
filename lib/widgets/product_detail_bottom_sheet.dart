@@ -292,7 +292,7 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                           child: ProductBorderWrapper(
                             sellerUsername: widget.sellerUsername,
                             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                            padding: const EdgeInsets.only(top: 42, bottom: 20, left: 16, right: 16),
+                            padding: const EdgeInsets.only(top: 75, bottom: 15, left: 16, right: 16),
                             child: _buildProductImageWidget(img, emojiSize: 140, fit: BoxFit.contain),
                           ),
                         ),
