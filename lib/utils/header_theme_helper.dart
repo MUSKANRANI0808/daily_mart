@@ -323,6 +323,22 @@ Widget buildSingleLottieItem(dynamic rawData, {BoxFit fit = BoxFit.cover}) {
   String clean = '';
   if (rawData is Map) {
     clean = (rawData['url'] ?? rawData['data'] ?? '').toString().trim();
+  } else if (rawData is String) {
+    final str = rawData.trim();
+    if (str.startsWith('{') && str.endsWith('}')) {
+      try {
+        final decoded = jsonDecode(str);
+        if (decoded is Map && (decoded.containsKey('url') || decoded.containsKey('data'))) {
+          clean = (decoded['url'] ?? decoded['data'] ?? '').toString().trim();
+        } else {
+          clean = str;
+        }
+      } catch (_) {
+        clean = str;
+      }
+    } else {
+      clean = str;
+    }
   } else {
     clean = (rawData ?? '').toString().trim();
   }
@@ -507,7 +523,14 @@ class _HeaderLottieCarouselWidgetState extends State<HeaderLottieCarouselWidget>
     if (currentItem is Map) {
       if (currentItem['color1'] != null) currentSlideConfig['color1'] = currentItem['color1'];
       if (currentItem['color2'] != null) currentSlideConfig['color2'] = currentItem['color2'];
-      if (currentItem['color3'] != null) currentSlideConfig['color3'] = currentItem['color3'];
+    } else if (currentItem is String && currentItem.trim().startsWith('{') && currentItem.trim().endsWith('}')) {
+      try {
+        final decoded = jsonDecode(currentItem.trim());
+        if (decoded is Map) {
+          if (decoded['color1'] != null) currentSlideConfig['color1'] = decoded['color1'];
+          if (decoded['color2'] != null) currentSlideConfig['color2'] = decoded['color2'];
+        }
+      } catch (_) {}
     }
 
     Widget carouselBody;
