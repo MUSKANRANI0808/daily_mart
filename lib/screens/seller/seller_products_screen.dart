@@ -7,6 +7,7 @@ import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/color_picker_dialog.dart';
 import '../../utils/csv_exporter.dart';
+import '../../widgets/product_border_wrapper.dart';
 
 int safeInt(dynamic val, [int defaultValue = 0]) {
   if (val == null) return defaultValue;
@@ -3167,7 +3168,11 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                                       ),
                                       child: ClipRRect(
                                         borderRadius: BorderRadius.circular(6),
-                                        child: _buildProductImageWidget(img, emojiSize: 15),
+                                        child: ProductBorderWrapper(
+                                          sellerUsername: widget.seller.username,
+                                          borderRadius: BorderRadius.circular(6),
+                                          child: _buildProductImageWidget(img, emojiSize: 15),
+                                        ),
                                       ),
                                     ),
                                     const SizedBox(width: 8),

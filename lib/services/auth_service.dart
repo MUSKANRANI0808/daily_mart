@@ -5730,4 +5730,79 @@ class AuthService {
     } catch (_) {}
     return [];
   }
+
+  // --- SELLER PRODUCT BORDER FRAME METHODS ---
+  static final Map<String, String> _productBorderCache = {};
+
+  /// Get Cached Seller Product Border Image string (Synchronous Instant Memory / Cache)
+  static String? getCachedSellerProductBorderImage(String sellerUsername) {
+    final cleanSeller = sellerUsername.trim().toLowerCase();
+    if (cleanSeller.isEmpty) return null;
+    return _productBorderCache[cleanSeller];
+  }
+
+  /// Get Seller Product Border Image (VPS Database API + Local SharedPreferences Cache)
+  static Future<String?> getSellerProductBorderImage(String sellerUsername) async {
+    final cleanSeller = sellerUsername.trim().toLowerCase();
+    if (cleanSeller.isEmpty) return null;
+
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_product_border_$cleanSeller';
+
+    // 1. Check local cache first
+    final cachedStr = prefs.getString(cacheKey);
+    if (cachedStr != null && cachedStr.isNotEmpty) {
+      _productBorderCache[cleanSeller] = cachedStr;
+    }
+
+    // 2. Fetch fresh from VPS API Database
+    try {
+      final res = await VpsApiService.get('get-seller-product-border&seller_username=$cleanSeller') ??
+          await VpsApiService.get('get-seller-profile&seller_username=$cleanSeller');
+      if (res != null && res['success'] == true) {
+        final borderImg = (res['border_image'] ?? res['product_border'] ?? res['border'] ?? '').toString().trim();
+        if (borderImg.isNotEmpty) {
+          await prefs.setString(cacheKey, borderImg);
+          _productBorderCache[cleanSeller] = borderImg;
+          return borderImg;
+        } else if (res['border_image'] == '' || res['product_border'] == '') {
+          await prefs.remove(cacheKey);
+          _productBorderCache.remove(cleanSeller);
+          return null;
+        }
+      }
+    } catch (_) {}
+
+    return _productBorderCache[cleanSeller];
+  }
+
+  /// Save Seller Product Border Image (VPS API Database + Local SharedPreferences Cache)
+  static Future<bool> saveSellerProductBorderImage(String sellerUsername, String borderData) async {
+    final cleanSeller = sellerUsername.trim().toLowerCase();
+    if (cleanSeller.isEmpty) return false;
+
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_product_border_$cleanSeller';
+    final cleanData = borderData.trim();
+
+    if (cleanData.isEmpty) {
+      await prefs.remove(cacheKey);
+      _productBorderCache.remove(cleanSeller);
+    } else {
+      await prefs.setString(cacheKey, cleanData);
+      _productBorderCache[cleanSeller] = cleanData;
+    }
+
+    // Save to VPS Database
+    try {
+      await VpsApiService.post('save-seller-product-border', {
+        'seller_username': cleanSeller,
+        'border_image': cleanData,
+        'product_border': cleanData,
+      });
+    } catch (_) {}
+
+    return true;
+  }
 }
+

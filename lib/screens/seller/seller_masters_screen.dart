@@ -7,6 +7,7 @@ import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/color_picker_dialog.dart';
 import '../../utils/csv_exporter.dart';
+import '../../widgets/product_border_wrapper.dart';
 import 'seller_products_screen.dart';
 
 int safeInt(dynamic val, [int defaultValue = 0]) {
@@ -1759,6 +1760,211 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
     );
   }
 
+  // --- 8. PRODUCT BORDER FRAME MASTER DIALOG ---
+  void _showManageProductBorderDialog() {
+    String currentBorder = AuthService.getCachedSellerProductBorderImage(_sellerUsername) ?? '';
+    final urlController = TextEditingController(text: currentBorder.startsWith('http') ? currentBorder : '');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final username = _sellerUsername;
+
+          Future<void> _pickBorderImage() async {
+            try {
+              final picker = ImagePicker();
+              final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+              if (picked != null) {
+                final bytes = await picked.readAsBytes();
+                final base64Str = 'data:image/png;base64,${base64Encode(bytes)}';
+                setModalState(() {
+                  currentBorder = base64Str;
+                });
+              }
+            } catch (_) {}
+          }
+
+          return Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              left: 20,
+              right: 20,
+              top: 16,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  Row(
+                    children: [
+                      const CircleAvatar(
+                        radius: 18,
+                        backgroundColor: Color(0xFFFCE7F3),
+                        child: Icon(Icons.border_outer_rounded, color: Color(0xFFEC4899), size: 20),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'Product Border Frame 🖼️',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Upload a PNG border image (transparent in center). All products in your shop will display inside this custom border frame!',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.3),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Image Upload / Select Options
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _pickBorderImage,
+                          icon: const Icon(Icons.upload_file_rounded, size: 18),
+                          label: const Text('Pick PNG Image', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFEC4899),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                      if (currentBorder.isNotEmpty) ...[
+                        const SizedBox(width: 10),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            setModalState(() {
+                              currentBorder = '';
+                              urlController.clear();
+                            });
+                          },
+                          icon: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 18),
+                          label: const Text('Clear', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13)),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.red),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // URL alternative input
+                  TextField(
+                    controller: urlController,
+                    onChanged: (val) {
+                      setModalState(() {
+                        currentBorder = val.trim();
+                      });
+                    },
+                    decoration: InputDecoration(
+                      labelText: 'Or Paste PNG Image URL',
+                      hintText: 'https://example.com/border.png',
+                      isDense: true,
+                      prefixIcon: const Icon(Icons.link_rounded, size: 20),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Live Preview Card
+                  const Text('Live Preview:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                  const SizedBox(height: 8),
+                  Container(
+                    height: 140,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Center(
+                      child: ProductBorderWrapper(
+                        borderImage: currentBorder,
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          width: 100,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text('📦', style: TextStyle(fontSize: 32)),
+                                SizedBox(height: 4),
+                                Text('Sample Product', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Save Button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        await AuthService.saveSellerProductBorderImage(username, currentBorder);
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(currentBorder.isNotEmpty ? '✓ Product border saved successfully! 🎉' : '✓ Product border removed!'),
+                              backgroundColor: const Color(0xFF10B981),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0F172A),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text('Save Border Settings 🚀', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1856,6 +2062,13 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                     icon: Icons.straighten_rounded,
                     color: const Color(0xFF10B981),
                     onTap: _showManageUnitsDialog,
+                  ),
+                  _buildMasterCard(
+                    title: 'Product Border 🖼️',
+                    subtitle: 'Upload PNG overlay',
+                    icon: Icons.border_outer_rounded,
+                    color: const Color(0xFFEC4899),
+                    onTap: _showManageProductBorderDialog,
                   ),
                   _buildMasterCard(
                     title: 'Search Bar Style 🔍',

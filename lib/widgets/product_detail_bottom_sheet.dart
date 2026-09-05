@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../services/cart_service.dart';
+import 'product_border_wrapper.dart';
 
 void showProductDetailBottomSheet({
   required BuildContext context,
@@ -290,7 +291,11 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                             height: 190,
                             width: double.infinity,
                             color: const Color(0xFFF8FAFC),
-                            child: _buildProductImageWidget(img, emojiSize: 68),
+                            child: ProductBorderWrapper(
+                              sellerUsername: widget.sellerUsername,
+                              borderRadius: BorderRadius.circular(20),
+                              child: _buildProductImageWidget(img, emojiSize: 68),
+                            ),
                           ),
                         ),
 
@@ -623,7 +628,11 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                                       ),
                                       child: ClipRRect(
                                         borderRadius: BorderRadius.circular(12),
-                                        child: _buildProductImageWidget(rImg, emojiSize: 36),
+                                        child: ProductBorderWrapper(
+                                          sellerUsername: widget.sellerUsername,
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: _buildProductImageWidget(rImg, emojiSize: 36),
+                                        ),
                                       ),
                                     ),
                                     const SizedBox(height: 6),

@@ -9,6 +9,7 @@ import '../../services/auth_service.dart';
 import '../../services/cart_service.dart';
 import '../../utils/header_theme_helper.dart';
 import '../../widgets/product_detail_bottom_sheet.dart';
+import '../../widgets/product_border_wrapper.dart';
 import '../dashboards/customer_dashboard.dart';
 import '../role_selection_screen.dart';
 import '../seller/seller_order_cart_screen.dart';
@@ -1574,7 +1575,11 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                       ),
                       child: ClipRRect(
                         borderRadius: const BorderRadius.all(Radius.circular(12)),
-                        child: _buildProductImageWidget(img, emojiSize: 34),
+                        child: ProductBorderWrapper(
+                          sellerUsername: widget.sellerUsername,
+                          borderRadius: const BorderRadius.all(Radius.circular(12)),
+                          child: _buildProductImageWidget(img, emojiSize: 34),
+                        ),
                       ),
                     ),
                     Positioned(
@@ -1687,7 +1692,11 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                     ),
                     child: ClipRRect(
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                      child: _buildProductImageWidget(img, emojiSize: isCompact ? 28 : 40),
+                      child: ProductBorderWrapper(
+                        sellerUsername: widget.sellerUsername,
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                        child: _buildProductImageWidget(img, emojiSize: isCompact ? 28 : 40),
+                      ),
                     ),
                   ),
                   // Stock Qty Badge
