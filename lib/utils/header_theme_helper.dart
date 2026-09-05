@@ -315,18 +315,10 @@ class _ContinuousShiningGlassBeamWidgetState extends State<ContinuousShiningGlas
 /// Helper method to build single Lottie animation from URL, Asset, JSON string or Base64 memory
 Widget buildSingleLottieItem(String rawData, {BoxFit fit = BoxFit.cover}) {
   final clean = rawData.trim();
-  if (clean.isEmpty || clean.contains('daily_mart_exclusive.json')) return const SizedBox.shrink();
+  if (clean.isEmpty || clean.startsWith('assets/') || clean.contains('daily_mart_exclusive.json')) return const SizedBox.shrink();
 
   if (clean.startsWith('http://') || clean.startsWith('https://')) {
     return Lottie.network(
-      clean,
-      fit: fit,
-      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-    );
-  }
-
-  if (clean.startsWith('assets/')) {
-    return Lottie.asset(
       clean,
       fit: fit,
       errorBuilder: (_, __, ___) => const SizedBox.shrink(),
@@ -450,7 +442,10 @@ class _HeaderLottieCarouselWidgetState extends State<HeaderLottieCarouselWidget>
     if (!mounted) return;
     _timer?.cancel();
 
-    final validAnims = anims.where((a) => a.trim().isNotEmpty && !a.contains('daily_mart_exclusive.json')).toList();
+    final validAnims = anims.where((a) {
+      final clean = a.trim();
+      return clean.isNotEmpty && !clean.startsWith('assets/') && !clean.contains('daily_mart_exclusive.json');
+    }).toList();
 
     setState(() {
       _animations = validAnims;

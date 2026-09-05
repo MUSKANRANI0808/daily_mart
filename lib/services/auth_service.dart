@@ -5845,7 +5845,10 @@ class AuthService {
         list = [str];
       }
     }
-    return list.where((item) => !item.contains('daily_mart_exclusive.json')).toList();
+    return list.where((item) {
+      final clean = item.trim();
+      return clean.isNotEmpty && !clean.startsWith('assets/') && !clean.contains('daily_mart_exclusive.json');
+    }).toList();
   }
 
   /// Get Cached Seller Header Animations List (Instant Memory / Cache)
