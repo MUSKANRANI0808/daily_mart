@@ -2077,18 +2077,9 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
 
               if (files.isNotEmpty) {
                 final file = files.first;
+                final bytes = await file.readAsBytes();
 
-                // 1. Web / Memory Bytes first
-                Uint8List? bytes = file.bytes;
-
-                // 2. Fallback readAsBytes for Mobile / Desktop
-                if (bytes == null || bytes.isEmpty) {
-                  try {
-                    bytes = await file.readAsBytes();
-                  } catch (_) {}
-                }
-
-                if (bytes != null && bytes.isNotEmpty) {
+                if (bytes.isNotEmpty) {
                   final jsonStr = utf8.decode(bytes, allowMalformed: true).trim();
                   if (jsonStr.isNotEmpty) {
                     try {
