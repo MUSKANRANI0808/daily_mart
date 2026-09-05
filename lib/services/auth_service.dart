@@ -5827,39 +5827,76 @@ class AuthService {
     return true;
   }
 
-  static final Map<String, List<String>> _headerAnimationsCache = {};
+  static final Map<String, List<dynamic>> _headerAnimationsCache = {};
 
-  static List<String> _parseAnimationsList(dynamic raw) {
+  static List<dynamic> _parseAnimationsList(dynamic raw) {
     if (raw == null) return [];
-    List<String> list = [];
+    List<dynamic> list = [];
     if (raw is List) {
-      list = raw.map((e) => e.toString()).where((s) => s.trim().isNotEmpty).toList();
+      list = raw;
     } else if (raw is String && raw.trim().isNotEmpty) {
       final str = raw.trim();
       if (str.startsWith('[') && str.endsWith(']')) {
         try {
           final List decoded = jsonDecode(str);
-          list = decoded.map((e) => e.toString()).where((s) => s.trim().isNotEmpty).toList();
-        } catch (_) {}
+          list = decoded;
+        } catch (_) {
+          list = [str];
+        }
       } else {
         list = [str];
       }
     }
+
     return list.where((item) {
-      final clean = item.trim();
+      if (item == null) return false;
+      String urlStr = '';
+      if (item is Map) {
+        urlStr = (item['url'] ?? item['data'] ?? '').toString();
+      } else if (item is String) {
+        final trimmed = item.trim();
+        if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+          try {
+            final Map map = jsonDecode(trimmed);
+            if (map.containsKey('url')) {
+              urlStr = map['url'].toString();
+            } else {
+              urlStr = trimmed;
+            }
+          } catch (_) {
+            urlStr = trimmed;
+          }
+        } else {
+          urlStr = trimmed;
+        }
+      }
+      final clean = urlStr.trim();
       return clean.isNotEmpty && !clean.startsWith('assets/') && !clean.contains('daily_mart_exclusive.json');
+    }).map((item) {
+      if (item is String) {
+        final trimmed = item.trim();
+        if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+          try {
+            final decoded = jsonDecode(trimmed);
+            if (decoded is Map) {
+              return Map<String, dynamic>.from(decoded);
+            }
+          } catch (_) {}
+        }
+      }
+      return item;
     }).toList();
   }
 
   /// Get Cached Seller Header Animations List (Instant Memory / Cache)
-  static List<String>? getCachedSellerHeaderAnimations(String sellerUsername) {
+  static List<dynamic>? getCachedSellerHeaderAnimations(String sellerUsername) {
     final cleanSeller = sellerUsername.trim().toLowerCase();
     if (cleanSeller.isEmpty) return null;
     return _headerAnimationsCache[cleanSeller];
   }
 
   /// Get Seller Header Animations List (VPS Database API + Local SharedPreferences Cache)
-  static Future<List<String>> getSellerHeaderAnimations(String sellerUsername) async {
+  static Future<List<dynamic>> getSellerHeaderAnimations(String sellerUsername) async {
     final cleanSeller = sellerUsername.trim().toLowerCase();
     if (cleanSeller.isEmpty) return [];
 
@@ -5870,8 +5907,8 @@ class AuthService {
     final cachedStr = prefs.getString(cacheKey);
     if (cachedStr != null && cachedStr.isNotEmpty) {
       try {
-        final decoded = List<String>.from(jsonDecode(cachedStr));
-        _headerAnimationsCache[cleanSeller] = decoded;
+        final decoded = List<dynamic>.from(jsonDecode(cachedStr));
+        _headerAnimationsCache[cleanSeller] = _parseAnimationsList(decoded);
       } catch (_) {}
     }
 
@@ -5892,7 +5929,7 @@ class AuthService {
             res['seller']?['animations'] ??
             res['data']?['header_animations'];
 
-        final List<String> fetched = _parseAnimationsList(raw);
+        final List<dynamic> fetched = _parseAnimationsList(raw);
         if (fetched.isNotEmpty) {
           await prefs.setString(cacheKey, jsonEncode(fetched));
           _headerAnimationsCache[cleanSeller] = fetched;
@@ -5905,7 +5942,7 @@ class AuthService {
   }
 
   /// Save Seller Header Animations List (VPS API Database + Local SharedPreferences Cache)
-  static Future<bool> saveSellerHeaderAnimations(String sellerUsername, List<String> animations) async {
+  static Future<bool> saveSellerHeaderAnimations(String sellerUsername, List<dynamic> animations) async {
     final cleanSeller = sellerUsername.trim().toLowerCase();
     if (cleanSeller.isEmpty) return false;
 

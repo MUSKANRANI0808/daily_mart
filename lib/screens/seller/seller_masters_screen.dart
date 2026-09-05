@@ -2053,12 +2053,26 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
   }
 
   // --- 9. HEADER LOTTIE ANIMATIONS MASTER DIALOG ---
-  // --- 9. HEADER LOTTIE ANIMATIONS MASTER DIALOG ---
   void _showManageHeaderAnimationsDialog() async {
     final username = _sellerUsername;
     final urlController = TextEditingController();
     final jsonCodeController = TextEditingController();
-    List<String> animationsList = List<String>.from(AuthService.getCachedSellerHeaderAnimations(username) ?? []);
+    
+    // Load existing cached animations and ensure each item is a Map<String, dynamic>
+    final rawList = await AuthService.getSellerHeaderAnimations(username);
+    List<Map<String, dynamic>> animationsList = rawList.map((item) {
+      if (item is Map) {
+        return Map<String, dynamic>.from(item);
+      }
+      return <String, dynamic>{
+        'url': item.toString(),
+        'color1': '#0F172A',
+        'color2': '#1E1B4B',
+        'color3': '#312E81',
+      };
+    }).toList();
+
+    int selectedIndex = 0;
     bool isProcessing = false;
 
     final initialHeaderConfig = await AuthService.getHeaderThemeConfig();
@@ -2072,6 +2086,9 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
+          if (selectedIndex >= animationsList.length && animationsList.isNotEmpty) {
+            selectedIndex = animationsList.length - 1;
+          }
 
           Future<void> _pickLottieJsonFile() async {
             try {
@@ -2083,7 +2100,13 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                 try {
                   jsonDecode(cleanJson);
                   setModalState(() {
-                    animationsList.add(cleanJson);
+                    animationsList.add({
+                      'url': cleanJson,
+                      'color1': headerTheme['color1']?.toString() ?? '#0F172A',
+                      'color2': headerTheme['color2']?.toString() ?? '#1E1B4B',
+                      'color3': headerTheme['color3']?.toString() ?? '#312E81',
+                    });
+                    selectedIndex = animationsList.length - 1;
                   });
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -2127,7 +2150,13 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
             try {
               jsonDecode(text);
               setModalState(() {
-                animationsList.add(text);
+                animationsList.add({
+                  'url': text,
+                  'color1': headerTheme['color1']?.toString() ?? '#0F172A',
+                  'color2': headerTheme['color2']?.toString() ?? '#1E1B4B',
+                  'color3': headerTheme['color3']?.toString() ?? '#312E81',
+                });
+                selectedIndex = animationsList.length - 1;
                 jsonCodeController.clear();
               });
               if (mounted) {
@@ -2162,10 +2191,20 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
               return;
             }
             setModalState(() {
-              animationsList.add(url);
+              animationsList.add({
+                'url': url,
+                'color1': headerTheme['color1']?.toString() ?? '#0F172A',
+                'color2': headerTheme['color2']?.toString() ?? '#1E1B4B',
+                'color3': headerTheme['color3']?.toString() ?? '#312E81',
+              });
+              selectedIndex = animationsList.length - 1;
               urlController.clear();
             });
           }
+
+          final Map<String, dynamic> activeAnimMap = animationsList.isNotEmpty && selectedIndex < animationsList.length
+              ? animationsList[selectedIndex]
+              : headerTheme;
 
           return Container(
             decoration: const BoxDecoration(
@@ -2212,7 +2251,7 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                             ),
                             SizedBox(height: 2),
                             Text(
-                              'Upload custom JSON animations & customize header background color!',
+                              'Set background color for each animation individually!',
                               style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                             ),
                           ],
@@ -2225,110 +2264,6 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                     ],
                   ),
                   const Divider(height: 20),
-
-                  // Header Background Colors Section
-                  const Text('Header Background Colors 🎨', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
-                  const SizedBox(height: 8),
-
-                  // Individual Custom Color Pickers
-                  Row(
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            FullColorPickerDialog.show(
-                              context,
-                              initialHex: headerTheme['color1']?.toString() ?? '#0F172A',
-                              onColorSelected: (selectedHex) {
-                                setModalState(() {
-                                  headerTheme['color1'] = selectedHex;
-                                });
-                              },
-                            );
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFCBD5E1)),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 22,
-                                  height: 22,
-                                  decoration: BoxDecoration(
-                                    color: HeaderThemeHelper.hexToColor(headerTheme['color1']?.toString() ?? '#0F172A'),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: Colors.black12),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('Color 1', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
-                                      Text(headerTheme['color1']?.toString() ?? '#0F172A', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            FullColorPickerDialog.show(
-                              context,
-                              initialHex: headerTheme['color2']?.toString() ?? '#1E1B4B',
-                              onColorSelected: (selectedHex) {
-                                setModalState(() {
-                                  headerTheme['color2'] = selectedHex;
-                                });
-                              },
-                            );
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFCBD5E1)),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 22,
-                                  height: 22,
-                                  decoration: BoxDecoration(
-                                    color: HeaderThemeHelper.hexToColor(headerTheme['color2']?.toString() ?? '#1E1B4B'),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: Colors.black12),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('Color 2', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
-                                      Text(headerTheme['color2']?.toString() ?? '#1E1B4B', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
 
                   // Upload Button & Info
                   const Text('Add Animation (.json file or URL) *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
@@ -2411,10 +2346,15 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // Uploaded Animations List
+                  // Configured Animations List (Cards #1, #2...)
                   Text(
                     'Configured Animations (${animationsList.length}):',
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    '👇 Click on any card below (#1, #2) to set its background color!',
+                    style: TextStyle(fontSize: 11, color: Color(0xFF8B5CF6), fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
 
@@ -2436,68 +2376,93 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                     )
                   else
                     SizedBox(
-                      height: 110,
+                      height: 115,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
                         itemCount: animationsList.length,
                         itemBuilder: (context, idx) {
-                          final animData = animationsList[idx];
-                          return Container(
-                            width: 110,
-                            margin: const EdgeInsets.only(right: 10),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF0F172A),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: const Color(0xFF8B5CF6), width: 1.5),
-                            ),
-                            child: Stack(
-                              children: [
-                                // Animation Preview
-                                Positioned.fill(
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: buildSingleLottieItem(animData, fit: BoxFit.cover),
-                                  ),
-                                ),
+                          final animMap = animationsList[idx];
+                          final isSelected = idx == selectedIndex;
+                          final c1 = animMap['color1']?.toString() ?? '#0F172A';
+                          final c2 = animMap['color2']?.toString() ?? '#1E1B4B';
+                          final c3 = animMap['color3']?.toString() ?? c2;
 
-                                // Index Badge
-                                Positioned(
-                                  top: 4,
-                                  left: 4,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withValues(alpha: 0.7),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      '#${idx + 1}',
-                                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          return GestureDetector(
+                            onTap: () {
+                              setModalState(() {
+                                selectedIndex = idx;
+                              });
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 250),
+                              width: 115,
+                              margin: const EdgeInsets.only(right: 12),
+                              decoration: HeaderThemeHelper.buildDecoration({
+                                'color1': c1,
+                                'color2': c2,
+                                'color3': c3,
+                              }).copyWith(
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: isSelected ? const Color(0xFF10B981) : const Color(0xFFCBD5E1),
+                                  width: isSelected ? 3.0 : 1.2,
+                                ),
+                                boxShadow: isSelected
+                                    ? [BoxShadow(color: const Color(0xFF10B981).withValues(alpha: 0.35), blurRadius: 8, spreadRadius: 1)]
+                                    : null,
+                              ),
+                              child: Stack(
+                                children: [
+                                  // Animation Preview
+                                  Positioned.fill(
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: buildSingleLottieItem(animMap['url'] ?? animMap, fit: BoxFit.cover),
                                     ),
                                   ),
-                                ),
 
-                                // Delete Button
-                                Positioned(
-                                  top: 4,
-                                  right: 4,
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      setModalState(() {
-                                        animationsList.removeAt(idx);
-                                      });
-                                    },
+                                  // Index & Selection Badge
+                                  Positioned(
+                                    top: 4,
+                                    left: 4,
                                     child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: const BoxDecoration(
-                                        color: Colors.red,
-                                        shape: BoxShape.circle,
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: isSelected ? const Color(0xFF10B981) : Colors.black.withValues(alpha: 0.75),
+                                        borderRadius: BorderRadius.circular(8),
                                       ),
-                                      child: const Icon(Icons.close_rounded, color: Colors.white, size: 14),
+                                      child: Text(
+                                        isSelected ? '#${idx + 1} ACTIVE' : '#${idx + 1}',
+                                        style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold),
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ],
+
+                                  // Delete Button
+                                  Positioned(
+                                    top: 4,
+                                    right: 4,
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        setModalState(() {
+                                          animationsList.removeAt(idx);
+                                          if (selectedIndex >= animationsList.length && animationsList.isNotEmpty) {
+                                            selectedIndex = animationsList.length - 1;
+                                          }
+                                        });
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: const BoxDecoration(
+                                          color: Colors.red,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.close_rounded, color: Colors.white, size: 14),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           );
                         },
@@ -2506,12 +2471,148 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
 
                   const SizedBox(height: 16),
 
+                  // Header Background Color Pickers for Currently Selected Animation Card
+                  if (animationsList.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF8B5CF6),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'Animation #${selectedIndex + 1}',
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Text('Background Gradient Colors 🎨', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A))),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+
+                          Row(
+                            children: [
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () {
+                                    FullColorPickerDialog.show(
+                                      context,
+                                      initialHex: activeAnimMap['color1']?.toString() ?? '#0F172A',
+                                      onColorSelected: (selectedHex) {
+                                        setModalState(() {
+                                          activeAnimMap['color1'] = selectedHex;
+                                          headerTheme['color1'] = selectedHex;
+                                        });
+                                      },
+                                    );
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 22,
+                                          height: 22,
+                                          decoration: BoxDecoration(
+                                            color: HeaderThemeHelper.hexToColor(activeAnimMap['color1']?.toString() ?? '#0F172A'),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(color: Colors.black12),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              const Text('Color 1', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+                                              Text(activeAnimMap['color1']?.toString() ?? '#0F172A', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () {
+                                    FullColorPickerDialog.show(
+                                      context,
+                                      initialHex: activeAnimMap['color2']?.toString() ?? '#1E1B4B',
+                                      onColorSelected: (selectedHex) {
+                                        setModalState(() {
+                                          activeAnimMap['color2'] = selectedHex;
+                                          headerTheme['color2'] = selectedHex;
+                                        });
+                                      },
+                                    );
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 22,
+                                          height: 22,
+                                          decoration: BoxDecoration(
+                                            color: HeaderThemeHelper.hexToColor(activeAnimMap['color2']?.toString() ?? '#1E1B4B'),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(color: Colors.black12),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              const Text('Color 2', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+                                              Text(activeAnimMap['color2']?.toString() ?? '#1E1B4B', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
                   // Live Header Preview Box with Selected Gradient Background & Animation
                   const Text('Live Header Auto-Slide Preview:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
                   const SizedBox(height: 8),
                   Container(
                     height: 110,
-                    decoration: HeaderThemeHelper.buildDecoration(headerTheme).copyWith(
+                    decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: const Color(0xFF8B5CF6), width: 1.5),
                     ),
@@ -2531,14 +2632,20 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                     height: 46,
                     child: ElevatedButton(
                       onPressed: () async {
-                        await AuthService.saveSellerHeaderAnimations(username, animationsList);
+                        // Serialize list to String/Map format
+                        final List<String> serialized = animationsList.map((item) => jsonEncode(item)).toList();
+                        await AuthService.saveSellerHeaderAnimations(username, serialized);
+                        if (animationsList.isNotEmpty && selectedIndex < animationsList.length) {
+                          headerTheme['color1'] = animationsList[selectedIndex]['color1'];
+                          headerTheme['color2'] = animationsList[selectedIndex]['color2'];
+                        }
                         await AuthService.saveHeaderThemeConfig(headerTheme);
                         if (ctx.mounted) Navigator.pop(ctx);
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
+                            const SnackBar(
                               content: Text('✓ Header Theme & Animations saved successfully! 🎉'),
-                              backgroundColor: const Color(0xFF10B981),
+                              backgroundColor: Color(0xFF10B981),
                               behavior: SnackBarBehavior.floating,
                             ),
                           );

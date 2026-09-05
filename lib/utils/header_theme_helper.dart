@@ -313,9 +313,17 @@ class _ContinuousShiningGlassBeamWidgetState extends State<ContinuousShiningGlas
 }
 
 /// Helper method to build single Lottie animation from URL, Asset, JSON string or Base64 memory
-Widget buildSingleLottieItem(String rawData, {BoxFit fit = BoxFit.cover}) {
-  final clean = rawData.trim();
-  if (clean.isEmpty || clean.startsWith('assets/') || clean.contains('daily_mart_exclusive.json')) return const SizedBox.shrink();
+Widget buildSingleLottieItem(dynamic rawData, {BoxFit fit = BoxFit.cover}) {
+  String clean = '';
+  if (rawData is Map) {
+    clean = (rawData['url'] ?? rawData['data'] ?? '').toString().trim();
+  } else {
+    clean = (rawData ?? '').toString().trim();
+  }
+
+  if (clean.isEmpty || clean.startsWith('assets/') || clean.contains('daily_mart_exclusive.json')) {
+    return const SizedBox.shrink();
+  }
 
   if (clean.startsWith('http://') || clean.startsWith('https://')) {
     return Lottie.network(
@@ -381,7 +389,7 @@ class FestivalLottieHeaderWidget extends StatelessWidget {
 class HeaderLottieCarouselWidget extends StatefulWidget {
   final String? sellerUsername;
   final Map<String, dynamic> config;
-  final List<String>? overrideAnimations;
+  final List<dynamic>? overrideAnimations;
 
   const HeaderLottieCarouselWidget({
     super.key,
@@ -395,7 +403,7 @@ class HeaderLottieCarouselWidget extends StatefulWidget {
 }
 
 class _HeaderLottieCarouselWidgetState extends State<HeaderLottieCarouselWidget> {
-  List<String> _animations = [];
+  List<dynamic> _animations = [];
   PageController? _pageController;
   Timer? _timer;
   int _currentPage = 0;
@@ -438,12 +446,14 @@ class _HeaderLottieCarouselWidgetState extends State<HeaderLottieCarouselWidget>
     _setupCarousel([]);
   }
 
-  void _setupCarousel(List<String> anims) {
+  void _setupCarousel(List<dynamic> anims) {
     if (!mounted) return;
     _timer?.cancel();
 
     final validAnims = anims.where((a) {
-      final clean = a.trim();
+      if (a == null) return false;
+      final String str = a is Map ? (a['url'] ?? a['data'] ?? '').toString() : a.toString();
+      final clean = str.trim();
       return clean.isNotEmpty && !clean.startsWith('assets/') && !clean.contains('daily_mart_exclusive.json');
     }).toList();
 
@@ -478,14 +488,21 @@ class _HeaderLottieCarouselWidgetState extends State<HeaderLottieCarouselWidget>
   Widget build(BuildContext context) {
     final double lottieOpacity = (widget.config['lottie_opacity'] as num?)?.toDouble() ?? 0.85;
 
-    // If no custom animations uploaded, show nothing (only show seller uploaded animations)
     if (_animations.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    // Single Animation
+    final currentItem = _animations[_currentPage % _animations.length];
+    final Map<String, dynamic> currentSlideConfig = Map<String, dynamic>.from(widget.config);
+    if (currentItem is Map) {
+      if (currentItem['color1'] != null) currentSlideConfig['color1'] = currentItem['color1'];
+      if (currentItem['color2'] != null) currentSlideConfig['color2'] = currentItem['color2'];
+      if (currentItem['color3'] != null) currentSlideConfig['color3'] = currentItem['color3'];
+    }
+
+    Widget carouselBody;
     if (_animations.length == 1) {
-      return IgnorePointer(
+      carouselBody = IgnorePointer(
         child: Opacity(
           opacity: lottieOpacity.clamp(0.1, 1.0),
           child: SizedBox.expand(
@@ -493,55 +510,61 @@ class _HeaderLottieCarouselWidgetState extends State<HeaderLottieCarouselWidget>
           ),
         ),
       );
+    } else {
+      carouselBody = IgnorePointer(
+        child: Opacity(
+          opacity: lottieOpacity.clamp(0.1, 1.0),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              PageView.builder(
+                controller: _pageController,
+                onPageChanged: (index) {
+                  if (mounted) {
+                    setState(() {
+                      _currentPage = index;
+                    });
+                  }
+                },
+                itemCount: _animations.length,
+                itemBuilder: (ctx, index) {
+                  return buildSingleLottieItem(_animations[index]);
+                },
+              ),
+
+              // Sliding Indicator Dots
+              Positioned(
+                bottom: 8,
+                left: 0,
+                right: 0,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(_animations.length, (idx) {
+                    final isSel = idx == _currentPage;
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      width: isSel ? 18 : 6,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: isSel ? Colors.white : Colors.white.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
-    // Multi-Animation Auto-Sliding PageView Carousel
-    return IgnorePointer(
-      child: Opacity(
-        opacity: lottieOpacity.clamp(0.1, 1.0),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            PageView.builder(
-              controller: _pageController,
-              onPageChanged: (index) {
-                if (mounted) {
-                  setState(() {
-                    _currentPage = index;
-                  });
-                }
-              },
-              itemCount: _animations.length,
-              itemBuilder: (ctx, index) {
-                return buildSingleLottieItem(_animations[index]);
-              },
-            ),
-
-            // Subtle Sliding Indicator Dots
-            Positioned(
-              bottom: 8,
-              left: 0,
-              right: 0,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(_animations.length, (idx) {
-                  final isSel = idx == _currentPage;
-                  return AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    margin: const EdgeInsets.symmetric(horizontal: 3),
-                    width: isSel ? 18 : 6,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: isSel ? Colors.white : Colors.white.withValues(alpha: 0.4),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  );
-                }),
-              ),
-            ),
-          ],
-        ),
-      ),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeInOut,
+      decoration: HeaderThemeHelper.buildDecoration(currentSlideConfig),
+      child: carouselBody,
     );
   }
 }
