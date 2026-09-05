@@ -10,6 +10,7 @@ import '../../services/auth_service.dart';
 import '../../widgets/color_picker_dialog.dart';
 import '../../utils/csv_exporter.dart';
 import '../../utils/image_border_helper.dart';
+import '../../utils/header_theme_helper.dart';
 import '../../widgets/product_border_wrapper.dart';
 import 'seller_products_screen.dart';
 
@@ -2356,7 +2357,7 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
-                                      color: Colors.black70,
+                                      color: Colors.black.withValues(alpha: 0.7),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Text(

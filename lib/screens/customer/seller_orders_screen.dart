@@ -1117,7 +1117,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                             // Flipkart Style Festive & Custom Seller Lottie Animation Overlay Carousel
                             Positioned.fill(
                               child: HeaderLottieCarouselWidget(
-                                sellerUsername: widget.seller['username'] ?? widget.seller['seller_username'] ?? '',
+                                sellerUsername: widget.sellerUsername,
                                 config: _headerThemeConfig,
                               ),
                             ),

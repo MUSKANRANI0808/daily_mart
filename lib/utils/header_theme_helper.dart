@@ -1,5 +1,9 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
+import '../services/auth_service.dart';
 
 class HeaderThemeHelper {
   static List<Map<String, String>> get festivalPresets => [
@@ -339,8 +343,9 @@ Widget buildSingleLottieItem(String rawData, {BoxFit fit = BoxFit.cover}) {
 
   if (clean.contains('{') && clean.contains('}')) {
     try {
-      return Lottie.string(
-        clean,
+      final bytes = Uint8List.fromList(utf8.encode(clean));
+      return Lottie.memory(
+        bytes,
         fit: fit,
         errorBuilder: (_, __, ___) => const SizedBox.shrink(),
       );
