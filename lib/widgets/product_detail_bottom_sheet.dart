@@ -279,94 +279,21 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. HERO PRODUCT IMAGE & DETAILS CONTAINER (Wrapped by Product Border Frame)
+                  // 1. HERO PRODUCT IMAGE CONTAINER (Full Width Edge-to-Edge Card with Border Frame)
                   Stack(
                     children: [
-                      // Combined Box (Full Width Edge-to-Edge)
+                      // Image Box (Full Width Edge-to-Edge)
                       ClipRRect(
                         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                         child: Container(
+                          height: 420,
                           width: double.infinity,
                           color: const Color(0xFFF8FAFC),
                           child: ProductBorderWrapper(
                             sellerUsername: widget.sellerUsername,
                             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(20, 52, 20, 20),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Hero Image
-                                  SizedBox(
-                                    height: 270,
-                                    width: double.infinity,
-                                    child: _buildProductImageWidget(img, emojiSize: 140, fit: BoxFit.contain),
-                                  ),
-                                  const SizedBox(height: 16),
-
-                                  // Product Title
-                                  Text(
-                                    name,
-                                    style: const TextStyle(
-                                      fontSize: 21,
-                                      fontWeight: FontWeight.w800,
-                                      color: Color(0xFF0F172A),
-                                      height: 1.25,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-
-                                  // Rate & Rating Sub-row
-                                  Row(
-                                    children: [
-                                      Text(
-                                        '₹$rateStr',
-                                        style: const TextStyle(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.w900,
-                                          color: Color(0xFF10B981),
-                                        ),
-                                      ),
-                                      Text(
-                                        ' / $_baseUnit',
-                                        style: const TextStyle(
-                                          fontSize: 13.5,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFF64748B),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFFEF3C7),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: const Row(
-                                          children: [
-                                            Icon(Icons.star_rounded, color: Color(0xFFD97706), size: 14),
-                                            SizedBox(width: 3),
-                                            Text(
-                                              '4.8',
-                                              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-
-                                  // Optional Description Line
-                                  if (desc.isNotEmpty && desc.toLowerCase() != name.toLowerCase()) ...[
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      desc,
-                                      style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B), height: 1.35),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
+                            padding: const EdgeInsets.only(top: 60, bottom: 25, left: 20, right: 20),
+                            child: _buildProductImageWidget(img, emojiSize: 140, fit: BoxFit.contain),
                           ),
                         ),
                       ),
@@ -425,6 +352,76 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                           ),
                       ],
                     ),
+
+                  // 2. PRODUCT NAME & RATE HEADER (OUTSIDE BORDER FRAME SO NO LEAVES COVER TEXT)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Title
+                        Text(
+                          name,
+                          style: const TextStyle(
+                            fontSize: 21,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A),
+                            height: 1.25,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+
+                        // Rate & Rating Sub-row
+                        Row(
+                          children: [
+                            Text(
+                              '₹$rateStr',
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF10B981),
+                              ),
+                            ),
+                            Text(
+                              ' / $_baseUnit',
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEF3C7),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.star_rounded, color: Color(0xFFD97706), size: 14),
+                                  SizedBox(width: 3),
+                                  Text(
+                                    '4.8',
+                                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        // Optional Clean Description Line
+                        if (desc.isNotEmpty && desc.toLowerCase() != name.toLowerCase()) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            desc,
+                            style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B), height: 1.35),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
 
                   const SizedBox(height: 14),
                   const Padding(
