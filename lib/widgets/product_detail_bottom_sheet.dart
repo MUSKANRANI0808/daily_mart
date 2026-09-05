@@ -286,13 +286,13 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                       ClipRRect(
                         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                         child: Container(
-                          height: 260,
+                          height: 340,
                           width: double.infinity,
                           color: const Color(0xFFF8FAFC),
                           child: ProductBorderWrapper(
                             sellerUsername: widget.sellerUsername,
                             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                            child: _buildProductImageWidget(img, emojiSize: 90),
+                            child: _buildProductImageWidget(img, emojiSize: 120),
                           ),
                         ),
                       ),
