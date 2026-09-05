@@ -279,25 +279,23 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. HERO PRODUCT IMAGE CONTAINER (Sleek Rounded Card)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Stack(
-                      children: [
-                        // Image Box
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: Container(
-                            height: 190,
-                            width: double.infinity,
-                            color: const Color(0xFFF8FAFC),
-                            child: ProductBorderWrapper(
-                              sellerUsername: widget.sellerUsername,
-                              borderRadius: BorderRadius.circular(20),
-                              child: _buildProductImageWidget(img, emojiSize: 68),
-                            ),
+                  // 1. HERO PRODUCT IMAGE CONTAINER (Full Width Edge-to-Edge Card)
+                  Stack(
+                    children: [
+                      // Image Box (Full Width Edge-to-Edge)
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                        child: Container(
+                          height: 260,
+                          width: double.infinity,
+                          color: const Color(0xFFF8FAFC),
+                          child: ProductBorderWrapper(
+                            sellerUsername: widget.sellerUsername,
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                            child: _buildProductImageWidget(img, emojiSize: 90),
                           ),
                         ),
+                      ),
 
                         // Back Button (Top Left)
                         Positioned(
@@ -353,7 +351,6 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                           ),
                       ],
                     ),
-                  ),
 
                   // 2. PRODUCT NAME & RATE HEADER
                   Padding(
