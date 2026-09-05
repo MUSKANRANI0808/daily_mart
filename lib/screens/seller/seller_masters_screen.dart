@@ -2050,6 +2050,410 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
     );
   }
 
+  // --- 9. HEADER LOTTIE ANIMATIONS MASTER DIALOG ---
+  void _showManageHeaderAnimationsDialog() {
+    final urlController = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final username = _sellerUsername;
+
+          List<String> animationsList = AuthService.getCachedSellerHeaderAnimations(username) ?? [];
+          bool isProcessing = false;
+
+          Future<void> _pickLottieJsonFile() async {
+            try {
+              setModalState(() => isProcessing = true);
+              final FilePickerResult? result = await FilePicker.platform.pickFiles(
+                type: FileType.custom,
+                allowedExtensions: ['json'],
+                withData: true,
+              );
+
+              if (result != null && result.files.isNotEmpty) {
+                final file = result.files.first;
+                final bytes = file.bytes;
+                if (bytes != null && bytes.isNotEmpty) {
+                  final jsonStr = utf8.decode(bytes, allowMalformed: true).trim();
+                  if (jsonStr.isNotEmpty) {
+                    try {
+                      jsonDecode(jsonStr);
+                      setModalState(() {
+                        animationsList.add(jsonStr);
+                      });
+                    } catch (_) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Selected file is not a valid Lottie JSON ❌'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  }
+                }
+              }
+            } catch (e) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error picking JSON file: $e ❌'), backgroundColor: Colors.red),
+                );
+              }
+            } finally {
+              setModalState(() => isProcessing = false);
+            }
+          }
+
+          void _addUrlAnimation() {
+            final url = urlController.text.trim();
+            if (url.isEmpty) return;
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Please enter a valid http/https Lottie JSON URL ❌'), backgroundColor: Colors.red),
+              );
+              return;
+            }
+            setModalState(() {
+              animationsList.add(url);
+              urlController.clear();
+            });
+          }
+
+          void _addPresetAnimation(String presetUrl) {
+            if (animationsList.contains(presetUrl)) return;
+            setModalState(() {
+              animationsList.add(presetUrl);
+            });
+          }
+
+          return Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              left: 20,
+              right: 20,
+              top: 16,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      const CircleAvatar(
+                        radius: 18,
+                        backgroundColor: Color(0xFFF3E8FF),
+                        child: Icon(Icons.movie_filter_rounded, color: Color(0xFF8B5CF6), size: 20),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Header Lottie Animations 🎬',
+                              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Upload custom JSON animations to auto-slide in header!',
+                              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B), size: 22),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 20),
+
+                  // Upload Button & Info
+                  const Text('Add Animation (.json file or URL) *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                  const SizedBox(height: 8),
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: ElevatedButton.icon(
+                      onPressed: isProcessing ? null : _pickLottieJsonFile,
+                      icon: const Icon(Icons.upload_file_rounded, color: Colors.white, size: 20),
+                      label: Text(
+                        isProcessing ? 'Reading JSON file...' : 'Upload Lottie JSON (.json) 📤',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF8B5CF6),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // URL Input Row
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: urlController,
+                          decoration: InputDecoration(
+                            hintText: 'Or paste Lottie JSON URL (https://...)',
+                            hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: _addUrlAnimation,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0F172A),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                        child: const Text('Add ➕', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Preset Animations Chips
+                  const Text('Quick Add Presets:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF64748B))),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      {
+                        'label': '🚀 Daily Mart Express',
+                        'url': 'assets/lottie/daily_mart_exclusive.json',
+                      },
+                      {
+                        'label': '🇮🇳 Freedom Sale',
+                        'url': 'assets/lottie/freedom_sale.json',
+                      },
+                      {
+                        'label': '🪔 Diwali Lights',
+                        'url': 'assets/lottie/diwali_lights.json',
+                      },
+                      {
+                        'label': '🥦 Grocery Shopping',
+                        'url': 'assets/lottie/grocery_shopping.json',
+                      },
+                      {
+                        'label': '⚡ Flash Sale',
+                        'url': 'assets/lottie/express_flash.json',
+                      },
+                      {
+                        'label': '🌧️ Monsoon Rain',
+                        'url': 'assets/lottie/monsoon_rain.json',
+                      },
+                      {
+                        'label': '🎉 New Year',
+                        'url': 'assets/lottie/new_year.json',
+                      },
+                    ].map((preset) {
+                      final isAdded = animationsList.contains(preset['url']);
+                      return ActionChip(
+                        avatar: Icon(
+                          isAdded ? Icons.check_circle_rounded : Icons.add_circle_outline_rounded,
+                          size: 16,
+                          color: isAdded ? const Color(0xFF10B981) : const Color(0xFF8B5CF6),
+                        ),
+                        label: Text(
+                          preset['label']!,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                            color: isAdded ? const Color(0xFF047857) : const Color(0xFF4C1D95),
+                          ),
+                        ),
+                        backgroundColor: isAdded ? const Color(0xFFD1FAE5) : const Color(0xFFF3E8FF),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        onPressed: () => _addPresetAnimation(preset['url']!),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Uploaded Animations List
+                  Text(
+                    'Configured Animations (${animationsList.length}):',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                  ),
+                  const SizedBox(height: 8),
+
+                  if (animationsList.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'No animations added yet. Upload JSON files or select presets above! 🎬',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                        ),
+                      ),
+                    )
+                  else
+                    SizedBox(
+                      height: 110,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: animationsList.length,
+                        itemBuilder: (context, idx) {
+                          final animData = animationsList[idx];
+                          return Container(
+                            width: 110,
+                            margin: const EdgeInsets.only(right: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F172A),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: const Color(0xFF8B5CF6), width: 1.5),
+                            ),
+                            child: Stack(
+                              children: [
+                                // Animation Preview
+                                Positioned.fill(
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: buildSingleLottieItem(animData, fit: BoxFit.cover),
+                                  ),
+                                ),
+
+                                // Index Badge
+                                Positioned(
+                                  top: 4,
+                                  left: 4,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black70,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      '#${idx + 1}',
+                                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ),
+
+                                // Delete Button
+                                Positioned(
+                                  top: 4,
+                                  right: 4,
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      setModalState(() {
+                                        animationsList.removeAt(idx);
+                                      });
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.red,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.close_rounded, color: Colors.white, size: 14),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+
+                  const SizedBox(height: 16),
+
+                  // Live Header Preview Box
+                  const Text('Live Header Auto-Slide Preview:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                  const SizedBox(height: 8),
+                  Container(
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFF8B5CF6)),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: HeaderLottieCarouselWidget(
+                        overrideAnimations: animationsList,
+                        config: const {
+                          'color1': '#0F172A',
+                          'color2': '#1E1B4B',
+                          'color3': '#312E81',
+                          'lottie_opacity': 0.9,
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Save Button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        await AuthService.saveSellerHeaderAnimations(username, animationsList);
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('✓ Header Lottie Animations saved successfully! (${animationsList.length} total) 🎉'),
+                              backgroundColor: const Color(0xFF10B981),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0F172A),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text('Save Animations 🚀', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -2154,6 +2558,13 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                     icon: Icons.border_outer_rounded,
                     color: const Color(0xFFEC4899),
                     onTap: _showManageProductBorderDialog,
+                  ),
+                  _buildMasterCard(
+                    title: 'Header Animations 🎬',
+                    subtitle: 'Upload Lottie JSONs',
+                    icon: Icons.movie_filter_rounded,
+                    color: const Color(0xFF8B5CF6),
+                    onTap: _showManageHeaderAnimationsDialog,
                   ),
                   _buildMasterCard(
                     title: 'Search Bar Style 🔍',

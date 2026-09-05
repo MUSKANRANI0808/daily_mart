@@ -5804,5 +5804,78 @@ class AuthService {
 
     return true;
   }
+
+  static final Map<String, List<String>> _headerAnimationsCache = {};
+
+  /// Get Cached Seller Header Animations List (Instant Memory / Cache)
+  static List<String>? getCachedSellerHeaderAnimations(String sellerUsername) {
+    final cleanSeller = sellerUsername.trim().toLowerCase();
+    if (cleanSeller.isEmpty) return null;
+    return _headerAnimationsCache[cleanSeller];
+  }
+
+  /// Get Seller Header Animations List (VPS Database API + Local SharedPreferences Cache)
+  static Future<List<String>> getSellerHeaderAnimations(String sellerUsername) async {
+    final cleanSeller = sellerUsername.trim().toLowerCase();
+    if (cleanSeller.isEmpty) return [];
+
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_header_animations_$cleanSeller';
+
+    // 1. Check local cache first
+    final cachedStr = prefs.getString(cacheKey);
+    if (cachedStr != null && cachedStr.isNotEmpty) {
+      try {
+        final decoded = List<String>.from(jsonDecode(cachedStr));
+        _headerAnimationsCache[cleanSeller] = decoded;
+      } catch (_) {}
+    }
+
+    // 2. Fetch fresh from VPS API Database
+    try {
+      final res = await VpsApiService.get('get-seller-header-animations&seller_username=$cleanSeller') ??
+          await VpsApiService.get('get-seller-profile&seller_username=$cleanSeller');
+      if (res != null && res['success'] == true) {
+        final rawList = res['header_animations'] ?? res['lottie_animations'] ?? res['animations'];
+        if (rawList is List) {
+          final list = List<String>.from(rawList.map((e) => e.toString()));
+          await prefs.setString(cacheKey, jsonEncode(list));
+          _headerAnimationsCache[cleanSeller] = list;
+          return list;
+        }
+      }
+    } catch (_) {}
+
+    return _headerAnimationsCache[cleanSeller] ?? [];
+  }
+
+  /// Save Seller Header Animations List (VPS API Database + Local SharedPreferences Cache)
+  static Future<bool> saveSellerHeaderAnimations(String sellerUsername, List<String> animations) async {
+    final cleanSeller = sellerUsername.trim().toLowerCase();
+    if (cleanSeller.isEmpty) return false;
+
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_header_animations_$cleanSeller';
+
+    if (animations.isEmpty) {
+      await prefs.remove(cacheKey);
+      _headerAnimationsCache.remove(cleanSeller);
+    } else {
+      await prefs.setString(cacheKey, jsonEncode(animations));
+      _headerAnimationsCache[cleanSeller] = animations;
+    }
+
+    // Save to VPS Database
+    try {
+      await VpsApiService.post('save-seller-header-animations', {
+        'seller_username': cleanSeller,
+        'header_animations': jsonEncode(animations),
+        'animations_list': animations,
+      });
+    } catch (_) {}
+
+    return true;
+  }
 }
+
 

@@ -308,6 +308,61 @@ class _ContinuousShiningGlassBeamWidgetState extends State<ContinuousShiningGlas
   }
 }
 
+/// Helper method to build single Lottie animation from URL, Asset, JSON string or Base64 memory
+Widget buildSingleLottieItem(String rawData, {BoxFit fit = BoxFit.cover}) {
+  final clean = rawData.trim();
+  if (clean.isEmpty) return const SizedBox.shrink();
+
+  if (clean.startsWith('http://') || clean.startsWith('https://')) {
+    return Lottie.network(
+      clean,
+      fit: fit,
+      errorBuilder: (_, __, ___) => Lottie.asset(
+        'assets/lottie/daily_mart_exclusive.json',
+        fit: fit,
+        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+      ),
+    );
+  }
+
+  if (clean.startsWith('assets/')) {
+    return Lottie.asset(
+      clean,
+      fit: fit,
+      errorBuilder: (_, __, ___) => Lottie.asset(
+        'assets/lottie/daily_mart_exclusive.json',
+        fit: fit,
+        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+      ),
+    );
+  }
+
+  if (clean.contains('{') && clean.contains('}')) {
+    try {
+      return Lottie.string(
+        clean,
+        fit: fit,
+        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+      );
+    } catch (_) {}
+  }
+
+  try {
+    String base64Str = clean;
+    if (clean.contains(',')) {
+      base64Str = clean.split(',').last.trim();
+    }
+    final bytes = base64Decode(base64Str);
+    return Lottie.memory(
+      bytes,
+      fit: fit,
+      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+    );
+  } catch (_) {}
+
+  return const SizedBox.shrink();
+}
+
 /// Dynamic Festival Lottie Vector Animation Overlay Widget
 class FestivalLottieHeaderWidget extends StatelessWidget {
   final Map<String, dynamic> config;
@@ -322,33 +377,175 @@ class FestivalLottieHeaderWidget extends StatelessWidget {
       lottieUrl = 'assets/lottie/daily_mart_exclusive.json';
     }
 
-    Widget buildLottieWidget() {
-      if (lottieUrl.startsWith('http')) {
-        return Lottie.network(
-          lottieUrl,
-          fit: BoxFit.cover,
-          errorBuilder: (ctx, err, stack) => Lottie.asset(
-            'assets/lottie/daily_mart_exclusive.json',
-            fit: BoxFit.cover,
-            errorBuilder: (c, e, s) => Lottie.asset('assets/lottie/freedom_sale.json', fit: BoxFit.cover),
-          ),
-        );
-      }
-      return Lottie.asset(
-        lottieUrl,
-        fit: BoxFit.cover,
-        errorBuilder: (ctx, err, stack) => Lottie.asset(
-          'assets/lottie/freedom_sale.json',
-          fit: BoxFit.cover,
-        ),
-      );
-    }
-
     return IgnorePointer(
       child: Opacity(
         opacity: lottieOpacity.clamp(0.1, 1.0),
         child: SizedBox.expand(
-          child: buildLottieWidget(),
+          child: buildSingleLottieItem(lottieUrl),
+        ),
+      ),
+    );
+  }
+}
+
+/// Dynamic Auto-Sliding Header Lottie Animations Carousel Widget
+class HeaderLottieCarouselWidget extends StatefulWidget {
+  final String? sellerUsername;
+  final Map<String, dynamic> config;
+  final List<String>? overrideAnimations;
+
+  const HeaderLottieCarouselWidget({
+    super.key,
+    this.sellerUsername,
+    required this.config,
+    this.overrideAnimations,
+  });
+
+  @override
+  State<HeaderLottieCarouselWidget> createState() => _HeaderLottieCarouselWidgetState();
+}
+
+class _HeaderLottieCarouselWidgetState extends State<HeaderLottieCarouselWidget> {
+  List<String> _animations = [];
+  PageController? _pageController;
+  Timer? _timer;
+  int _currentPage = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAnimations();
+  }
+
+  @override
+  void didUpdateWidget(covariant HeaderLottieCarouselWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.overrideAnimations != oldWidget.overrideAnimations ||
+        widget.sellerUsername != oldWidget.sellerUsername) {
+      _loadAnimations();
+    }
+  }
+
+  Future<void> _loadAnimations() async {
+    if (widget.overrideAnimations != null) {
+      _setupCarousel(widget.overrideAnimations!);
+      return;
+    }
+
+    final sUsername = widget.sellerUsername;
+    if (sUsername != null && sUsername.isNotEmpty) {
+      final cached = AuthService.getCachedSellerHeaderAnimations(sUsername);
+      if (cached != null && cached.isNotEmpty) {
+        _setupCarousel(cached);
+      }
+
+      final fresh = await AuthService.getSellerHeaderAnimations(sUsername);
+      if (mounted) {
+        _setupCarousel(fresh);
+      }
+      return;
+    }
+
+    _setupCarousel([]);
+  }
+
+  void _setupCarousel(List<String> anims) {
+    if (!mounted) return;
+    _timer?.cancel();
+
+    setState(() {
+      _animations = anims;
+      _currentPage = 0;
+    });
+
+    if (_animations.length > 1) {
+      _pageController?.dispose();
+      _pageController = PageController(initialPage: 0);
+      _timer = Timer.periodic(const Duration(seconds: 4), (timer) {
+        if (!mounted || _animations.length <= 1 || _pageController == null || !_pageController!.hasClients) return;
+        _currentPage = (_currentPage + 1) % _animations.length;
+        _pageController!.animateToPage(
+          _currentPage,
+          duration: const Duration(milliseconds: 700),
+          curve: Curves.easeInOut,
+        );
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _pageController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double lottieOpacity = (widget.config['lottie_opacity'] as num?)?.toDouble() ?? 0.85;
+
+    // Fallback to default festival animation if no custom animations uploaded
+    if (_animations.isEmpty) {
+      return FestivalLottieHeaderWidget(config: widget.config);
+    }
+
+    // Single Animation
+    if (_animations.length == 1) {
+      return IgnorePointer(
+        child: Opacity(
+          opacity: lottieOpacity.clamp(0.1, 1.0),
+          child: SizedBox.expand(
+            child: buildSingleLottieItem(_animations.first),
+          ),
+        ),
+      );
+    }
+
+    // Multi-Animation Auto-Sliding PageView Carousel
+    return IgnorePointer(
+      child: Opacity(
+        opacity: lottieOpacity.clamp(0.1, 1.0),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            PageView.builder(
+              controller: _pageController,
+              onPageChanged: (index) {
+                if (mounted) {
+                  setState(() {
+                    _currentPage = index;
+                  });
+                }
+              },
+              itemCount: _animations.length,
+              itemBuilder: (ctx, index) {
+                return buildSingleLottieItem(_animations[index]);
+              },
+            ),
+
+            // Subtle Sliding Indicator Dots
+            Positioned(
+              bottom: 8,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(_animations.length, (idx) {
+                  final isSel = idx == _currentPage;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width: isSel ? 18 : 6,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: isSel ? Colors.white : Colors.white.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ],
         ),
       ),
     );

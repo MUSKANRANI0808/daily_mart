@@ -916,9 +916,12 @@ class _SellerDashboardState extends State<SellerDashboard> {
                       ),
                     ),
 
-                    // Flipkart Style Festive Lottie Animation Overlay
+                    // Flipkart Style Festive & Custom Seller Lottie Animation Overlay Carousel
                     Positioned.fill(
-                      child: FestivalLottieHeaderWidget(config: _headerThemeConfig),
+                      child: HeaderLottieCarouselWidget(
+                        sellerUsername: _sellerUsername,
+                        config: _headerThemeConfig,
+                      ),
                     ),
 
                     // Continuous Metallic Shining Glass Light Beam
