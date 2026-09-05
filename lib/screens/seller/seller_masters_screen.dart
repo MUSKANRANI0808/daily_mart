@@ -2230,47 +2230,6 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                   const Text('Header Background Colors 🎨', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
                   const SizedBox(height: 8),
 
-                  // Preset Theme Swatches
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      {'name': '🔵 Royal Blue', 'c1': '#1D4ED8', 'c2': '#3B82F6', 'c3': '#60A5FA'},
-                      {'name': '🌙 Midnight Navy', 'c1': '#0F172A', 'c2': '#1E1B4B', 'c3': '#312E81'},
-                      {'name': '⚡ Sky Blue', 'c1': '#0284C7', 'c2': '#0EA5E9', 'c3': '#38BDF8'},
-                      {'name': '🌲 Emerald Green', 'c1': '#064E3B', 'c2': '#047857', 'c3': '#10B981'},
-                      {'name': '🌅 Sunset Red', 'c1': '#881337', 'c2': '#BE123C', 'c3': '#E11D48'},
-                      {'name': '👑 Golden Amber', 'c1': '#451A03', 'c2': '#78350F', 'c3': '#D97706'},
-                      {'name': '⚡ Orange Flare', 'c1': '#7C2D12', 'c2': '#C2410C', 'c3': '#EA580C'},
-                      {'name': '🟣 Royal Purple', 'c1': '#2E1065', 'c2': '#581C87', 'c3': '#7E22CE'},
-                    ].map((theme) {
-                      return ActionChip(
-                        avatar: Container(
-                          width: 14,
-                          height: 14,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: HeaderThemeHelper.hexToColor(theme['c2']!),
-                          ),
-                        ),
-                        label: Text(
-                          theme['name']!,
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                        ),
-                        backgroundColor: const Color(0xFFF1F5F9),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                        onPressed: () {
-                          setModalState(() {
-                            headerTheme['color1'] = theme['c1'];
-                            headerTheme['color2'] = theme['c2'];
-                            headerTheme['color3'] = theme['c3'];
-                          });
-                        },
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 12),
-
                   // Individual Custom Color Pickers
                   Row(
                     children: [
