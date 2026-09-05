@@ -2053,12 +2053,18 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
   }
 
   // --- 9. HEADER LOTTIE ANIMATIONS MASTER DIALOG ---
-  void _showManageHeaderAnimationsDialog() {
+  // --- 9. HEADER LOTTIE ANIMATIONS MASTER DIALOG ---
+  void _showManageHeaderAnimationsDialog() async {
     final username = _sellerUsername;
     final urlController = TextEditingController();
     final jsonCodeController = TextEditingController();
     List<String> animationsList = List<String>.from(AuthService.getCachedSellerHeaderAnimations(username) ?? []);
     bool isProcessing = false;
+
+    final initialHeaderConfig = await AuthService.getHeaderThemeConfig();
+    Map<String, dynamic> headerTheme = Map<String, dynamic>.from(initialHeaderConfig);
+
+    if (!mounted) return;
 
     showModalBottomSheet(
       context: context,
@@ -2091,7 +2097,7 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                 } catch (err) {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
+                      const SnackBar(
                         content: Text('Selected file is not a valid Lottie JSON format ❌'),
                         backgroundColor: Colors.red,
                         behavior: SnackBarBehavior.floating,
@@ -2161,13 +2167,6 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
             });
           }
 
-          void _addPresetAnimation(String presetUrl) {
-            if (animationsList.contains(presetUrl)) return;
-            setModalState(() {
-              animationsList.add(presetUrl);
-            });
-          }
-
           return Container(
             decoration: const BoxDecoration(
               color: Colors.white,
@@ -2208,12 +2207,12 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Header Lottie Animations 🎬',
+                              'Header Theme & Animations 🎬🎨',
                               style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                             ),
                             SizedBox(height: 2),
                             Text(
-                              'Upload custom JSON animations to auto-slide in header!',
+                              'Upload custom JSON animations & customize header background color!',
                               style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                             ),
                           ],
@@ -2226,6 +2225,151 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                     ],
                   ),
                   const Divider(height: 20),
+
+                  // Header Background Colors Section
+                  const Text('Header Background Colors 🎨', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                  const SizedBox(height: 8),
+
+                  // Preset Theme Swatches
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      {'name': '🔵 Royal Blue', 'c1': '#1D4ED8', 'c2': '#3B82F6', 'c3': '#60A5FA'},
+                      {'name': '🌙 Midnight Navy', 'c1': '#0F172A', 'c2': '#1E1B4B', 'c3': '#312E81'},
+                      {'name': '⚡ Sky Blue', 'c1': '#0284C7', 'c2': '#0EA5E9', 'c3': '#38BDF8'},
+                      {'name': '🌲 Emerald Green', 'c1': '#064E3B', 'c2': '#047857', 'c3': '#10B981'},
+                      {'name': '🌅 Sunset Red', 'c1': '#881337', 'c2': '#BE123C', 'c3': '#E11D48'},
+                      {'name': '👑 Golden Amber', 'c1': '#451A03', 'c2': '#78350F', 'c3': '#D97706'},
+                      {'name': '⚡ Orange Flare', 'c1': '#7C2D12', 'c2': '#C2410C', 'c3': '#EA580C'},
+                      {'name': '🟣 Royal Purple', 'c1': '#2E1065', 'c2': '#581C87', 'c3': '#7E22CE'},
+                    ].map((theme) {
+                      return ActionChip(
+                        avatar: Container(
+                          width: 14,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: HeaderThemeHelper.hexToColor(theme['c2']!),
+                          ),
+                        ),
+                        label: Text(
+                          theme['name']!,
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                        ),
+                        backgroundColor: const Color(0xFFF1F5F9),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        onPressed: () {
+                          setModalState(() {
+                            headerTheme['color1'] = theme['c1'];
+                            headerTheme['color2'] = theme['c2'];
+                            headerTheme['color3'] = theme['c3'];
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Individual Custom Color Pickers
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            FullColorPickerDialog.show(
+                              context,
+                              initialHex: headerTheme['color1']?.toString() ?? '#0F172A',
+                              onColorSelected: (selectedHex) {
+                                setModalState(() {
+                                  headerTheme['color1'] = selectedHex;
+                                });
+                              },
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFCBD5E1)),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 22,
+                                  height: 22,
+                                  decoration: BoxDecoration(
+                                    color: HeaderThemeHelper.hexToColor(headerTheme['color1']?.toString() ?? '#0F172A'),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.black12),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Color 1', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+                                      Text(headerTheme['color1']?.toString() ?? '#0F172A', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            FullColorPickerDialog.show(
+                              context,
+                              initialHex: headerTheme['color2']?.toString() ?? '#1E1B4B',
+                              onColorSelected: (selectedHex) {
+                                setModalState(() {
+                                  headerTheme['color2'] = selectedHex;
+                                });
+                              },
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFCBD5E1)),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 22,
+                                  height: 22,
+                                  decoration: BoxDecoration(
+                                    color: HeaderThemeHelper.hexToColor(headerTheme['color2']?.toString() ?? '#1E1B4B'),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.black12),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Color 2', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+                                      Text(headerTheme['color2']?.toString() ?? '#1E1B4B', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
 
                   // Upload Button & Info
                   const Text('Add Animation (.json file or URL) *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
@@ -2308,8 +2452,6 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                   ),
                   const SizedBox(height: 14),
 
-
-
                   // Uploaded Animations List
                   Text(
                     'Configured Animations (${animationsList.length}):',
@@ -2327,7 +2469,7 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                       ),
                       child: const Center(
                         child: Text(
-                          'No animations added yet. Upload JSON files or select presets above! 🎬',
+                          'No animations added yet. Upload JSON file or paste code above! 🎬',
                           textAlign: TextAlign.center,
                           style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                         ),
@@ -2405,26 +2547,20 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
 
                   const SizedBox(height: 16),
 
-                  // Live Header Preview Box
+                  // Live Header Preview Box with Selected Gradient Background & Animation
                   const Text('Live Header Auto-Slide Preview:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
                   const SizedBox(height: 8),
                   Container(
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0F172A),
+                    height: 110,
+                    decoration: HeaderThemeHelper.buildDecoration(headerTheme).copyWith(
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFF8B5CF6)),
+                      border: Border.all(color: const Color(0xFF8B5CF6), width: 1.5),
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(16),
                       child: HeaderLottieCarouselWidget(
                         overrideAnimations: animationsList,
-                        config: const {
-                          'color1': '#0F172A',
-                          'color2': '#1E1B4B',
-                          'color3': '#312E81',
-                          'lottie_opacity': 0.9,
-                        },
+                        config: headerTheme,
                       ),
                     ),
                   ),
@@ -2437,11 +2573,12 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                     child: ElevatedButton(
                       onPressed: () async {
                         await AuthService.saveSellerHeaderAnimations(username, animationsList);
+                        await AuthService.saveHeaderThemeConfig(headerTheme);
                         if (ctx.mounted) Navigator.pop(ctx);
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('✓ Header Lottie Animations saved successfully! (${animationsList.length} total) 🎉'),
+                              content: Text('✓ Header Theme & Animations saved successfully! 🎉'),
                               backgroundColor: const Color(0xFF10B981),
                               behavior: SnackBarBehavior.floating,
                             ),
@@ -2452,7 +2589,7 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                         backgroundColor: const Color(0xFF0F172A),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: const Text('Save Animations 🚀', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                      child: const Text('Save Theme & Animations 🚀', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
                     ),
                   ),
                 ],
