@@ -2066,18 +2066,29 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
           List<String> animationsList = AuthService.getCachedSellerHeaderAnimations(username) ?? [];
           bool isProcessing = false;
 
+          final jsonCodeController = TextEditingController();
+
           Future<void> _pickLottieJsonFile() async {
             try {
               setModalState(() => isProcessing = true);
               final List<PlatformFile> files = await FilePicker.pickFiles(
-                type: FileType.custom,
-                allowedExtensions: ['json'],
+                type: FileType.any,
               );
 
               if (files.isNotEmpty) {
                 final file = files.first;
-                final bytes = await file.readAsBytes();
-                if (bytes.isNotEmpty) {
+
+                // 1. Web / Memory Bytes first
+                Uint8List? bytes = file.bytes;
+
+                // 2. Fallback readAsBytes for Mobile / Desktop
+                if (bytes == null || bytes.isEmpty) {
+                  try {
+                    bytes = await file.readAsBytes();
+                  } catch (_) {}
+                }
+
+                if (bytes != null && bytes.isNotEmpty) {
                   final jsonStr = utf8.decode(bytes, allowMalformed: true).trim();
                   if (jsonStr.isNotEmpty) {
                     try {
@@ -2085,27 +2096,82 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                       setModalState(() {
                         animationsList.add(jsonStr);
                       });
-                    } catch (_) {
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Selected file is not a valid Lottie JSON ❌'),
+                            content: Text('✓ Lottie JSON animation added successfully! 🎉'),
+                            backgroundColor: Color(0xFF10B981),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    } catch (err) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('File is not a valid Lottie JSON format ❌'),
                             backgroundColor: Colors.red,
+                            behavior: SnackBarBehavior.floating,
                           ),
                         );
                       }
                     }
+                  }
+                } else {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Could not read file data. Try pasting JSON text below! ❌'),
+                        backgroundColor: Colors.orange,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
                   }
                 }
               }
             } catch (e) {
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Error picking JSON file: $e ❌'), backgroundColor: Colors.red),
+                  SnackBar(
+                    content: Text('Upload error: $e ❌ (Try pasting JSON code below!)'),
+                    backgroundColor: Colors.red,
+                    behavior: SnackBarBehavior.floating,
+                  ),
                 );
               }
             } finally {
               setModalState(() => isProcessing = false);
+            }
+          }
+
+          void _addJsonTextAnimation() {
+            final text = jsonCodeController.text.trim();
+            if (text.isEmpty) return;
+            try {
+              jsonDecode(text);
+              setModalState(() {
+                animationsList.add(text);
+                jsonCodeController.clear();
+              });
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('✓ Pasted Lottie JSON animation added! 🎉'),
+                    backgroundColor: Color(0xFF10B981),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            } catch (_) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Pasted text is not valid Lottie JSON ❌'),
+                    backgroundColor: Colors.red,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
             }
           }
 
@@ -2236,6 +2302,36 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         ),
                         child: const Text('Add ➕', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Paste JSON Code Row
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: jsonCodeController,
+                          maxLines: 1,
+                          decoration: InputDecoration(
+                            hintText: 'Or paste JSON code content ({"v":"5..."})',
+                            hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: _addJsonTextAnimation,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF10B981),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                        child: const Text('Add JSON 📋', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                       ),
                     ],
                   ),
