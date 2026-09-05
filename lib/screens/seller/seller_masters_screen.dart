@@ -2658,31 +2658,69 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                     width: double.infinity,
                     height: 46,
                     child: ElevatedButton(
-                      onPressed: () async {
-                        final List<String> serialized = animationsList.map((item) => jsonEncode(item)).toList();
-                        await AuthService.saveSellerHeaderAnimations(username, serialized);
-                        if (animationsList.isNotEmpty && selectedIndex < animationsList.length) {
-                          headerTheme['color1'] = animationsList[selectedIndex]['color1'];
-                          headerTheme['color2'] = animationsList[selectedIndex]['color2'];
-                          headerTheme.remove('color3');
-                        }
-                        await AuthService.saveHeaderThemeConfig(headerTheme);
-                        if (ctx.mounted) Navigator.pop(ctx);
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('✓ Header Theme & Animations saved successfully! 🎉'),
-                              backgroundColor: Color(0xFF10B981),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        }
-                      },
+                      onPressed: isProcessing
+                          ? null
+                          : () async {
+                              setModalState(() => isProcessing = true);
+                              try {
+                                final List<String> serialized = animationsList.map((item) => jsonEncode(item)).toList();
+                                await AuthService.saveSellerHeaderAnimations(username, serialized);
+                                if (animationsList.isNotEmpty && selectedIndex < animationsList.length) {
+                                  headerTheme['color1'] = animationsList[selectedIndex]['color1'];
+                                  headerTheme['color2'] = animationsList[selectedIndex]['color2'];
+                                  headerTheme.remove('color3');
+                                }
+                                await AuthService.saveHeaderThemeConfig(headerTheme);
+                                if (ctx.mounted) Navigator.pop(ctx);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('✓ Header Theme & Animations saved successfully! 🎉'),
+                                      backgroundColor: Color(0xFF10B981),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
+                              } catch (err) {
+                                setModalState(() => isProcessing = false);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Save error: $err ❌'),
+                                      backgroundColor: Colors.red,
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF0F172A),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: const Text('Save Theme & Animations 🚀', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                      child: isProcessing
+                          ? const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2.5,
+                                  ),
+                                ),
+                                SizedBox(width: 10),
+                                Text(
+                                  'Saving Theme & Animations...',
+                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                ),
+                              ],
+                            )
+                          : const Text(
+                              'Save Theme & Animations 🚀',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
                     ),
                   ),
                 ],
