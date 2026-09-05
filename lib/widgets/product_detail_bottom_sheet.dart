@@ -628,11 +628,7 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> {
                                       ),
                                       child: ClipRRect(
                                         borderRadius: BorderRadius.circular(12),
-                                        child: ProductBorderWrapper(
-                                          sellerUsername: widget.sellerUsername,
-                                          borderRadius: BorderRadius.circular(12),
-                                          child: _buildProductImageWidget(rImg, emojiSize: 36),
-                                        ),
+                                        child: _buildProductImageWidget(rImg, emojiSize: 36),
                                       ),
                                     ),
                                     const SizedBox(height: 6),

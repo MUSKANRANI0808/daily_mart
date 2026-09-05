@@ -1575,11 +1575,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                       ),
                       child: ClipRRect(
                         borderRadius: const BorderRadius.all(Radius.circular(12)),
-                        child: ProductBorderWrapper(
-                          sellerUsername: widget.sellerUsername,
-                          borderRadius: const BorderRadius.all(Radius.circular(12)),
-                          child: _buildProductImageWidget(img, emojiSize: 34),
-                        ),
+                        child: _buildProductImageWidget(img, emojiSize: 34),
                       ),
                     ),
                     Positioned(
@@ -1692,11 +1688,7 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
                     ),
                     child: ClipRRect(
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                      child: ProductBorderWrapper(
-                        sellerUsername: widget.sellerUsername,
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                        child: _buildProductImageWidget(img, emojiSize: isCompact ? 28 : 40),
-                      ),
+                      child: _buildProductImageWidget(img, emojiSize: isCompact ? 28 : 40),
                     ),
                   ),
                   // Stock Qty Badge

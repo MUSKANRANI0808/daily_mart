@@ -3168,11 +3168,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                                       ),
                                       child: ClipRRect(
                                         borderRadius: BorderRadius.circular(6),
-                                        child: ProductBorderWrapper(
-                                          sellerUsername: widget.seller.username,
-                                          borderRadius: BorderRadius.circular(6),
-                                          child: _buildProductImageWidget(img, emojiSize: 15),
-                                        ),
+                                        child: _buildProductImageWidget(img, emojiSize: 15),
                                       ),
                                     ),
                                     const SizedBox(width: 8),
@@ -3824,7 +3820,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
               ],
             ),
           );
-        },
+        },  
       ),
     );
   }
