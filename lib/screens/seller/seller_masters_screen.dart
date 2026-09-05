@@ -2054,7 +2054,11 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
 
   // --- 9. HEADER LOTTIE ANIMATIONS MASTER DIALOG ---
   void _showManageHeaderAnimationsDialog() {
+    final username = _sellerUsername;
     final urlController = TextEditingController();
+    final jsonCodeController = TextEditingController();
+    List<String> animationsList = List<String>.from(AuthService.getCachedSellerHeaderAnimations(username) ?? []);
+    bool isProcessing = false;
 
     showModalBottomSheet(
       context: context,
@@ -2062,12 +2066,6 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
-          final username = _sellerUsername;
-
-          List<String> animationsList = AuthService.getCachedSellerHeaderAnimations(username) ?? [];
-          bool isProcessing = false;
-
-          final jsonCodeController = TextEditingController();
 
           Future<void> _pickLottieJsonFile() async {
             try {
