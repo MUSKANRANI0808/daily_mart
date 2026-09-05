@@ -5758,9 +5758,22 @@ class AuthService {
     // 2. Fetch fresh from VPS API Database
     try {
       final res = await VpsApiService.get('get-seller-product-border&seller_username=$cleanSeller') ??
-          await VpsApiService.get('get-seller-profile&seller_username=$cleanSeller');
-      if (res != null && res['success'] == true) {
-        final borderImg = (res['border_image'] ?? res['product_border'] ?? res['border'] ?? '').toString().trim();
+          await VpsApiService.get('get-seller-product-border&username=$cleanSeller') ??
+          await VpsApiService.get('get-seller-profile&seller_username=$cleanSeller') ??
+          await VpsApiService.get('get-seller-profile&username=$cleanSeller') ??
+          await VpsApiService.get('get-seller-masters&seller_username=$cleanSeller');
+
+      if (res != null) {
+        final borderImg = (res['border_image'] ??
+                res['product_border'] ??
+                res['border'] ??
+                res['seller']?['border_image'] ??
+                res['seller']?['product_border'] ??
+                res['seller']?['border'] ??
+                '')
+            .toString()
+            .trim();
+
         if (borderImg.isNotEmpty) {
           await prefs.setString(cacheKey, borderImg);
           _productBorderCache[cleanSeller] = borderImg;
@@ -5797,6 +5810,15 @@ class AuthService {
     try {
       await VpsApiService.post('save-seller-product-border', {
         'seller_username': cleanSeller,
+        'username': cleanSeller,
+        'border_image': cleanData,
+        'product_border': cleanData,
+        'border': cleanData,
+      });
+
+      await VpsApiService.post('update-seller-profile', {
+        'seller_username': cleanSeller,
+        'username': cleanSeller,
         'border_image': cleanData,
         'product_border': cleanData,
       });
@@ -5806,6 +5828,25 @@ class AuthService {
   }
 
   static final Map<String, List<String>> _headerAnimationsCache = {};
+
+  static List<String> _parseAnimationsList(dynamic raw) {
+    if (raw == null) return [];
+    if (raw is List) {
+      return raw.map((e) => e.toString()).where((s) => s.trim().isNotEmpty).toList();
+    }
+    if (raw is String && raw.trim().isNotEmpty) {
+      final str = raw.trim();
+      if (str.startsWith('[') && str.endsWith(']')) {
+        try {
+          final List decoded = jsonDecode(str);
+          return decoded.map((e) => e.toString()).where((s) => s.trim().isNotEmpty).toList();
+        } catch (_) {}
+      } else {
+        return [str];
+      }
+    }
+    return [];
+  }
 
   /// Get Cached Seller Header Animations List (Instant Memory / Cache)
   static List<String>? getCachedSellerHeaderAnimations(String sellerUsername) {
@@ -5834,14 +5875,25 @@ class AuthService {
     // 2. Fetch fresh from VPS API Database
     try {
       final res = await VpsApiService.get('get-seller-header-animations&seller_username=$cleanSeller') ??
-          await VpsApiService.get('get-seller-profile&seller_username=$cleanSeller');
-      if (res != null && res['success'] == true) {
-        final rawList = res['header_animations'] ?? res['lottie_animations'] ?? res['animations'];
-        if (rawList is List) {
-          final list = List<String>.from(rawList.map((e) => e.toString()));
-          await prefs.setString(cacheKey, jsonEncode(list));
-          _headerAnimationsCache[cleanSeller] = list;
-          return list;
+          await VpsApiService.get('get-seller-header-animations&username=$cleanSeller') ??
+          await VpsApiService.get('get-seller-profile&seller_username=$cleanSeller') ??
+          await VpsApiService.get('get-seller-profile&username=$cleanSeller') ??
+          await VpsApiService.get('get-seller-masters&seller_username=$cleanSeller');
+
+      if (res != null) {
+        final raw = res['header_animations'] ??
+            res['lottie_animations'] ??
+            res['animations'] ??
+            res['seller']?['header_animations'] ??
+            res['seller']?['lottie_animations'] ??
+            res['seller']?['animations'] ??
+            res['data']?['header_animations'];
+
+        final List<String> fetched = _parseAnimationsList(raw);
+        if (fetched.isNotEmpty) {
+          await prefs.setString(cacheKey, jsonEncode(fetched));
+          _headerAnimationsCache[cleanSeller] = fetched;
+          return fetched;
         }
       }
     } catch (_) {}
@@ -5865,12 +5917,29 @@ class AuthService {
       _headerAnimationsCache[cleanSeller] = animations;
     }
 
+    final jsonStr = jsonEncode(animations);
+
     // Save to VPS Database
     try {
       await VpsApiService.post('save-seller-header-animations', {
         'seller_username': cleanSeller,
-        'header_animations': jsonEncode(animations),
+        'username': cleanSeller,
+        'header_animations': jsonStr,
+        'lottie_animations': jsonStr,
+        'animations': jsonStr,
         'animations_list': animations,
+      });
+
+      await VpsApiService.post('update-seller-profile', {
+        'seller_username': cleanSeller,
+        'username': cleanSeller,
+        'header_animations': jsonStr,
+      });
+
+      await VpsApiService.post('save-seller-masters', {
+        'seller_username': cleanSeller,
+        'username': cleanSeller,
+        'header_animations': jsonStr,
       });
     } catch (_) {}
 
