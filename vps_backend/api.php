@@ -1433,6 +1433,7 @@ if ($action == 'get-header-theme') {
     $qty = isset($input['qty']) ? (int)$input['qty'] : 1;
     if ($qty <= 0) $qty = 1;
     $rate = isset($input['rate']) ? (float)$input['rate'] : 0.0;
+    $purchase_rate = isset($input['purchase_rate']) ? (float)$input['purchase_rate'] : (isset($input['p_rate']) ? (float)$input['p_rate'] : 0.0);
     $button_text = isset($input['button_text']) && !empty(trim($input['button_text'])) ? trim($input['button_text']) : 'Buy Now';
 
     if (empty($seller_username) || empty($name)) {
@@ -1453,9 +1454,14 @@ if ($action == 'get-header-theme') {
         @$conn->query("ALTER TABLE seller_products ADD COLUMN section VARCHAR(255) DEFAULT NULL");
     }
 
-    $stmt = $conn->prepare("INSERT INTO seller_products (seller_username, name, description, unit, category, section, qty, rate, image_url, button_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $colCheckPurRate = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'purchase_rate'");
+    if (!$colCheckPurRate || $colCheckPurRate->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_products ADD COLUMN purchase_rate DECIMAL(10,2) DEFAULT 0.00");
+    }
+
+    $stmt = $conn->prepare("INSERT INTO seller_products (seller_username, name, description, unit, category, section, qty, rate, purchase_rate, image_url, button_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     if ($stmt) {
-        $stmt->bind_param("sssssidsss", $seller_username, $name, $description, $unit, $category, $section, $qty, $rate, $image_url, $button_text);
+        $stmt->bind_param("sssssiddsss", $seller_username, $name, $description, $unit, $category, $section, $qty, $rate, $purchase_rate, $image_url, $button_text);
         if ($stmt->execute()) {
             $newId = $stmt->insert_id;
             echo json_encode([
@@ -1471,6 +1477,7 @@ if ($action == 'get-header-theme') {
                     "section" => $section,
                     "qty" => $qty,
                     "rate" => $rate,
+                    "purchase_rate" => $purchase_rate,
                     "image_url" => $image_url,
                     "button_text" => $button_text
                 ]
@@ -1643,6 +1650,7 @@ if ($action == 'get-header-theme') {
     $qty = isset($input['qty']) ? (int)$input['qty'] : 1;
     if ($qty <= 0) $qty = 1;
     $rate = isset($input['rate']) ? (float)$input['rate'] : 0.0;
+    $purchase_rate = isset($input['purchase_rate']) ? (float)$input['purchase_rate'] : (isset($input['p_rate']) ? (float)$input['p_rate'] : 0.0);
     $image_url = isset($input['image_url']) ? trim($input['image_url']) : (isset($input['image']) ? trim($input['image']) : '');
     $button_text = isset($input['button_text']) && !empty(trim($input['button_text'])) ? trim($input['button_text']) : 'Buy Now';
 
@@ -1651,9 +1659,14 @@ if ($action == 'get-header-theme') {
         exit();
     }
 
-    $stmt = $conn->prepare("UPDATE seller_products SET name = ?, description = ?, unit = ?, category = ?, section = ?, qty = ?, rate = ?, image_url = ?, button_text = ? WHERE id = ?");
+    $colCheckPurRate = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'purchase_rate'");
+    if (!$colCheckPurRate || $colCheckPurRate->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_products ADD COLUMN purchase_rate DECIMAL(10,2) DEFAULT 0.00");
+    }
+
+    $stmt = $conn->prepare("UPDATE seller_products SET name = ?, description = ?, unit = ?, category = ?, section = ?, qty = ?, rate = ?, purchase_rate = ?, image_url = ?, button_text = ? WHERE id = ?");
     if ($stmt) {
-        $stmt->bind_param("sssssidssi", $name, $description, $unit, $category, $section, $qty, $rate, $image_url, $button_text, $id);
+        $stmt->bind_param("sssssiddssi", $name, $description, $unit, $category, $section, $qty, $rate, $purchase_rate, $image_url, $button_text, $id);
         if ($stmt->execute()) {
             echo json_encode(["success" => true, "message" => "Product updated successfully"]);
             exit();

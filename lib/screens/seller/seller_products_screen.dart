@@ -1920,6 +1920,9 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     final qtyController = TextEditingController(
       text: isEditing ? safeInt(productToEdit['qty'], 1).toString() : '1',
     );
+    final purchaseRateController = TextEditingController(
+      text: isEditing ? (safeDouble(productToEdit['purchase_rate'], 0.0) > 0 ? safeDouble(productToEdit['purchase_rate'], 0.0).toString() : '') : '',
+    );
     final rateController = TextEditingController(
       text: isEditing ? safeDouble(productToEdit['rate'], 0.0).toString() : '',
     );
@@ -2374,23 +2377,26 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                             );
                           }).toList(),
                         ),
-                  // Quantity & Price Row
+                  
+                  // Quantity, Purchase Rate (P. Rate) & Rate / Price Row
                   Row(
                     children: [
                       // Qty Input
                       Expanded(
+                        flex: 3,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Quantity (Qty) *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                            const Text('Qty *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A))),
                             const SizedBox(height: 6),
                             TextField(
                               controller: qtyController,
                               keyboardType: TextInputType.number,
+                              onChanged: (val) => setModalState(() {}),
                               decoration: InputDecoration(
                                 hintText: '1',
                                 isDense: true,
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
@@ -2401,27 +2407,58 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      // Rate Input
+                      const SizedBox(width: 8),
+                      // Purchase Rate (P. Rate ₹) Input
                       Expanded(
+                        flex: 4,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Rate / Price (₹) *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                            const Text('P. Rate (₹)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0284C7))),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: purchaseRateController,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              onChanged: (val) => setModalState(() {}),
+                              decoration: InputDecoration(
+                                prefixText: '₹ ',
+                                prefixStyle: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0284C7), fontSize: 13.5),
+                                hintText: '0.00',
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: Color(0xFF0284C7), width: 2),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Sale Rate Input
+                      Expanded(
+                        flex: 4,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Rate / Price (₹) *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF059669))),
                             const SizedBox(height: 6),
                             TextField(
                               controller: rateController,
                               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              onChanged: (val) => setModalState(() {}),
                               decoration: InputDecoration(
                                 prefixText: '₹ ',
-                                prefixStyle: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF059669), fontSize: 15),
+                                prefixStyle: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF059669), fontSize: 13.5),
                                 hintText: '0.00',
                                 isDense: true,
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 2),
+                                  borderSide: const BorderSide(color: Color(0xFF10B981), width: 2),
                                 ),
                               ),
                             ),
@@ -2430,7 +2467,76 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 10),
+
+                  // Live Margin Calculation Card / Badge
+                  Builder(
+                    builder: (context) {
+                      final double pRate = double.tryParse(purchaseRateController.text.trim()) ?? 0.0;
+                      final double sRate = double.tryParse(rateController.text.trim()) ?? 0.0;
+                      final int qty = int.tryParse(qtyController.text.trim()) ?? 1;
+
+                      if (pRate <= 0 || sRate <= 0) {
+                        return const SizedBox.shrink();
+                      }
+
+                      final double margin = sRate - pRate;
+                      final double marginPercent = pRate > 0 ? ((margin / pRate) * 100) : 0.0;
+                      final double totalMargin = margin * (qty > 0 ? qty : 1);
+                      final bool isProfit = margin >= 0;
+
+                      final bgClr = isProfit ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2);
+                      final borderClr = isProfit ? const Color(0xFFA7F3D0) : const Color(0xFFFCA5A5);
+                      final textClr = isProfit ? const Color(0xFF047857) : const Color(0xFFDC2626);
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: bgClr,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: borderClr, width: 1.2),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isProfit ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                              color: textClr,
+                              size: 22,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        isProfit ? 'Profit Margin / Unit:' : 'Loss / Unit:',
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: textClr),
+                                      ),
+                                      Text(
+                                        '₹${margin.abs().toStringAsFixed(2)} (${marginPercent.abs().toStringAsFixed(1)}%)',
+                                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.5, color: textClr),
+                                      ),
+                                    ],
+                                  ),
+                                  if (qty > 1) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Total ${isProfit ? "Profit" : "Loss"} ($qty qty): ₹${totalMargin.abs().toStringAsFixed(2)}',
+                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: textClr.withValues(alpha: 0.85)),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
 
                   // Custom Action Button Text (e.g. Buy Now, Shop Now, Order Now)
                   const Text('Card Action Button Text (Optional)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
@@ -2458,6 +2564,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                       final pName = nameController.text.trim();
                       final pDesc = descController.text.trim();
                       final pQty = int.tryParse(qtyController.text.trim()) ?? 1;
+                      final pPurRate = double.tryParse(purchaseRateController.text.trim()) ?? 0.0;
                       final pRateStr = rateController.text.trim();
                       final pRate = double.tryParse(pRateStr) ?? 0.0;
                       final pBtnText = buttonTextController.text.trim().isNotEmpty ? buttonTextController.text.trim() : 'Buy Now';
@@ -2492,6 +2599,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           section: selectedSection,
                           qty: pQty,
                           rate: pRate,
+                          purchaseRate: pPurRate,
                           imageUrl: prodImageUrl,
                           buttonText: pBtnText,
                         );
@@ -2505,6 +2613,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           section: selectedSection,
                           qty: pQty,
                           rate: pRate,
+                          purchaseRate: pPurRate,
                           imageUrl: prodImageUrl,
                           buttonText: pBtnText,
                         );

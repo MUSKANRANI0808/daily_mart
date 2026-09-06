@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
@@ -25,6 +26,9 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
   double _totalRevenue = 0.0;
   double _cashRevenue = 0.0;
   double _onlineRevenue = 0.0;
+  double _totalPurchaseCost = 0.0;
+  double _totalProfit = 0.0;
+  Map<String, double> _catalogPurchaseRates = {};
   int _totalOrdersCount = 0;
 
   int _allCount = 0;
@@ -62,6 +66,8 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
           _totalRevenue = 0.0;
           _cashRevenue = 0.0;
           _onlineRevenue = 0.0;
+          _totalPurchaseCost = 0.0;
+          _totalProfit = 0.0;
           _totalOrdersCount = 0;
           _allCount = 0;
           _unpaidCount = 0;
@@ -74,6 +80,20 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
     }
 
     try {
+      // 0. Fetch catalog product purchase rates for profit lookup
+      try {
+        final catalogProds = await AuthService.getCachedSellerProducts(sellerUser);
+        final Map<String, double> purMap = {};
+        for (var p in catalogProds) {
+          final name = (p['name'] ?? '').toString().trim().toLowerCase();
+          final pRate = double.tryParse(p['purchase_rate']?.toString() ?? '0') ?? 0.0;
+          if (name.isNotEmpty && pRate > 0) {
+            purMap[name] = pRate;
+          }
+        }
+        _catalogPurchaseRates = purMap;
+      } catch (_) {}
+
       // 1. Instant 0ms cache load
       final cachedOrders = await AuthService.getCachedSellerCustomerOrders(sellerUser);
       if (cachedOrders.isNotEmpty && mounted && _isLoading) {
@@ -271,6 +291,7 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
     double totRev = 0.0;
     double cashRev = 0.0;
     double onlineRev = 0.0;
+    double totPurCost = 0.0;
     int cAll = 0;
     int cUnpaid = 0;
     int cCash = 0;
@@ -283,6 +304,45 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
       final String ordStat = (o['order_status'] ?? '').toString().toLowerCase();
       final bool isDeleted = ordStat == 'deleted';
 
+      // Calculate order purchase cost
+      double orderPurchaseCost = 0.0;
+      List items = [];
+      final rawMsg = o['raw_msg'];
+      if (rawMsg != null && rawMsg is Map) {
+        if (rawMsg['items'] is List) {
+          items = rawMsg['items'];
+        } else if (rawMsg['items_json'] != null) {
+          try {
+            final dec = jsonDecode(rawMsg['items_json'].toString());
+            if (dec is List) items = dec;
+          } catch (_) {}
+        }
+      }
+      if (items.isEmpty && o['items'] is List) {
+        items = o['items'];
+      }
+
+      for (var it in items) {
+        if (it is Map) {
+          final int itemQty = (it['qty'] as num?)?.toInt() ?? 1;
+          double pRate = (it['purchase_rate'] as num?)?.toDouble() ??
+              (it['p_rate'] as num?)?.toDouble() ??
+              (it['purchaseRate'] as num?)?.toDouble() ??
+              0.0;
+
+          if (pRate <= 0) {
+            final pName = (it['name'] ?? it['product_name'] ?? it['title'] ?? '').toString().trim().toLowerCase();
+            if (pName.isNotEmpty && _catalogPurchaseRates.containsKey(pName)) {
+              pRate = _catalogPurchaseRates[pName]!;
+            }
+          }
+          orderPurchaseCost += (pRate * itemQty);
+        }
+      }
+
+      o['purchase_cost'] = orderPurchaseCost;
+      o['profit_margin'] = amt - orderPurchaseCost;
+
       cAll++;
       if (isPaid) {
         if (pType == 'Online') {
@@ -290,12 +350,14 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
           if (amt > 0 && !isDeleted) {
             totRev += amt;
             onlineRev += amt;
+            totPurCost += orderPurchaseCost;
           }
         } else {
           cCash++;
           if (amt > 0 && !isDeleted) {
             totRev += amt;
             cashRev += amt;
+            totPurCost += orderPurchaseCost;
           }
         }
       } else {
@@ -326,6 +388,8 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
 
     setState(() {
       _totalRevenue = totRev;
+      _totalPurchaseCost = totPurCost;
+      _totalProfit = totRev - totPurCost;
       _cashRevenue = cashRev;
       _onlineRevenue = onlineRev;
       _totalOrdersCount = dateFiltered.length;
@@ -718,17 +782,17 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // COMPACT REVENUE SUMMARY CARD (LIGHT GREEN / EMERALD THEME)
+                    // COMPACT REVENUE & PROFIT SUMMARY CARD (EMERALD THEME)
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
                           colors: [Color(0xFF059669), Color(0xFF10B981)], // Emerald to Vibrant Light Green
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(18),
                         boxShadow: [
                           BoxShadow(
                             color: const Color(0xFF059669).withValues(alpha: 0.25),
@@ -745,19 +809,19 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
                             children: [
                               Text(
                                 _dateFilter == 'Today'
-                                    ? "TODAY'S REVENUE"
+                                    ? "TODAY'S REVENUE & PROFIT"
                                     : (_dateFilter == 'Yesterday'
-                                        ? "YESTERDAY'S REVENUE"
+                                        ? "YESTERDAY'S REVENUE & PROFIT"
                                         : (_dateFilter == 'ThisWeek'
-                                            ? "LAST 7 DAYS REVENUE"
+                                            ? "LAST 7 DAYS REVENUE & PROFIT"
                                             : (_dateFilter == 'ThisMonth'
-                                                ? "LAST 30 DAYS REVENUE"
-                                                : (_dateFilter == 'Custom' ? "CUSTOM RANGE REVENUE" : "COLLECTED REVENUE")))),
+                                                ? "LAST 30 DAYS REVENUE & PROFIT"
+                                                : (_dateFilter == 'Custom' ? "CUSTOM RANGE REVENUE & PROFIT" : "COLLECTED REVENUE & PROFIT")))),
                                 style: const TextStyle(
                                   color: Color(0xFFD1FAE5),
                                   fontWeight: FontWeight.w800,
-                                  fontSize: 11,
-                                  letterSpacing: 1.0,
+                                  fontSize: 10.5,
+                                  letterSpacing: 0.8,
                                 ),
                               ),
                               Container(
@@ -777,19 +841,53 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '₹${_totalRevenue % 1 == 0 ? _totalRevenue.toInt() : _totalRevenue.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 26,
-                            ),
+                          const SizedBox(height: 6),
+
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              Text(
+                                '₹${_totalRevenue % 1 == 0 ? _totalRevenue.toInt() : _totalRevenue.toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 28,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              if (_totalRevenue > 0)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: _totalProfit >= 0 ? const Color(0xFFFEF08A) : const Color(0xFFFCA5A5),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        _totalProfit >= 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                                        size: 13,
+                                        color: _totalProfit >= 0 ? const Color(0xFF854D0E) : const Color(0xFF991B1B),
+                                      ),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        '${_totalProfit >= 0 ? "+" : "-"}₹${_totalProfit.abs() % 1 == 0 ? _totalProfit.abs().toInt() : _totalProfit.abs().toStringAsFixed(2)} Net Profit',
+                                        style: TextStyle(
+                                          color: _totalProfit >= 0 ? const Color(0xFF854D0E) : const Color(0xFF991B1B),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
                           ),
                           const SizedBox(height: 10),
-                          Divider(color: Colors.white.withValues(alpha: 0.2), height: 1),
-                          const SizedBox(height: 10),
 
+                          // Payment Channel Sub Cards (Cash & Online)
                           Row(
                             children: [
                               // Cash Sub Card
@@ -867,6 +965,92 @@ class _SellerAccountsScreenState extends State<SellerAccountsScreen> {
                                 ),
                               ),
                             ],
+                          ),
+                          const SizedBox(height: 10),
+
+                          // 3-Column Financial Profit Breakdown Row (Sale Rate, P. Rate, Profit Value)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+                            ),
+                            child: Row(
+                              children: [
+                                // 1. Total Sale Value (Sale Rate)
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Sale Value', style: TextStyle(color: Color(0xFFD1FAE5), fontSize: 10, fontWeight: FontWeight.w700)),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '₹${_totalRevenue % 1 == 0 ? _totalRevenue.toInt() : _totalRevenue.toStringAsFixed(2)}',
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13),
+                                      ),
+                                      const Text('Sale Rate', style: TextStyle(color: Color(0xFFA7F3D0), fontSize: 9, fontWeight: FontWeight.w500)),
+                                    ],
+                                  ),
+                                ),
+                                Container(width: 1, height: 30, color: Colors.white.withValues(alpha: 0.2)),
+                                const SizedBox(width: 10),
+
+                                // 2. Total Purchase Cost (P. Rate)
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Product Cost', style: TextStyle(color: Color(0xFFBAE6FD), fontSize: 10, fontWeight: FontWeight.w700)),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '₹${_totalPurchaseCost % 1 == 0 ? _totalPurchaseCost.toInt() : _totalPurchaseCost.toStringAsFixed(2)}',
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13),
+                                      ),
+                                      const Text('P. Rate', style: TextStyle(color: Color(0xFF7DD3FC), fontSize: 9, fontWeight: FontWeight.w500)),
+                                    ],
+                                  ),
+                                ),
+                                Container(width: 1, height: 30, color: Colors.white.withValues(alpha: 0.2)),
+                                const SizedBox(width: 10),
+
+                                // 3. Total Profit Value (Sale - P. Rate)
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _totalProfit >= 0 ? 'Total Profit' : 'Total Loss',
+                                        style: TextStyle(
+                                          color: _totalProfit >= 0 ? const Color(0xFFFEF08A) : const Color(0xFFFCA5A5),
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '₹${_totalProfit.abs() % 1 == 0 ? _totalProfit.abs().toInt() : _totalProfit.abs().toStringAsFixed(2)}',
+                                        style: TextStyle(
+                                          color: _totalProfit >= 0 ? const Color(0xFFFEF08A) : const Color(0xFFFCA5A5),
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                      Text(
+                                        _totalPurchaseCost > 0
+                                            ? '${_totalProfit >= 0 ? "+" : "-"}${((_totalProfit / _totalPurchaseCost) * 100).abs().toStringAsFixed(1)}% margin'
+                                            : 'Sale - P. Rate',
+                                        style: TextStyle(
+                                          color: _totalProfit >= 0 ? const Color(0xFFFEF08A).withValues(alpha: 0.9) : const Color(0xFFFCA5A5),
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),

@@ -4334,6 +4334,7 @@ class AuthService {
     String section = '',
     int qty = 1,
     required double rate,
+    double purchaseRate = 0.0,
     String imageUrl = '',
     String buttonText = 'Buy Now',
   }) async {
@@ -4356,6 +4357,7 @@ class AuthService {
         'section': section.trim(),
         'qty': qty,
         'rate': rate,
+        'purchase_rate': purchaseRate,
         'image_url': cleanImg,
         'image': cleanImg,
         'button_text': cleanBtnText,
@@ -4380,6 +4382,7 @@ class AuthService {
       'section': section.trim(),
       'qty': qty,
       'rate': rate,
+      'purchase_rate': purchaseRate,
       'image_url': cleanImg,
       'image': cleanImg,
       'button_text': cleanBtnText,
@@ -4503,6 +4506,7 @@ class AuthService {
     String section = '',
     int qty = 1,
     required double rate,
+    double purchaseRate = 0.0,
     String imageUrl = '',
     String buttonText = 'Buy Now',
   }) async {
@@ -4524,6 +4528,7 @@ class AuthService {
         'section': section.trim(),
         'qty': qty,
         'rate': rate,
+        'purchase_rate': purchaseRate,
         'image_url': cleanImg,
         'image': cleanImg,
         'button_text': cleanBtnText,
@@ -4547,6 +4552,7 @@ class AuthService {
             p['section'] = section.trim();
             p['qty'] = qty;
             p['rate'] = rate;
+            p['purchase_rate'] = purchaseRate;
             p['image_url'] = cleanImg;
             p['image'] = cleanImg;
             p['button_text'] = cleanBtnText;
@@ -4907,6 +4913,11 @@ class AuthService {
   }
 
   static const String _keyGlobalHeaderTheme = 'global_header_theme_config';
+  static Map<String, dynamic>? _cachedHeaderThemeConfigMemory;
+
+  static Map<String, dynamic>? getCachedHeaderThemeConfig() {
+    return _cachedHeaderThemeConfigMemory;
+  }
 
   /// Get Global Animated Header Theme Configuration (Database-First + Local Cache Fallback)
   static Future<Map<String, dynamic>> getHeaderThemeConfig() async {
@@ -4935,6 +4946,7 @@ class AuthService {
           serverConfig['lottie_url'] = '';
         }
         await prefs.setString(_keyGlobalHeaderTheme, jsonEncode(serverConfig));
+        _cachedHeaderThemeConfigMemory = serverConfig;
         return serverConfig;
       }
     } catch (_) {}
@@ -4947,16 +4959,19 @@ class AuthService {
         if ((cached['lottie_url'] ?? '').toString().contains('lottiefiles.com') || (cached['lottie_url'] ?? '').toString().contains('daily_mart_exclusive.json')) {
           cached['lottie_url'] = '';
         }
+        _cachedHeaderThemeConfigMemory = cached;
         return cached;
       } catch (_) {}
     }
 
+    _cachedHeaderThemeConfigMemory = defaultConfig;
     return defaultConfig;
   }
 
   /// Save Global Animated Header Theme Configuration (Local-First + VPS Sync)
   static Future<bool> saveHeaderThemeConfig(Map<String, dynamic> config) async {
     final prefs = await SharedPreferences.getInstance();
+    _cachedHeaderThemeConfigMemory = config;
     await prefs.setString(_keyGlobalHeaderTheme, jsonEncode(config));
 
     try {

@@ -1178,13 +1178,14 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
   }
 
   // --- 4. SEARCH BAR STYLE DIALOG (EXACT ORIGINAL LOGIC & DESIGN) ---
-  void _showManageSearchBarDialog() async {
-    final currentConfig = await AuthService.getHeaderThemeConfig();
+  void _showManageSearchBarDialog() {
+    Map<String, dynamic> currentConfig = AuthService.getCachedHeaderThemeConfig() ?? {};
     String bgColor = (currentConfig['search_bg_color'] ?? '#FFFFFF').toString();
     double opacity = ((currentConfig['search_opacity'] as num?)?.toDouble() ?? 1.0).clamp(0.0, 1.0);
     String textColor = (currentConfig['search_text_color'] ?? '#0F172A').toString();
 
-    if (!mounted) return;
+    bool isLoadedFromNetwork = false;
+    bool isProcessing = false;
 
     showModalBottomSheet(
       context: context,
@@ -1192,6 +1193,21 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
+          if (!isLoadedFromNetwork) {
+            isLoadedFromNetwork = true;
+            Future.microtask(() async {
+              final freshConfig = await AuthService.getHeaderThemeConfig();
+              if (ctx.mounted) {
+                setModalState(() {
+                  currentConfig = freshConfig;
+                  bgColor = (freshConfig['search_bg_color'] ?? '#FFFFFF').toString();
+                  opacity = ((freshConfig['search_opacity'] as num?)?.toDouble() ?? 1.0).clamp(0.0, 1.0);
+                  textColor = (freshConfig['search_text_color'] ?? '#0F172A').toString();
+                });
+              }
+            });
+          }
+
           final Color previewColor = hexToColor(bgColor).withValues(alpha: opacity);
           final Color previewTextColor = hexToColor(textColor);
 
@@ -1367,21 +1383,68 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                   const SizedBox(height: 20),
 
                   ElevatedButton(
-                    onPressed: () async {
-                      final updatedMap = Map<String, dynamic>.from(currentConfig);
-                      updatedMap['search_bg_color'] = bgColor;
-                      updatedMap['search_opacity'] = opacity;
-                      updatedMap['search_text_color'] = textColor;
+                    onPressed: isProcessing
+                        ? null
+                        : () async {
+                            setModalState(() => isProcessing = true);
+                            try {
+                              final updatedMap = Map<String, dynamic>.from(currentConfig);
+                              updatedMap['search_bg_color'] = bgColor;
+                              updatedMap['search_opacity'] = opacity;
+                              updatedMap['search_text_color'] = textColor;
 
-                      Navigator.pop(ctx);
-                      await AuthService.saveHeaderThemeConfig(updatedMap);
-                    },
+                              await AuthService.saveHeaderThemeConfig(updatedMap);
+                              if (ctx.mounted) Navigator.pop(ctx);
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('✓ Search Bar Style saved successfully! 🎉'),
+                                    backgroundColor: Color(0xFF10B981),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            } catch (err) {
+                              setModalState(() => isProcessing = false);
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Save error: $err ❌'),
+                                    backgroundColor: Colors.red,
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            }
+                          },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF8B5CF6),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
-                    child: const Text('Save Search Bar Style 🎨', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                    child: isProcessing
+                        ? const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2.5,
+                                ),
+                              ),
+                              SizedBox(width: 10),
+                              Text(
+                                'Saving Search Bar Style...',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
+                            ],
+                          )
+                        : const Text(
+                            'Save Search Bar Style 🎨',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
                   ),
                 ],
               ),
@@ -2024,23 +2087,59 @@ class _SellerMastersScreenState extends State<SellerMastersScreen> {
                       onPressed: isProcessing
                           ? null
                           : () async {
-                              await AuthService.saveSellerProductBorderImage(username, currentBorder);
-                              if (ctx.mounted) Navigator.pop(ctx);
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(currentBorder.isNotEmpty ? '✓ Transparent PNG product border saved! 🎉' : '✓ Product border removed!'),
-                                    backgroundColor: const Color(0xFF10B981),
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
+                              setModalState(() => isProcessing = true);
+                              try {
+                                await AuthService.saveSellerProductBorderImage(username, currentBorder);
+                                if (ctx.mounted) Navigator.pop(ctx);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(currentBorder.isNotEmpty ? '✓ Transparent PNG product border saved! 🎉' : '✓ Product border removed!'),
+                                      backgroundColor: const Color(0xFF10B981),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
+                              } catch (err) {
+                                setModalState(() => isProcessing = false);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Save error: $err ❌'),
+                                      backgroundColor: Colors.red,
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
                               }
                             },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF0F172A),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: const Text('Save Border Settings 🚀', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                      child: isProcessing
+                          ? const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2.5,
+                                  ),
+                                ),
+                                SizedBox(width: 10),
+                                Text(
+                                  'Saving Border Settings...',
+                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                ),
+                              ],
+                            )
+                          : const Text(
+                              'Save Border Settings 🚀',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
                     ),
                   ),
                 ],
