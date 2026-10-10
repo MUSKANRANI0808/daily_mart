@@ -1,8 +1,8 @@
 class VpsConfig {
-  static const String serverIp = '89.116.52.173';
+  static const String serverIp = '200.141.4.137';
 
   static String get apiBaseUrl {
-    return 'https://us-central1-apna-store-raniganj.cloudfunctions.net/api';
+    return 'http://200.141.4.137/api.php';
   }
 
   static const String dbName = 'daily_mart';

@@ -1,15 +1,14 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
-import 'package:url_launcher/url_launcher.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../vps_api_service.dart';
 import '../dashboards/customer_dashboard.dart';
 import '../role_selection_screen.dart';
 import 'customer_addresses_screen.dart';
-import 'search_seller_screen.dart';
 
 enum FlipAxis { horizontal, vertical }
 
@@ -398,7 +397,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
@@ -407,53 +406,54 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    Image.asset(
-                      'assets/images/gift_box.png',
-                      width: 18,
-                      height: 18,
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) => const Text('🎁', style: TextStyle(fontSize: 13)),
-                    ),
-                    const SizedBox(width: 5),
-                    Flexible(
-                      child: Text(
-                        _giftsEarned > 0 ? 'Order Stamp Gift $_giftsEarned' : 'Order Stamp Gift',
-                        style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 12),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
+              Row(
+                children: [
+                  Image.asset(
+                    'assets/images/gift_box.png',
+                    width: 17,
+                    height: 17,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) => const Text('🎁', style: TextStyle(fontSize: 13)),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _giftsEarned > 0 ? 'Order Stamp Gift ($_giftsEarned)' : 'Order Stamp Gift',
+                    style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ],
               ),
               if (_giftsEarned > 0)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [Color(0xFFF59E0B), Color(0xFF10B981)]),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(color: const Color(0xFFF59E0B).withValues(alpha: 0.25), blurRadius: 6),
-                    ],
+                    color: const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFFCD34D)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('🎁', style: TextStyle(fontSize: 11)),
+                      const Text('🎁', style: TextStyle(fontSize: 10)),
                       const SizedBox(width: 3),
                       Text(
                         '${_giftsEarned} Gift${_giftsEarned > 1 ? 's' : ''} Earned!',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10.5),
+                        style: const TextStyle(color: Color(0xFFB45309), fontWeight: FontWeight.bold, fontSize: 10),
                       ),
                     ],
                   ),
                 )
               else
-                Text(
-                  'Delivered: ${_totalDeliveredOrders}',
-                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 10.5, fontWeight: FontWeight.w600),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Text(
+                    'Delivered: $_totalDeliveredOrders',
+                    style: const TextStyle(color: Color(0xFF64748B), fontSize: 10.5, fontWeight: FontWeight.w600),
+                  ),
                 ),
             ],
           ),
@@ -470,45 +470,51 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                 children: [
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 300),
-                    width: 38,
-                    height: 38,
+                    width: 36,
+                    height: 36,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: isFilled
                           ? const LinearGradient(
-                              colors: [Color(0xFFF59E0B), Color(0xFF10B981)],
+                              colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             )
                           : null,
-                      color: isFilled ? null : const Color(0xFFF1F5F9),
+                      color: isFilled ? null : Colors.white,
                       border: Border.all(
-                        color: isFilled ? const Color(0xFFF59E0B) : const Color(0xFFCBD5E1),
-                        width: isFilled ? 2 : 1.5,
+                        color: isFilled ? const Color(0xFFD97706) : const Color(0xFFCBD5E1),
+                        width: isFilled ? 1.5 : 1.2,
                       ),
                       boxShadow: isFilled
                           ? [
                               BoxShadow(
-                                color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                                color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
                                 blurRadius: 6,
                                 offset: const Offset(0, 2),
                               )
                             ]
-                          : [],
+                          : [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.02),
+                                blurRadius: 4,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
                     ),
                     child: Center(
                       child: isFilled
                           ? Image.asset(
                               'assets/images/gift_box.png',
-                              width: 26,
-                              height: 26,
+                              width: 22,
+                              height: 22,
                               fit: BoxFit.contain,
-                              errorBuilder: (context, error, stackTrace) => const Text('🎁', style: TextStyle(fontSize: 18)),
+                              errorBuilder: (context, error, stackTrace) => const Text('🎁', style: TextStyle(fontSize: 16)),
                             )
                           : Text(
                               '$stampNum',
                               style: const TextStyle(
-                                color: Color(0xFF64748B),
+                                color: Color(0xFF475569),
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
                               ),
@@ -517,7 +523,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    isFilled ? 'Gift $stampNum' : 'Blank $stampNum',
+                    isFilled ? 'Gift $stampNum' : 'Order $stampNum',
                     style: TextStyle(
                       color: isFilled ? const Color(0xFFD97706) : const Color(0xFF94A3B8),
                       fontSize: 9.5,
@@ -528,273 +534,312 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
               );
             }),
           ),
-
-          // Stamp Badges Row completed
         ],
       ),
     );
   }
 
-  Widget _buildCardFront() {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-      clipBehavior: Clip.antiAlias,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [
-              Color(0xFFFFFFFF), // Pure White
-              Color(0xFFF0FDF4), // Mint Snow
-              Color(0xFFECFDF5), // Light Emerald Pearl
+  Widget _buildAnimatedCardContainer({required Widget child}) {
+    return AnimatedBuilder(
+      animation: _shimmerController,
+      builder: (context, _) {
+        final t = _shimmerController.value;
+        final rotation = t * 2 * math.pi;
+
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            // Dynamic multi-color animated rotating border
+            gradient: SweepGradient(
+              transform: GradientRotation(rotation),
+              colors: const [
+                Color(0xFF2563EB), // Royal Blue
+                Color(0xFF06B6D4), // Cyan
+                Color(0xFF8B5CF6), // Purple
+                Color(0xFFF43F5E), // Rose Pink
+                Color(0xFFF59E0B), // Amber Gold
+                Color(0xFF10B981), // Emerald
+                Color(0xFF2563EB), // Return to Royal Blue
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Color.lerp(
+                  const Color(0xFF2563EB),
+                  const Color(0xFF8B5CF6),
+                  (math.sin(rotation) + 1) / 2,
+                )!.withValues(alpha: 0.15),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
             ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
           ),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: const Color(0xFFA7F3D0), width: 1.5),
-        ),
-        child: Stack(
-          children: [
-            // Decorative Background Circle Highlights
-            Positioned(
-              top: -20,
-              right: -20,
-              child: Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xFF10B981).withValues(alpha: 0.06),
-                ),
+          padding: const EdgeInsets.all(2.0), // Smooth 2px colorful border
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              // Soft animated shimmering background gradient
+              gradient: LinearGradient(
+                begin: Alignment(-1.0 + 2.0 * t, -1.0),
+                end: Alignment(1.0 + 2.0 * t, 1.0),
+                colors: const [
+                  Colors.white,
+                  Color(0xFFF0F7FF), // Soft Sky Tint
+                  Color(0xFFFAF5FF), // Soft Lavender Tint
+                  Color(0xFFF0FDF4), // Soft Mint Pearl
+                  Colors.white,
+                ],
+                stops: const [0.0, 0.35, 0.5, 0.65, 1.0],
               ),
             ),
+            child: Padding(
+              padding: const EdgeInsets.all(13.0),
+              child: child,
+            ),
+          ),
+        );
+      },
+    );
+  }
 
-            // Card Main Content (Clean Light Layout)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 18.0, horizontal: 16.0),
-              child: Column(
-                children: [
-                  // Avatar + Name + Phone Row
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: [Color(0xFFF59E0B), Color(0xFF10B981)],
+  Widget _buildCardFront() {
+    return _buildAnimatedCardContainer(
+      child: Column(
+        children: [
+          // Avatar + Name + Phone Row
+          Row(
+            children: [
+              AnimatedBuilder(
+                animation: _shimmerController,
+                builder: (context, _) {
+                  final rot = _shimmerController.value * 2 * math.pi;
+                  return Container(
+                    padding: const EdgeInsets.all(2.2),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: SweepGradient(
+                        transform: GradientRotation(rot),
+                        colors: const [
+                          Color(0xFF2563EB),
+                          Color(0xFF06B6D4),
+                          Color(0xFF8B5CF6),
+                          Color(0xFFEC4899),
+                          Color(0xFF2563EB),
+                        ],
+                      ),
+                    ),
+                    child: const CircleAvatar(
+                      radius: 22,
+                      backgroundColor: Color(0xFFEFF6FF),
+                      child: Icon(Icons.person_rounded, size: 28, color: Color(0xFF2563EB)),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            _currentName,
+                            style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        child: const CircleAvatar(
-                          radius: 26,
-                          backgroundColor: Color(0xFF0F172A),
-                          child: Icon(Icons.person_rounded, size: 32, color: Colors.white),
+                        const SizedBox(width: 6),
+                        InkWell(
+                          onTap: _editCustomerName,
+                          borderRadius: BorderRadius.circular(6),
+                          child: const Padding(
+                            padding: EdgeInsets.all(2.0),
+                            child: Icon(Icons.edit_rounded, size: 15, color: Color(0xFF2563EB)),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    _currentName,
-                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                InkWell(
-                                  onTap: _editCustomerName,
-                                  child: const Icon(Icons.edit_rounded, size: 15, color: Color(0xFF059669)),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Mobile: +91 ${widget.customer.mobile ?? ''}',
-                              style: const TextStyle(fontSize: 12.5, color: Color(0xFF475569), fontWeight: FontWeight.w500),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  // 5 Digital Stamp Widget
-                  _buildStampProgressWidget(),
-                ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Mobile: +91 ${widget.customer.mobile ?? ''}',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 4,
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.flip_camera_android_rounded, size: 11, color: Color(0xFF2563EB)),
+                    SizedBox(width: 3),
+                    Text('Flip 🔄', style: TextStyle(color: Color(0xFF2563EB), fontSize: 10, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // 5 Digital Stamp Widget
+          _buildStampProgressWidget(),
+        ],
       ),
     );
   }
 
   Widget _buildCardBack() {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-      clipBehavior: Clip.antiAlias,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [
-              Color(0xFFFFFFFF), // Pure White
-              Color(0xFFF8FAFC), // Slate Snow
-              Color(0xFFECFDF5), // Light Mint
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: const Color(0xFFA7F3D0), width: 1.5),
-        ),
-        child: Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 18.0, horizontal: 16.0),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Expanded(
-                        child: Row(
-                          children: [
-                            Icon(Icons.military_tech_rounded, color: Color(0xFFD97706), size: 18),
-                            SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                'DIGITAL STAMP REWARDS 🎁',
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.3),
-                              ),
-                            ),
-                          ],
-                        ),
+    return _buildAnimatedCardContainer(
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Expanded(
+                child: Row(
+                  children: [
+                    Icon(Icons.military_tech_rounded, color: Color(0xFFD97706), size: 18),
+                    SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        'DIGITAL STAMP REWARDS 🎁',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.3),
                       ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: _giftsEarned > 0 ? const Color(0xFFECFDF5) : const Color(0xFFFEF3C7),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: _giftsEarned > 0 ? const Color(0xFFA7F3D0) : const Color(0xFFFCD34D),
-                          ),
-                        ),
-                        child: Text(
-                          _giftsEarned > 0 ? '${_giftsEarned} GIFT UNLOCKED 🎁' : '${_filledStamps}/5 STAMPS 🎁',
-                          style: TextStyle(
-                            color: _giftsEarned > 0 ? const Color(0xFF047857) : const Color(0xFFB45309),
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFFA7F3D0)),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.06),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(Icons.qr_code_2_rounded, size: 64, color: Color(0xFF0F172A)),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _currentName,
-                              style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 17),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              'ID: DM-CUST-${widget.customer.mobile ?? '812885'}',
-                              style: const TextStyle(color: Color(0xFF64748B), fontSize: 11.5, fontWeight: FontWeight.w600),
-                            ),
-                            const SizedBox(height: 5),
-                            Text(
-                              'Total Delivered Orders: ${_totalDeliveredOrders}',
-                              style: const TextStyle(
-                                color: Color(0xFF047857),
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              _giftsEarned > 0
-                                  ? '🎁 ${_giftsEarned} Gift Icon${_giftsEarned > 1 ? 's' : ''} Unlocked!'
-                                  : 'Need 5 delivered orders for 1 Gift Icon (${_filledStamps}/5 Delivered)',
-                              style: TextStyle(
-                                color: _giftsEarned > 0 ? const Color(0xFFD97706) : const Color(0xFF64748B),
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Scan at Merchant Store to Redeem Gifts 🎁',
-                          style: TextStyle(color: Color(0xFF64748B), fontSize: 9.5, fontWeight: FontWeight.bold),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.flip_camera_android_rounded, size: 11, color: Color(0xFF475569)),
-                            SizedBox(width: 3),
-                            Text('Tap to Flip Back 🔄', style: TextStyle(color: Color(0xFF334155), fontSize: 10, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: _giftsEarned > 0 ? const Color(0xFFFEF3C7) : const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: _giftsEarned > 0 ? const Color(0xFFFCD34D) : const Color(0xFFBFDBFE),
+                  ),
+                ),
+                child: Text(
+                  _giftsEarned > 0 ? '${_giftsEarned} GIFT UNLOCKED 🎁' : '${_filledStamps}/5 STAMPS 🎁',
+                  style: TextStyle(
+                    color: _giftsEarned > 0 ? const Color(0xFFB45309) : const Color(0xFF2563EB),
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 4,
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.qr_code_2_rounded, size: 60, color: Color(0xFF0F172A)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _currentName,
+                      style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 15.5),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'ID: DM-CUST-${widget.customer.mobile ?? '812885'}',
+                      style: const TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Delivered Orders: $_totalDeliveredOrders',
+                      style: const TextStyle(
+                        color: Color(0xFF2563EB),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _giftsEarned > 0
+                          ? '🎁 $_giftsEarned Gift${_giftsEarned > 1 ? 's' : ''} Unlocked!'
+                          : 'Order 5 items for 1 Gift ($_filledStamps/5 Delivered)',
+                      style: TextStyle(
+                        color: _giftsEarned > 0 ? const Color(0xFFD97706) : const Color(0xFF64748B),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Expanded(
+                child: Text(
+                  'Scan to Redeem Gifts 🎁',
+                  style: TextStyle(color: Color(0xFF64748B), fontSize: 10.5, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 4,
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.flip_camera_android_rounded, size: 11, color: Color(0xFF2563EB)),
+                    SizedBox(width: 3),
+                    Text('Flip Back 🔄', style: TextStyle(color: Color(0xFF2563EB), fontSize: 10, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -802,24 +847,31 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0F172A),
-        elevation: 1,
-        title: const Row(
-          children: [
-            Icon(Icons.person_rounded, color: Color(0xFF10B981)),
-            SizedBox(width: 10),
-            Text('My Profile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ],
+        backgroundColor: Colors.white,
+        elevation: 0,
+        title: const Text(
+          'My Profile',
+          style: TextStyle(
+            color: Color(0xFF0F172A),
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(height: 1, color: Color(0xFFF1F5F9)),
         ),
       ),
       body: SingleChildScrollView(
+        padding: const EdgeInsets.only(top: 8, bottom: 85),
+        physics: const BouncingScrollPhysics(),
         child: Column(
           children: [
             // Interactive 3D Flip Header Card
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: GestureDetector(
                 onTap: () => _toggleFlipCard(axis: FlipAxis.horizontal),
                 onPanEnd: (details) {
@@ -874,21 +926,24 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
               ),
             ),
 
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
 
-            // Full-Width Edge-to-Edge Profile Options Menu Container (0 side margin)
+            // Profile Options Menu Card (Full Screen Width)
             Container(
               width: double.infinity,
               decoration: const BoxDecoration(
                 color: Colors.white,
-                border: Border.symmetric(
-                  horizontal: BorderSide(color: Color(0xFFE2E8F0), width: 1.0),
+                border: Border(
+                  top: BorderSide(color: Color(0xFFE2E8F0)),
+                  bottom: BorderSide(color: Color(0xFFE2E8F0)),
                 ),
               ),
               child: Column(
                 children: [
                   _buildProfileTile(
                     icon: Icons.location_on_rounded,
+                    iconColor: const Color(0xFF2563EB),
+                    iconBg: const Color(0xFFEFF6FF),
                     title: 'Saved Delivery Addresses',
                     subtitle: _addressSubtitle,
                     onTap: () async {
@@ -901,23 +956,29 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
                       _loadProfileAndAddress();
                     },
                   ),
-                  const Divider(height: 1, indent: 64, endIndent: 0),
+                  const Divider(height: 1, indent: 62, endIndent: 0, color: Color(0xFFF1F5F9)),
                   _buildProfileTile(
-                    icon: Icons.notifications_rounded,
+                    icon: Icons.notifications_active_rounded,
+                    iconColor: const Color(0xFFF59E0B),
+                    iconBg: const Color(0xFFFFFBEB),
                     title: 'Order Notifications',
                     subtitle: 'SMS, WhatsApp, App Alert',
                     onTap: () {},
                   ),
-                  const Divider(height: 1, indent: 64, endIndent: 0),
+                  const Divider(height: 1, indent: 62, endIndent: 0, color: Color(0xFFF1F5F9)),
                   _buildProfileTile(
-                    icon: Icons.language_rounded,
+                    icon: Icons.translate_rounded,
+                    iconColor: const Color(0xFF10B981),
+                    iconBg: const Color(0xFFECFDF5),
                     title: 'App Language',
                     subtitle: 'Hindi / English',
                     onTap: () {},
                   ),
-                  const Divider(height: 1, indent: 64, endIndent: 0),
+                  const Divider(height: 1, indent: 62, endIndent: 0, color: Color(0xFFF1F5F9)),
                   _buildProfileTile(
-                    icon: Icons.help_outline_rounded,
+                    icon: Icons.support_agent_rounded,
+                    iconColor: const Color(0xFF0284C7),
+                    iconBg: const Color(0xFFF0F9FF),
                     title: 'Help & Customer Care',
                     subtitle: '24/7 Support Desk',
                     onTap: _showHelpSupportModal,
@@ -926,117 +987,133 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
               ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
 
-            // My Selected Seller Card with Padding
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            // My Selected Seller Card (Full Screen Width, Sleek & Compact)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+              decoration: const BoxDecoration(
                 color: Colors.white,
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
-                          shape: BoxShape.circle,
+                border: Border(
+                  top: BorderSide(color: Color(0xFFE2E8F0)),
+                  bottom: BorderSide(color: Color(0xFFE2E8F0)),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: const Icon(Icons.storefront_rounded, color: Color(0xFF2563EB), size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'My Connected Store 🏪',
+                          style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold),
                         ),
-                        child: const Icon(Icons.storefront_rounded, color: Color(0xFF8B5CF6), size: 24),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('My Selected Seller 🏪', style: TextStyle(fontSize: 11, color: Colors.black54, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 2),
-                            Text(
-                              _selectedSellerName.isNotEmpty ? _selectedSellerName : 'No Seller Selected',
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                            ),
-                            if (_selectedSellerMobile.isNotEmpty)
-                              Text('Mobile: +91 $_selectedSellerMobile', style: const TextStyle(fontSize: 12, color: Colors.black54)),
-                          ],
+                        const SizedBox(height: 1),
+                        Text(
+                          _selectedSellerName.isNotEmpty ? _selectedSellerName : 'No Seller Selected',
+                          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Color(0xFF8B5CF6)),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                            ),
-                            icon: const Icon(Icons.swap_horiz_rounded, size: 15, color: Color(0xFF8B5CF6)),
-                            label: const Text('Switch', style: TextStyle(color: Color(0xFF8B5CF6), fontWeight: FontWeight.bold, fontSize: 12)),
-                            onPressed: () async {
-                              await AuthService.clearLastSelectedSeller();
-                              if (mounted) {
-                                Navigator.pushAndRemoveUntil(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (ctx) => CustomerDashboard(customer: widget.customer),
-                                  ),
-                                  (route) => false,
-                                );
-                              }
-                            },
+                        if (_selectedSellerMobile.isNotEmpty)
+                          Text(
+                            'Mobile: +91 $_selectedSellerMobile',
+                            style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
                           ),
-                          if (_selectedSellerName.isNotEmpty && _selectedSellerName != 'No Seller Selected') ...[
-                            const SizedBox(width: 6),
-                            InkWell(
-                              onTap: _deleteSeller,
-                              borderRadius: BorderRadius.circular(10),
-                              child: Container(
-                                padding: const EdgeInsets.all(7),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFEF2F2),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: const Color(0xFFFCA5A5)),
-                                ),
-                                child: const Icon(Icons.delete_outline_rounded, size: 18, color: Color(0xFFEF4444)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFF2563EB)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        icon: const Icon(Icons.swap_horiz_rounded, size: 14, color: Color(0xFF2563EB)),
+                        label: const Text('Switch', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold, fontSize: 11)),
+                        onPressed: () async {
+                          await AuthService.clearLastSelectedSeller();
+                          if (mounted) {
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(
+                                builder: (ctx) => CustomerDashboard(customer: widget.customer),
                               ),
-                            ),
-                          ],
-                        ],
+                              (route) => false,
+                            );
+                          }
+                        },
                       ),
+                      if (_selectedSellerName.isNotEmpty && _selectedSellerName != 'No Seller Selected') ...[
+                        const SizedBox(width: 6),
+                        InkWell(
+                          onTap: _deleteSeller,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF2F2),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFFCA5A5)),
+                            ),
+                            child: const Icon(Icons.delete_outline_rounded, size: 16, color: Color(0xFFEF4444)),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
-                ),
+                ],
               ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
-            // Logout Button with Padding
+            // Logout Button (Sleek, Soft Red Style)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: SizedBox(
                 width: double.infinity,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFEF4444),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                height: 42,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFEF2F2),
+                    foregroundColor: const Color(0xFFDC2626),
+                    side: const BorderSide(color: Color(0xFFFCA5A5), width: 1.1),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  icon: const Icon(Icons.logout_rounded, color: Colors.white),
+                  icon: const Icon(Icons.logout_rounded, size: 17, color: Color(0xFFDC2626)),
                   label: const Text(
                     'Logout from Daily Mart',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                    style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.bold, fontSize: 13.5),
                   ),
                   onPressed: () => _logout(context),
                 ),
               ),
             ),
 
-            const SizedBox(height: 16),
-            const Text('Daily Mart • Powered by Apna Store', style: TextStyle(color: Colors.black45, fontSize: 11.5, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 24),
+            const SizedBox(height: 10),
+            const Text(
+              'Daily Mart • Powered by Apna Store',
+              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w600),
+            ),
           ],
         ),
       ),
@@ -1388,19 +1465,33 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> with Tick
     required String title,
     required String subtitle,
     required VoidCallback onTap,
+    Color iconColor = const Color(0xFF2563EB),
+    Color iconBg = const Color(0xFFEFF6FF),
   }) {
     return ListTile(
+      dense: true,
+      visualDensity: const VisualDensity(horizontal: 0, vertical: -2),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
       leading: Container(
-        padding: const EdgeInsets.all(8),
+        width: 34,
+        height: 34,
         decoration: BoxDecoration(
-          color: const Color(0xFFF1F5F9),
-          borderRadius: BorderRadius.circular(10),
+          color: iconBg,
+          borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(icon, color: const Color(0xFF10B981)),
+        child: Icon(icon, color: iconColor, size: 18),
       ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A))),
-      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.black54), maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.grey),
+      title: Text(
+        title,
+        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF0F172A)),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: const Icon(Icons.chevron_right_rounded, size: 18, color: Color(0xFF94A3B8)),
       onTap: onTap,
     );
   }

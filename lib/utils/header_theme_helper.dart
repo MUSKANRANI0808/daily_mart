@@ -195,6 +195,37 @@ class HeaderThemeHelper {
     },
   ];
 
+  static DecorationImage? buildDecorationImage(String? imageSource) {
+    if (imageSource == null) return null;
+    final clean = imageSource.trim();
+    if (clean.isEmpty || clean == 'null' || clean == 'undefined') return null;
+
+    final ImageProvider provider;
+    if (clean.startsWith('http://') || clean.startsWith('https://')) {
+      provider = NetworkImage(clean);
+    } else if (clean.startsWith('assets/')) {
+      provider = AssetImage(clean);
+    } else {
+      try {
+        String base64Str = clean;
+        if (clean.contains(',')) {
+          base64Str = clean.split(',').last.trim();
+        }
+        final bytes = base64Decode(base64Str);
+        provider = MemoryImage(bytes);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    return DecorationImage(
+      image: provider,
+      fit: BoxFit.cover,
+      alignment: Alignment.center,
+      onError: (exception, stackTrace) {},
+    );
+  }
+
   static BoxDecoration buildDecoration(Map<String, dynamic> config) {
     final c1 = hexToColor(config['color1']?.toString() ?? '#0F172A');
     final c2 = hexToColor(config['color2']?.toString() ?? '#1E1B4B');
@@ -217,40 +248,97 @@ class HeaderThemeHelper {
       colors = colors.map((c) => Color.alphaBlend(Colors.black.withValues(alpha: 0.40), c)).toList();
     }
 
+    Gradient gradient;
     if (dir == 'horizontal') {
-      return BoxDecoration(
-        gradient: LinearGradient(
-          colors: colors,
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
+      gradient = LinearGradient(
+        colors: colors,
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
       );
     } else if (dir == 'vertical') {
-      return BoxDecoration(
-        gradient: LinearGradient(
-          colors: colors,
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
+      gradient = LinearGradient(
+        colors: colors,
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
       );
     } else if (dir == 'radial') {
-      return BoxDecoration(
-        gradient: RadialGradient(
-          colors: colors,
-          center: Alignment.center,
-          radius: 1.2,
-        ),
+      gradient = RadialGradient(
+        colors: colors,
+        center: Alignment.center,
+        radius: 1.2,
       );
     } else {
       // 'diagonal'
-      return BoxDecoration(
-        gradient: LinearGradient(
-          colors: colors,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+      gradient = LinearGradient(
+        colors: colors,
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
       );
     }
+
+    final String? bgImgStr = config['bg_image']?.toString() ??
+        config['background_image']?.toString() ??
+        config['header_bg_image']?.toString();
+
+    final DecorationImage? decImg = buildDecorationImage(bgImgStr);
+
+    return BoxDecoration(
+      gradient: gradient,
+      image: decImg,
+    );
+  }
+
+  static BoxDecoration buildStickyDecoration(Map<String, dynamic> config) {
+    final c1Str = config['sticky_color1']?.toString() ?? config['color1']?.toString() ?? '#0F172A';
+    final c2Str = config['sticky_color2']?.toString() ?? config['color2']?.toString() ?? '#1E1B4B';
+    final c1 = hexToColor(c1Str);
+    final c2 = hexToColor(c2Str);
+    final List<Color> colors = [c1, c2];
+
+    final dir = (config['sticky_direction'] ?? config['direction'] ?? 'horizontal').toString().toLowerCase();
+
+    Gradient gradient;
+    if (dir == 'horizontal') {
+      gradient = LinearGradient(
+        colors: colors,
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+      );
+    } else if (dir == 'vertical') {
+      gradient = LinearGradient(
+        colors: colors,
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      );
+    } else if (dir == 'radial') {
+      gradient = RadialGradient(
+        colors: colors,
+        center: Alignment.center,
+        radius: 1.2,
+      );
+    } else {
+      gradient = LinearGradient(
+        colors: colors,
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
+    }
+
+    return BoxDecoration(
+      gradient: gradient,
+    );
+  }
+
+  /// Get Category Icon & Text Color for Full Header
+  static Color getCategoryIconColor(Map<String, dynamic> config) {
+    final hex = config['category_icon_color'] ?? config['icon_color'] ?? '#FFFFFF';
+    return hexToColor(hex.toString());
+  }
+
+  /// Get Category Icon & Text Color for Sticky Scrolled Header
+  static Color getStickyCategoryIconColor(Map<String, dynamic> config) {
+    final hex = config['sticky_category_icon_color'] ?? config['sticky_icon_color'] ?? config['category_icon_color'] ?? '#FFFFFF';
+    return hexToColor(hex.toString());
   }
 }
 
@@ -322,14 +410,14 @@ class _ContinuousShiningGlassBeamWidgetState extends State<ContinuousShiningGlas
 Widget buildSingleLottieItem(dynamic rawData, {BoxFit fit = BoxFit.cover}) {
   String clean = '';
   if (rawData is Map) {
-    clean = (rawData['url'] ?? rawData['data'] ?? '').toString().trim();
+    clean = (rawData['animation'] ?? rawData['url'] ?? rawData['data'] ?? '').toString().trim();
   } else if (rawData is String) {
     final str = rawData.trim();
     if (str.startsWith('{') && str.endsWith('}')) {
       try {
         final decoded = jsonDecode(str);
-        if (decoded is Map && (decoded.containsKey('url') || decoded.containsKey('data'))) {
-          clean = (decoded['url'] ?? decoded['data'] ?? '').toString().trim();
+        if (decoded is Map && (decoded.containsKey('animation') || decoded.containsKey('url') || decoded.containsKey('data'))) {
+          clean = (decoded['animation'] ?? decoded['url'] ?? decoded['data'] ?? '').toString().trim();
         } else {
           clean = str;
         }
@@ -440,7 +528,8 @@ class _HeaderLottieCarouselWidgetState extends State<HeaderLottieCarouselWidget>
   void didUpdateWidget(covariant HeaderLottieCarouselWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.overrideAnimations != oldWidget.overrideAnimations ||
-        widget.sellerUsername != oldWidget.sellerUsername) {
+        widget.sellerUsername != oldWidget.sellerUsername ||
+        widget.config != oldWidget.config) {
       _loadAnimations();
     }
   }
@@ -523,12 +612,26 @@ class _HeaderLottieCarouselWidgetState extends State<HeaderLottieCarouselWidget>
     if (currentItem is Map) {
       if (currentItem['color1'] != null) currentSlideConfig['color1'] = currentItem['color1'];
       if (currentItem['color2'] != null) currentSlideConfig['color2'] = currentItem['color2'];
+      if (currentItem['direction'] != null) currentSlideConfig['direction'] = currentItem['direction'];
+      if (currentItem.containsKey('bg_image')) {
+        currentSlideConfig['bg_image'] = currentItem['bg_image'];
+      }
+      if (currentItem.containsKey('background_image')) {
+        currentSlideConfig['background_image'] = currentItem['background_image'];
+      }
     } else if (currentItem is String && currentItem.trim().startsWith('{') && currentItem.trim().endsWith('}')) {
       try {
         final decoded = jsonDecode(currentItem.trim());
         if (decoded is Map) {
           if (decoded['color1'] != null) currentSlideConfig['color1'] = decoded['color1'];
           if (decoded['color2'] != null) currentSlideConfig['color2'] = decoded['color2'];
+          if (decoded['direction'] != null) currentSlideConfig['direction'] = decoded['direction'];
+          if (decoded.containsKey('bg_image')) {
+            currentSlideConfig['bg_image'] = decoded['bg_image'];
+          }
+          if (decoded.containsKey('background_image')) {
+            currentSlideConfig['background_image'] = decoded['background_image'];
+          }
         }
       } catch (_) {}
     }

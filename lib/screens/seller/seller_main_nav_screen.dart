@@ -3,12 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
-import '../../services/cart_service.dart';
 import '../dashboards/seller_dashboard.dart';
 import 'seller_accounts_screen.dart';
 import 'seller_masters_screen.dart';
 import 'seller_order_cart_screen.dart';
-import 'seller_products_screen.dart';
 import 'seller_profile_screen.dart';
 
 class SellerMainNavScreen extends StatefulWidget {
@@ -141,74 +139,270 @@ class _SellerMainNavScreenState extends State<SellerMainNavScreen> {
           index: _currentIndex,
           children: pages,
         ),
-        bottomNavigationBar: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 16,
-                offset: const Offset(0, -3),
+        bottomNavigationBar: Builder(
+          builder: (context) {
+            final bottomInset = MediaQuery.of(context).padding.bottom;
+
+            return SizedBox(
+              height: 64 + bottomInset,
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.bottomCenter,
+                children: [
+                  // 1. Curved White Bottom Bar
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: 60 + bottomInset,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFDC2626).withValues(alpha: 0.08),
+                            blurRadius: 18,
+                            offset: const Offset(0, -4),
+                          ),
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 8,
+                            offset: const Offset(0, -2),
+                          ),
+                        ],
+                        border: const Border(
+                          top: BorderSide(color: Color(0xFFFEE2E2), width: 1.2),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // 2. Dynamic Nav Items (Active Tab gets elevated red circle with pink aura)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: bottomInset,
+                    height: 64,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        _buildSellerNavItem(
+                          index: 0,
+                          icon: Icons.home_rounded,
+                          label: 'Home',
+                        ),
+                        _buildSellerNavItem(
+                          index: 1,
+                          icon: Icons.account_balance_wallet_rounded,
+                          label: 'Account',
+                        ),
+                        _buildSellerNavItem(
+                          index: 2,
+                          icon: Icons.grid_view_rounded,
+                          label: 'Master',
+                        ),
+                        _buildSellerNavItem(
+                          index: 3,
+                          icon: Icons.receipt_long_rounded,
+                          label: 'Order',
+                          badgeCount: _cartBadgeCount,
+                        ),
+                        _buildSellerNavItem(
+                          index: 4,
+                          icon: Icons.person_rounded,
+                          label: 'Profile',
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSellerNavItem({
+    required int index,
+    required IconData icon,
+    required String label,
+    int badgeCount = 0,
+  }) {
+    final isSelected = _currentIndex == index;
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          if (_currentIndex == index) return;
+          setState(() {
+            _currentIndex = index;
+          });
+          _updateCartBadge();
+        },
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(scale: animation, child: child),
           ),
-          child: BottomNavigationBar(
-            currentIndex: _currentIndex,
-            onTap: (index) {
-              setState(() {
-                _currentIndex = index;
-              });
-              _updateCartBadge();
-            },
-            type: BottomNavigationBarType.fixed,
-            backgroundColor: Colors.white,
-            selectedItemColor: const Color(0xFF8B5CF6),
-            unselectedItemColor: const Color(0xFF64748B),
-            selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
-            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 10.5),
-            elevation: 0,
-            items: [
-              const BottomNavigationBarItem(
-                icon: Icon(Icons.home_rounded),
-                activeIcon: Icon(Icons.home_rounded, size: 25),
-                label: 'Home',
-              ),
-              const BottomNavigationBarItem(
-                icon: Icon(Icons.account_balance_wallet_rounded),
-                activeIcon: Icon(Icons.account_balance_wallet_rounded, size: 25),
-                label: 'Account',
-              ),
-              const BottomNavigationBarItem(
-                icon: Icon(Icons.grid_view_rounded),
-                activeIcon: Icon(Icons.grid_view_rounded, size: 25),
-                label: 'Master',
-              ),
-              BottomNavigationBarItem(
-                icon: _cartBadgeCount > 0
-                    ? Badge(
-                        label: Text('$_cartBadgeCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                        backgroundColor: const Color(0xFF10B981),
-                        child: const Icon(Icons.receipt_long_rounded),
-                      )
-                    : const Icon(Icons.receipt_long_rounded),
-                activeIcon: _cartBadgeCount > 0
-                    ? Badge(
-                        label: Text('$_cartBadgeCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                        backgroundColor: const Color(0xFF10B981),
-                        child: const Icon(Icons.receipt_long_rounded, size: 25),
-                      )
-                    : const Icon(Icons.receipt_long_rounded, size: 25),
-                label: 'Order',
-              ),
-              const BottomNavigationBarItem(
-                icon: Icon(Icons.person_rounded),
-                activeIcon: Icon(Icons.person_rounded, size: 25),
-                label: 'Profile',
-              ),
-            ],
-          ),
+          child: isSelected
+              ? OverflowBox(
+                  key: ValueKey('active_seller_$index'),
+                  minHeight: 0,
+                  maxHeight: 120,
+                  alignment: Alignment.center,
+                  child: Transform.translate(
+                    offset: const Offset(0, -11),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Active Floating Pink Aura Ring + Vibrant Red Gradient Circle
+                        Container(
+                          width: 46,
+                          height: 46,
+                          padding: const EdgeInsets.all(3.5),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFFFFE4E6), // Soft Pink Aura Ring
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFDC2626).withValues(alpha: 0.28),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Container(
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                colors: [Color(0xFFEF4444), Color(0xFFDC2626)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                            ),
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Icon(
+                                  icon,
+                                  color: Colors.white,
+                                  size: 21,
+                                ),
+                                if (badgeCount > 0)
+                                  Positioned(
+                                    top: 1,
+                                    right: 1,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(8),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.2),
+                                            blurRadius: 2,
+                                          ),
+                                        ],
+                                      ),
+                                      child: Text(
+                                        '$badgeCount',
+                                        style: const TextStyle(
+                                          color: Color(0xFFDC2626),
+                                          fontSize: 7.5,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFFDC2626),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : OverflowBox(
+                  key: ValueKey('inactive_seller_$index'),
+                  minHeight: 0,
+                  maxHeight: 120,
+                  alignment: Alignment.center,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Icon(
+                            icon,
+                            size: 22,
+                            color: const Color(0xFF64748B),
+                          ),
+                          if (badgeCount > 0)
+                            Positioned(
+                              top: -5,
+                              right: -8,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFFEF4444), Color(0xFFDC2626)],
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFFDC2626).withValues(alpha: 0.3),
+                                      blurRadius: 3,
+                                      offset: const Offset(0, 1),
+                                    ),
+                                  ],
+                                ),
+                                child: Text(
+                                  '$badgeCount',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 7.5,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
         ),
       ),
     );
   }
 }
+

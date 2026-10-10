@@ -106,6 +106,11 @@ if (!$colCheckSliderSec || $colCheckSliderSec->num_rows == 0) {
     @$conn->query("ALTER TABLE seller_sliders ADD COLUMN section VARCHAR(255) DEFAULT 'Top Banner'");
 }
 
+$colCheckSliderFullWidth = $conn->query("SHOW COLUMNS FROM seller_sliders LIKE 'full_width'");
+if (!$colCheckSliderFullWidth || $colCheckSliderFullWidth->num_rows == 0) {
+    @$conn->query("ALTER TABLE seller_sliders ADD COLUMN full_width INT DEFAULT 0");
+}
+
 // 5. Auto-check & create delivery_boys table in database
 $conn->query("CREATE TABLE IF NOT EXISTS delivery_boys (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -129,6 +134,34 @@ $colCheckSelLoc = $conn->query("SHOW COLUMNS FROM sellers LIKE 'location'");
 if (!$colCheckSelLoc || $colCheckSelLoc->num_rows == 0) {
     @$conn->query("ALTER TABLE sellers ADD COLUMN location VARCHAR(255) DEFAULT NULL");
 }
+
+$colCheckBorder = $conn->query("SHOW COLUMNS FROM sellers LIKE 'border_image'");
+if (!$colCheckBorder || $colCheckBorder->num_rows == 0) {
+    @$conn->query("ALTER TABLE sellers ADD COLUMN border_image LONGTEXT DEFAULT NULL");
+}
+
+// Auto-check & create seller_borders table in database
+@$conn->query("CREATE TABLE IF NOT EXISTS seller_borders (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    seller_username VARCHAR(100) NOT NULL UNIQUE,
+    border_image LONGTEXT DEFAULT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX(seller_username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+$colCheckAnim = $conn->query("SHOW COLUMNS FROM sellers LIKE 'header_animations'");
+if (!$colCheckAnim || $colCheckAnim->num_rows == 0) {
+    @$conn->query("ALTER TABLE sellers ADD COLUMN header_animations LONGTEXT DEFAULT NULL");
+}
+
+// Auto-check & create seller_animations table in database
+@$conn->query("CREATE TABLE IF NOT EXISTS seller_animations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    seller_username VARCHAR(100) NOT NULL UNIQUE,
+    header_animations LONGTEXT DEFAULT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX(seller_username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
 // 6. Auto-check & create locations table in database
 $conn->query("CREATE TABLE IF NOT EXISTS locations (
@@ -190,13 +223,45 @@ if (!$colCheckCat || $colCheckCat->num_rows == 0) {
     name VARCHAR(255) NOT NULL,
     image_url LONGTEXT DEFAULT NULL,
     color VARCHAR(50) DEFAULT '#8B5CF6',
+    icon_url LONGTEXT DEFAULT NULL,
+    poster_url LONGTEXT DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX(seller_username)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+$colCheckCatIcon = $conn->query("SHOW COLUMNS FROM seller_categories LIKE 'icon_url'");
+if (!$colCheckCatIcon || $colCheckCatIcon->num_rows == 0) {
+    @$conn->query("ALTER TABLE seller_categories ADD COLUMN icon_url LONGTEXT DEFAULT NULL");
+}
+
 $colCheckCatColor = $conn->query("SHOW COLUMNS FROM seller_categories LIKE 'color'");
 if (!$colCheckCatColor || $colCheckCatColor->num_rows == 0) {
     @$conn->query("ALTER TABLE seller_categories ADD COLUMN color VARCHAR(50) DEFAULT '#8B5CF6'");
+}
+
+$colCheckCatPoster = $conn->query("SHOW COLUMNS FROM seller_categories LIKE 'poster_url'");
+if (!$colCheckCatPoster || $colCheckCatPoster->num_rows == 0) {
+    @$conn->query("ALTER TABLE seller_categories ADD COLUMN poster_url LONGTEXT DEFAULT NULL");
+}
+
+$colCheckCatItemBg = $conn->query("SHOW COLUMNS FROM seller_categories LIKE 'item_bg_color'");
+if (!$colCheckCatItemBg || $colCheckCatItemBg->num_rows == 0) {
+    @$conn->query("ALTER TABLE seller_categories ADD COLUMN item_bg_color VARCHAR(50) DEFAULT '#F8FAFC'");
+}
+
+$colCheckCatSections = $conn->query("SHOW COLUMNS FROM seller_categories LIKE 'sections'");
+if (!$colCheckCatSections || $colCheckCatSections->num_rows == 0) {
+    @$conn->query("ALTER TABLE seller_categories ADD COLUMN sections TEXT DEFAULT NULL");
+}
+
+$colCheckCatHideName = $conn->query("SHOW COLUMNS FROM seller_categories LIKE 'hide_name'");
+if (!$colCheckCatHideName || $colCheckCatHideName->num_rows == 0) {
+    @$conn->query("ALTER TABLE seller_categories ADD COLUMN hide_name TINYINT(1) DEFAULT 0");
+}
+
+$colCheckCatFullSize = $conn->query("SHOW COLUMNS FROM seller_categories LIKE 'full_size_image'");
+if (!$colCheckCatFullSize || $colCheckCatFullSize->num_rows == 0) {
+    @$conn->query("ALTER TABLE seller_categories ADD COLUMN full_size_image TINYINT(1) DEFAULT 0");
 }
 
 // 11. Auto-check & create seller_sections table if missing
@@ -220,6 +285,16 @@ if (!$colCheckSecBg || $colCheckSecBg->num_rows == 0) {
 $colCheckSecCols = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'columns'");
 if (!$colCheckSecCols || $colCheckSecCols->num_rows == 0) {
     @$conn->query("ALTER TABLE seller_sections ADD COLUMN columns INT DEFAULT 2");
+}
+
+$colCheckSecFullWidth = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'full_width'");
+if (!$colCheckSecFullWidth || $colCheckSecFullWidth->num_rows == 0) {
+    @$conn->query("ALTER TABLE seller_sections ADD COLUMN full_width INT DEFAULT 0");
+}
+
+$colCheckSecPosterFullWidth = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'poster_full_width'");
+if (!$colCheckSecPosterFullWidth || $colCheckSecPosterFullWidth->num_rows == 0) {
+    @$conn->query("ALTER TABLE seller_sections ADD COLUMN poster_full_width INT DEFAULT 0");
 }
 
 $colCheckSecCol = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'section'");
@@ -287,8 +362,20 @@ if ($action == 'get-header-theme') {
         $last10 = (strlen($digits) >= 10) ? substr($digits, -10) : $digits;
         $escapedLike = "%" . $conn->real_escape_string($last10) . "%";
 
-        $chkRes = $conn->query("SELECT name, address_json FROM customers WHERE mobile = '$mobile' OR mobile LIKE '$escapedLike' ORDER BY id DESC LIMIT 1");
+        $chkRes = $conn->query("SELECT name, address_json, is_blocked, blocked_reason FROM customers WHERE mobile = '$mobile' OR mobile LIKE '$escapedLike' ORDER BY id DESC LIMIT 1");
         if ($chkRes && $chkRow = $chkRes->fetch_assoc()) {
+            if (!empty($chkRow['is_blocked']) && (int)$chkRow['is_blocked'] === 1) {
+                $bReason = trim($chkRow['blocked_reason'] ?? '');
+                echo json_encode([
+                    "success" => false,
+                    "is_blocked" => true,
+                    "role" => "customer",
+                    "mobile" => $mobile,
+                    "name" => trim($chkRow['name'] ?? 'Customer'),
+                    "message" => "आपकी ID ब्लॉक कर दी गई है। सहायता के लिए कृपया हमारी सपोर्ट टीम से संपर्क करें。"
+                ]);
+                exit();
+            }
             $exName = trim($chkRow['name'] ?? '');
             if (!empty($exName) && $exName !== 'Customer' && strpos($exName, 'Customer') !== 0) {
                 $cName = $exName;
@@ -535,6 +622,7 @@ if ($action == 'get-header-theme') {
             $row['overlay_dim'] = isset($row['overlay_dim']) ? (float)$row['overlay_dim'] : 0.0;
             $row['remove_white_bg'] = isset($row['remove_white_bg']) ? (int)$row['remove_white_bg'] : 0;
             $row['img_fit'] = isset($row['img_fit']) ? $row['img_fit'] : 'cover';
+            $row['full_width'] = isset($row['full_width']) ? (int)$row['full_width'] : 0;
             $sliders[] = $row;
         }
     }
@@ -557,6 +645,8 @@ if ($action == 'get-header-theme') {
     $overlay_dim = isset($input['overlay_dim']) ? (float)$input['overlay_dim'] : 0.0;
     $remove_white_bg = isset($input['remove_white_bg']) ? (int)$input['remove_white_bg'] : 0;
     $img_fit = isset($input['img_fit']) ? trim($input['img_fit']) : 'cover';
+    $full_width = isset($input['full_width']) ? (int)$input['full_width'] : (isset($_POST['full_width']) ? (int)$_POST['full_width'] : 0);
+    if ($full_width != 1) $full_width = 0;
 
     if (empty($seller_username)) {
         echo json_encode(["success" => false, "message" => "Seller username required"]);
@@ -583,9 +673,14 @@ if ($action == 'get-header-theme') {
         @$conn->query("ALTER TABLE seller_sliders ADD COLUMN position VARCHAR(50) DEFAULT 'internal'");
     }
 
-    $stmt = $conn->prepare("INSERT INTO seller_sliders (seller_username, tag, title, description, bg_image_url, tag_bg_color, tag_shape, title_color, desc_color, section, position, overlay_dim, remove_white_bg, img_fit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $colCheckSliderFullWidth = $conn->query("SHOW COLUMNS FROM seller_sliders LIKE 'full_width'");
+    if (!$colCheckSliderFullWidth || $colCheckSliderFullWidth->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sliders ADD COLUMN full_width INT DEFAULT 0");
+    }
+
+    $stmt = $conn->prepare("INSERT INTO seller_sliders (seller_username, tag, title, description, bg_image_url, tag_bg_color, tag_shape, title_color, desc_color, section, position, overlay_dim, remove_white_bg, img_fit, full_width) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     if ($stmt) {
-        $stmt->bind_param("ssssssssssdisi", $seller_username, $tag, $title, $description, $bg_image_url, $tag_bg_color, $tag_shape, $title_color, $desc_color, $section, $position, $overlay_dim, $remove_white_bg, $img_fit);
+        $stmt->bind_param("ssssssssssdisii", $seller_username, $tag, $title, $description, $bg_image_url, $tag_bg_color, $tag_shape, $title_color, $desc_color, $section, $position, $overlay_dim, $remove_white_bg, $img_fit, $full_width);
         if ($stmt->execute()) {
             $newId = $stmt->insert_id;
             echo json_encode([
@@ -607,6 +702,7 @@ if ($action == 'get-header-theme') {
                     "overlay_dim" => $overlay_dim,
                     "remove_white_bg" => $remove_white_bg,
                     "img_fit" => $img_fit,
+                    "full_width" => $full_width,
                 ]
             ]);
             exit();
@@ -631,6 +727,8 @@ if ($action == 'get-header-theme') {
     $overlay_dim = isset($input['overlay_dim']) ? (float)$input['overlay_dim'] : 0.0;
     $remove_white_bg = isset($input['remove_white_bg']) ? (int)$input['remove_white_bg'] : 0;
     $img_fit = isset($input['img_fit']) ? trim($input['img_fit']) : 'cover';
+    $full_width = isset($input['full_width']) ? (int)$input['full_width'] : (isset($_POST['full_width']) ? (int)$_POST['full_width'] : 0);
+    if ($full_width != 1) $full_width = 0;
 
     $colCheckSec = $conn->query("SHOW COLUMNS FROM seller_sliders LIKE 'section'");
     if (!$colCheckSec || $colCheckSec->num_rows == 0) {
@@ -642,12 +740,17 @@ if ($action == 'get-header-theme') {
         @$conn->query("ALTER TABLE seller_sliders ADD COLUMN position VARCHAR(50) DEFAULT 'internal'");
     }
 
+    $colCheckSliderFullWidth = $conn->query("SHOW COLUMNS FROM seller_sliders LIKE 'full_width'");
+    if (!$colCheckSliderFullWidth || $colCheckSliderFullWidth->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sliders ADD COLUMN full_width INT DEFAULT 0");
+    }
+
     if ($slider_id > 0) {
-        $stmt = $conn->prepare("UPDATE seller_sliders SET tag = ?, title = ?, description = ?, bg_image_url = ?, tag_bg_color = ?, tag_shape = ?, title_color = ?, desc_color = ?, section = ?, position = ?, overlay_dim = ?, remove_white_bg = ?, img_fit = ? WHERE id = ?");
+        $stmt = $conn->prepare("UPDATE seller_sliders SET tag = ?, title = ?, description = ?, bg_image_url = ?, tag_bg_color = ?, tag_shape = ?, title_color = ?, desc_color = ?, section = ?, position = ?, overlay_dim = ?, remove_white_bg = ?, img_fit = ?, full_width = ? WHERE id = ?");
         if ($stmt) {
-            $stmt->bind_param("ssssssssssdisi", $tag, $title, $description, $bg_image_url, $tag_bg_color, $tag_shape, $title_color, $desc_color, $section, $position, $overlay_dim, $remove_white_bg, $img_fit, $slider_id);
+            $stmt->bind_param("ssssssssssdisii", $tag, $title, $description, $bg_image_url, $tag_bg_color, $tag_shape, $title_color, $desc_color, $section, $position, $overlay_dim, $remove_white_bg, $img_fit, $full_width, $slider_id);
             $stmt->execute();
-            echo json_encode(["success" => true, "message" => "Slider updated in database"]);
+            echo json_encode(["success" => true, "message" => "Slider updated in database", "full_width" => $full_width]);
             exit();
         }
     }
@@ -754,6 +857,110 @@ if ($action == 'get-header-theme') {
     }
     echo json_encode(["success" => true, "message" => "Customer profile & address updated in database"]);
     exit();
+} elseif ($action == 'get-all-customers') {
+    // 1. Auto-check & add is_blocked and blocked_reason and created_at columns if missing
+    $chkBlocked = $conn->query("SHOW COLUMNS FROM customers LIKE 'is_blocked'");
+    if (!$chkBlocked || $chkBlocked->num_rows == 0) {
+        @$conn->query("ALTER TABLE customers ADD COLUMN is_blocked TINYINT(1) DEFAULT 0");
+    }
+    $chkReason = $conn->query("SHOW COLUMNS FROM customers LIKE 'blocked_reason'");
+    if (!$chkReason || $chkReason->num_rows == 0) {
+        @$conn->query("ALTER TABLE customers ADD COLUMN blocked_reason VARCHAR(255) DEFAULT NULL");
+    }
+    $chkCreated = $conn->query("SHOW COLUMNS FROM customers LIKE 'created_at'");
+    if (!$chkCreated || $chkCreated->num_rows == 0) {
+        @$conn->query("ALTER TABLE customers ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
+    }
+
+    $res = $conn->query("SELECT * FROM customers ORDER BY id DESC");
+    $customers = array();
+    if ($res && $res !== true) {
+        while ($row = $res->fetch_assoc()) {
+            $cMobile = trim($row['mobile'] ?? '');
+            $digits = preg_replace('/[^0-9]/', '', $cMobile);
+            $last10 = (strlen($digits) >= 10) ? substr($digits, -10) : $digits;
+
+            // Count total orders for this customer from messages table
+            $orderCount = 0;
+            if (!empty($last10)) {
+                $ordRes = $conn->query("SELECT COUNT(*) as total FROM messages WHERE (customer_mobile = '$cMobile' OR customer_mobile LIKE '%$last10%') AND (items_json IS NOT NULL OR order_id IS NOT NULL OR message LIKE '%ORDER%')");
+                if ($ordRes && $ordRow = $ordRes->fetch_assoc()) {
+                    $orderCount = (int)$ordRow['total'];
+                }
+            }
+
+            $row['id'] = (int)$row['id'];
+            $row['is_blocked'] = isset($row['is_blocked']) ? (int)$row['is_blocked'] : 0;
+            $row['total_orders'] = $orderCount;
+            $customers[] = $row;
+        }
+    }
+
+    echo json_encode(["success" => true, "customers" => $customers]);
+    exit();
+} elseif ($action == 'toggle-block-customer') {
+    $mobile = isset($input['mobile']) ? trim($input['mobile']) : (isset($_POST['mobile']) ? trim($_POST['mobile']) : (isset($_GET['mobile']) ? trim($_GET['mobile']) : ''));
+    $id = isset($input['id']) ? (int)$input['id'] : (isset($_POST['id']) ? (int)$_POST['id'] : 0);
+    $is_blocked = isset($input['is_blocked']) ? (int)$input['is_blocked'] : (isset($_POST['is_blocked']) ? (int)$_POST['is_blocked'] : 1);
+    $reason = isset($input['reason']) ? trim($input['reason']) : '';
+
+    if (empty($mobile) && $id <= 0) {
+        echo json_encode(["success" => false, "message" => "Customer mobile or id required"]);
+        exit();
+    }
+
+    $chkBlocked = $conn->query("SHOW COLUMNS FROM customers LIKE 'is_blocked'");
+    if (!$chkBlocked || $chkBlocked->num_rows == 0) {
+        @$conn->query("ALTER TABLE customers ADD COLUMN is_blocked TINYINT(1) DEFAULT 0");
+    }
+    $chkReason = $conn->query("SHOW COLUMNS FROM customers LIKE 'blocked_reason'");
+    if (!$chkReason || $chkReason->num_rows == 0) {
+        @$conn->query("ALTER TABLE customers ADD COLUMN blocked_reason VARCHAR(255) DEFAULT NULL");
+    }
+
+    $escapedReason = $conn->real_escape_string($reason);
+    if ($id > 0) {
+        $conn->query("UPDATE customers SET is_blocked = $is_blocked, blocked_reason = '$escapedReason' WHERE id = $id");
+    }
+    if (!empty($mobile)) {
+        $digits = preg_replace('/[^0-9]/', '', $mobile);
+        $last10 = (strlen($digits) >= 10) ? substr($digits, -10) : $digits;
+        $conn->query("UPDATE customers SET is_blocked = $is_blocked, blocked_reason = '$escapedReason' WHERE mobile = '$mobile' OR mobile LIKE '%$last10%'");
+    }
+
+    echo json_encode([
+        "success" => true,
+        "message" => $is_blocked == 1 ? "Customer has been blocked" : "Customer has been unblocked",
+        "is_blocked" => $is_blocked
+    ]);
+    exit();
+} elseif ($action == 'check-customer-blocked-status') {
+    $mobile = isset($_GET['mobile']) ? trim($_GET['mobile']) : (isset($input['mobile']) ? trim($input['mobile']) : '');
+    $digits = preg_replace('/[^0-9]/', '', $mobile);
+    $last10 = (strlen($digits) >= 10) ? substr($digits, -10) : $digits;
+
+    $chkBlocked = $conn->query("SHOW COLUMNS FROM customers LIKE 'is_blocked'");
+    if (!$chkBlocked || $chkBlocked->num_rows == 0) {
+        echo json_encode(["success" => true, "is_blocked" => false]);
+        exit();
+    }
+
+    $isBlocked = false;
+    $reason = '';
+    if (!empty($last10)) {
+        $res = $conn->query("SELECT is_blocked, blocked_reason FROM customers WHERE mobile = '$mobile' OR mobile LIKE '%$last10%' ORDER BY id DESC LIMIT 1");
+        if ($res && $row = $res->fetch_assoc()) {
+            $isBlocked = ((int)($row['is_blocked'] ?? 0)) === 1;
+            $reason = trim($row['blocked_reason'] ?? '');
+        }
+    }
+
+    echo json_encode([
+        "success" => true,
+        "is_blocked" => $isBlocked,
+        "reason" => $reason
+    ]);
+    exit();
 } elseif ($action == 'search-seller') {
     $rawTerm = isset($_GET['mobile']) ? trim($_GET['mobile']) : (isset($input['mobile']) ? trim($input['mobile']) : '');
     $digits = preg_replace('/[^0-9]/', '', $rawTerm);
@@ -780,17 +987,21 @@ if ($action == 'get-header-theme') {
     $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
     $escapedSeller = $conn->real_escape_string($seller_username);
 
-    $orderCount = 0;
-    $cntQuery = !empty($seller_username)
-        ? "SELECT COUNT(*) as total_orders FROM messages WHERE (seller_username = '$escapedSeller' OR seller_username LIKE '%$escapedSeller%') AND (items_json IS NOT NULL AND items_json != '' OR message LIKE '%ORDER%')"
-        : "SELECT COUNT(*) as total_orders FROM messages WHERE items_json IS NOT NULL AND items_json != '' OR message LIKE '%ORDER%'";
-
-    $cntRes = $conn->query($cntQuery);
-    if ($cntRes && $cRow = $cntRes->fetch_assoc()) {
-        $orderCount = (int)$cRow['total_orders'];
+    $nextId = 0;
+    $aiRes = $conn->query("SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'messages'");
+    if ($aiRes && $aiRow = $aiRes->fetch_assoc() && !empty($aiRow['AUTO_INCREMENT'])) {
+        $nextId = (int)$aiRow['AUTO_INCREMENT'];
+    }
+    if ($nextId <= 0) {
+        $maxRes = $conn->query("SELECT MAX(id) as max_id FROM messages");
+        $maxId = 0;
+        if ($maxRes && $mRow = $maxRes->fetch_assoc()) {
+            $maxId = (int)$mRow['max_id'];
+        }
+        $nextId = $maxId + 1;
     }
 
-    $nextNum = 1001 + $orderCount;
+    $nextNum = 1000 + $nextId;
     $nextOrderId = "#DM-" . $nextNum;
 
     echo json_encode([
@@ -798,7 +1009,7 @@ if ($action == 'get-header-theme') {
         "next_order_id" => $nextOrderId,
         "order_number" => $nextOrderId,
         "sequence" => $nextNum,
-        "total_orders" => $orderCount
+        "total_orders" => $maxId
     ]);
     exit();
 } elseif ($action == 'send-message') {
@@ -935,28 +1146,74 @@ if ($action == 'get-header-theme') {
     echo json_encode(["success" => true, "logs" => $existing_logs]);
 } elseif ($action == 'update-order-status') {
     $msg_id = isset($input['message_id']) ? (int)$input['message_id'] : 0;
+    $order_id = isset($input['order_id']) ? trim($input['order_id']) : '';
     $status_text = isset($input['order_status']) ? trim($input['order_status']) : 'Ready';
     $cancelled_at = isset($input['cancelled_at']) ? trim($input['cancelled_at']) : date('d/m/Y, H:i');
     $cancel_reason = isset($input['cancel_reason']) ? trim($input['cancel_reason']) : '';
 
+    if (empty($order_id) && $msg_id > 1000) {
+        $order_id = "#DM-$msg_id";
+    }
+
+    // Resolve real message id in DB:
+    $realMsgId = 0;
     if ($msg_id > 0) {
-        $msgRow = $conn->query("SELECT order_id FROM messages WHERE id = $msg_id LIMIT 1");
-        $ordNum = ($msgRow && $r = $msgRow->fetch_assoc()) ? $r['order_id'] : "#DM-" . (1000 + $msg_id);
+        $check = $conn->query("SELECT id FROM messages WHERE id = $msg_id LIMIT 1");
+        if ($check && $r = $check->fetch_assoc()) {
+            $realMsgId = (int)$r['id'];
+        }
+    }
+    if ($realMsgId == 0 && !empty($order_id)) {
+        $cleanOrd = $conn->real_escape_string($order_id);
+        $check = $conn->query("SELECT id FROM messages WHERE order_id = '$cleanOrd' OR order_id LIKE '%$cleanOrd%' LIMIT 1");
+        if ($check && $r = $check->fetch_assoc()) {
+            $realMsgId = (int)$r['id'];
+        }
+    }
+    if ($realMsgId == 0 && $msg_id > 1000) {
+        $possibleDbId = $msg_id - 1000;
+        $check = $conn->query("SELECT id FROM messages WHERE id = $possibleDbId LIMIT 1");
+        if ($check && $r = $check->fetch_assoc()) {
+            $realMsgId = (int)$r['id'];
+        }
+    }
+
+    if ($realMsgId > 0 || !empty($order_id)) {
+        $msgRow = ($realMsgId > 0) ? $conn->query("SELECT order_id FROM messages WHERE id = $realMsgId LIMIT 1") : null;
+        $ordNum = ($msgRow && $r = $msgRow->fetch_assoc()) ? $r['order_id'] : (!empty($order_id) ? $order_id : "#DM-" . (1000 + $realMsgId));
 
         if (!empty($cancel_reason) || strtolower($status_text) == 'cancelled') {
-            $stmt = $conn->prepare("UPDATE messages SET order_status = 'Cancelled', delivery_status = 'Cancelled', cancelled_at = ?, cancel_reason = ? WHERE id = ?");
-            if ($stmt) {
-                $stmt->bind_param("ssi", $cancelled_at, $cancel_reason, $msg_id);
-                $stmt->execute();
+            if ($realMsgId > 0) {
+                $stmt = $conn->prepare("UPDATE messages SET order_status = 'Cancelled', delivery_status = 'Cancelled', cancelled_at = ?, cancel_reason = ? WHERE id = ?");
+                if ($stmt) {
+                    $stmt->bind_param("ssi", $cancelled_at, $cancel_reason, $realMsgId);
+                    $stmt->execute();
+                }
+            } else if (!empty($order_id)) {
+                $stmt = $conn->prepare("UPDATE messages SET order_status = 'Cancelled', delivery_status = 'Cancelled', cancelled_at = ?, cancel_reason = ? WHERE order_id = ?");
+                if ($stmt) {
+                    $stmt->bind_param("sss", $cancelled_at, $cancel_reason, $order_id);
+                    $stmt->execute();
+                }
             }
-            @$conn->query("UPDATE customer_orders SET order_status = 'Cancelled', delivery_status = 'Cancelled', cancelled_at = '$cancelled_at', cancel_reason = '" . $conn->real_escape_string($cancel_reason) . "' WHERE order_number = '$ordNum' OR id = $msg_id");
+            @$conn->query("UPDATE customer_orders SET order_status = 'Cancelled', delivery_status = 'Cancelled', cancelled_at = '$cancelled_at', cancel_reason = '" . $conn->real_escape_string($cancel_reason) . "' WHERE order_number = '$ordNum' OR id = $realMsgId");
         } else {
-            $stmt = $conn->prepare("UPDATE messages SET order_status = ? WHERE id = ?");
-            if ($stmt) {
-                $stmt->bind_param("si", $status_text, $msg_id);
-                $stmt->execute();
+            // Updating to Ready or other status:
+            $delivStatus = (strtolower($status_text) == 'ready') ? 'Ready' : $status_text;
+            if ($realMsgId > 0) {
+                $stmt = $conn->prepare("UPDATE messages SET order_status = ?, delivery_status = ? WHERE id = ?");
+                if ($stmt) {
+                    $stmt->bind_param("ssi", $status_text, $delivStatus, $realMsgId);
+                    $stmt->execute();
+                }
+            } else if (!empty($order_id)) {
+                $stmt = $conn->prepare("UPDATE messages SET order_status = ?, delivery_status = ? WHERE order_id = ?");
+                if ($stmt) {
+                    $stmt->bind_param("sss", $status_text, $delivStatus, $order_id);
+                    $stmt->execute();
+                }
             }
-            @$conn->query("UPDATE customer_orders SET order_status = '" . $conn->real_escape_string($status_text) . "' WHERE order_number = '$ordNum' OR id = $msg_id");
+            @$conn->query("UPDATE customer_orders SET order_status = '" . $conn->real_escape_string($status_text) . "', delivery_status = '" . $conn->real_escape_string($delivStatus) . "' WHERE order_number = '$ordNum' OR id = $realMsgId");
         }
     }
     echo json_encode(["success" => true]);
@@ -1095,8 +1352,23 @@ if ($action == 'get-header-theme') {
     $last10 = (strlen($digits) >= 10) ? substr($digits, -10) : $digits;
     $escapedSeller = $conn->real_escape_string($seller_username);
 
+    $payment_mode = isset($input['payment_mode']) && !empty(trim($input['payment_mode'])) ? trim($input['payment_mode']) : 'Cash on Delivery';
+    $payment_status = isset($input['payment_status']) && !empty(trim($input['payment_status'])) ? trim($input['payment_status']) : (strtolower($payment_mode) == 'online' ? 'paid' : 'unpaid');
+    $payment_utr = isset($input['payment_utr']) ? trim($input['payment_utr']) : (isset($input['utr']) ? trim($input['utr']) : '');
+    $paid_amount = isset($input['paid_amount']) ? (float)$input['paid_amount'] : ($payment_status == 'paid' ? $total_amount : 0.0);
+    $paid_at = isset($input['paid_at']) && !empty(trim($input['paid_at'])) ? trim($input['paid_at']) : ($payment_status == 'paid' ? date('d/m/Y, H:i') : null);
+    $delivery_address = isset($input['delivery_address']) ? trim($input['delivery_address']) : (isset($input['address']) ? trim($input['address']) : '');
+
     // Build message summary string
     $msgText = "🛒 NEW ORDER PLACED\nTotal Items: $total_count\nTotal Amount: ₹" . number_format($total_amount, 2);
+    $msgText .= "\n💳 Payment Mode: $payment_mode (" . strtoupper($payment_status) . ")";
+    if (!empty($payment_utr)) {
+        $msgText .= "\nTxn/UTR: $payment_utr";
+    }
+    if (!empty($delivery_address)) {
+        $msgText .= "\n📍 Address: $delivery_address";
+    }
+
     if (is_array($items) && count($items) > 0) {
         $msgLines = array();
         $idx = 1;
@@ -1111,14 +1383,23 @@ if ($action == 'get-header-theme') {
             }
         }
         if (count($msgLines) > 0) {
-            $msgText = implode("\n", $msgLines);
+            $msgText .= "\n\nItems:\n" . implode("\n", $msgLines);
         }
     }
 
+    $colCheckPayMode = $conn->query("SHOW COLUMNS FROM messages LIKE 'payment_mode'");
+    if (!$colCheckPayMode || $colCheckPayMode->num_rows == 0) {
+        @$conn->query("ALTER TABLE messages ADD COLUMN payment_mode VARCHAR(50) DEFAULT 'Cash on Delivery'");
+    }
+    $colCheckDelAddr = $conn->query("SHOW COLUMNS FROM messages LIKE 'delivery_address'");
+    if (!$colCheckDelAddr || $colCheckDelAddr->num_rows == 0) {
+        @$conn->query("ALTER TABLE messages ADD COLUMN delivery_address TEXT DEFAULT NULL");
+    }
+
     // Insert directly into messages table (The primary orders table in phpMyAdmin)
-    $stmtMsg = $conn->prepare("INSERT INTO messages (seller_username, customer_mobile, message, items_json, order_id, order_status, order_amount, sender_type, is_read, payment_status, delivery_status) VALUES (?, ?, ?, ?, 'TEMP', 'Pending', ?, 'customer', 0, 'unpaid', 'pending')");
+    $stmtMsg = $conn->prepare("INSERT INTO messages (seller_username, customer_mobile, message, items_json, order_id, order_status, order_amount, sender_type, is_read, payment_status, payment_mode, payment_utr, paid_amount, paid_at, delivery_address, delivery_status) VALUES (?, ?, ?, ?, 'TEMP', 'Pending', ?, 'customer', 0, ?, ?, ?, ?, ?, ?, 'pending')");
     if ($stmtMsg) {
-        $stmtMsg->bind_param("ssssd", $seller_username, $customer_mobile, $msgText, $items_json, $total_amount);
+        $stmtMsg->bind_param("ssssdsssdss", $seller_username, $customer_mobile, $msgText, $items_json, $total_amount, $payment_status, $payment_mode, $payment_utr, $paid_amount, $paid_at, $delivery_address);
         if ($stmtMsg->execute()) {
             $dbInsertId = $stmtMsg->insert_id;
             $orderNumber = "#DM-" . (1000 + $dbInsertId);
@@ -1136,12 +1417,27 @@ if ($action == 'get-header-theme') {
                 total_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                 total_count INT NOT NULL DEFAULT 0,
                 order_status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+                payment_status VARCHAR(50) DEFAULT 'unpaid',
+                payment_mode VARCHAR(50) DEFAULT 'Cash on Delivery',
+                payment_utr VARCHAR(100) DEFAULT NULL,
+                paid_amount DECIMAL(10,2) DEFAULT 0.00,
+                paid_at VARCHAR(50) DEFAULT NULL,
+                delivery_address TEXT DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 INDEX(customer_mobile),
                 INDEX(seller_username)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-            @$conn->query("INSERT INTO customer_orders (order_number, seller_username, seller_name, customer_mobile, customer_name, items_json, total_amount, total_count, order_status) VALUES ('$orderNumber', '$escapedSeller', '" . $conn->real_escape_string($seller_name) . "', '$customer_mobile', '" . $conn->real_escape_string($customer_name) . "', '" . $conn->real_escape_string($items_json) . "', $total_amount, $total_count, 'PENDING')");
+            $colCheckCoPayMode = $conn->query("SHOW COLUMNS FROM customer_orders LIKE 'payment_mode'");
+            if (!$colCheckCoPayMode || $colCheckCoPayMode->num_rows == 0) {
+                @$conn->query("ALTER TABLE customer_orders ADD COLUMN payment_mode VARCHAR(50) DEFAULT 'Cash on Delivery'");
+            }
+            $colCheckCoDelAddr = $conn->query("SHOW COLUMNS FROM customer_orders LIKE 'delivery_address'");
+            if (!$colCheckCoDelAddr || $colCheckCoDelAddr->num_rows == 0) {
+                @$conn->query("ALTER TABLE customer_orders ADD COLUMN delivery_address TEXT DEFAULT NULL");
+            }
+
+            @$conn->query("INSERT INTO customer_orders (order_number, seller_username, seller_name, customer_mobile, customer_name, items_json, total_amount, total_count, order_status, payment_status, payment_mode, payment_utr, paid_amount, paid_at, delivery_address) VALUES ('$orderNumber', '$escapedSeller', '" . $conn->real_escape_string($seller_name) . "', '$customer_mobile', '" . $conn->real_escape_string($customer_name) . "', '" . $conn->real_escape_string($items_json) . "', $total_amount, $total_count, 'PENDING', '" . $conn->real_escape_string($payment_status) . "', '" . $conn->real_escape_string($payment_mode) . "', '" . $conn->real_escape_string($payment_utr) . "', $paid_amount, " . ($paid_at ? "'$paid_at'" : "NULL") . ", '" . $conn->real_escape_string($delivery_address) . "')");
 
             echo json_encode([
                 "success" => true,
@@ -1158,6 +1454,11 @@ if ($action == 'get-header-theme') {
                     "total_amount" => $total_amount,
                     "total_count" => $total_count,
                     "status" => "PENDING",
+                    "payment_mode" => $payment_mode,
+                    "payment_status" => $payment_status,
+                    "payment_utr" => $payment_utr,
+                    "paid_amount" => $paid_amount,
+                    "delivery_address" => $delivery_address,
                     "date" => date('d/m/Y H:i'),
                     "timestamp" => time() * 1000
                 ]
@@ -1176,7 +1477,7 @@ if ($action == 'get-header-theme') {
     }
 
     $escapedSeller = $conn->real_escape_string($seller_username);
-    $query = "SELECT m.*, c.name as customer_name FROM messages m LEFT JOIN customers c ON (m.customer_mobile = c.mobile OR c.mobile LIKE CONCAT('%', RIGHT(m.customer_mobile, 10))) WHERE (m.seller_username = '$escapedSeller' OR LOWER(m.seller_username) = LOWER('$escapedSeller') OR m.seller_username LIKE '%$escapedSeller%') AND (m.items_json IS NOT NULL OR m.order_id IS NOT NULL OR m.message LIKE '%ORDER%') ORDER BY m.id DESC";
+    $query = "SELECT m.*, c.name as customer_name, s.name as seller_name, s.location as seller_location FROM messages m LEFT JOIN customers c ON (m.customer_mobile = c.mobile OR c.mobile LIKE CONCAT('%', RIGHT(m.customer_mobile, 10))) LEFT JOIN sellers s ON (m.seller_username = s.username OR LOWER(m.seller_username) = LOWER(s.username)) WHERE (m.seller_username = '$escapedSeller' OR LOWER(m.seller_username) = LOWER('$escapedSeller') OR m.seller_username LIKE '%$escapedSeller%') AND (m.items_json IS NOT NULL OR m.order_id IS NOT NULL OR m.message LIKE '%ORDER%') ORDER BY m.id DESC";
 
     $res = $conn->query($query);
     $orders = array();
@@ -1184,6 +1485,43 @@ if ($action == 'get-header-theme') {
         while ($row = $res->fetch_assoc()) {
             $row['id'] = (int)$row['id'];
             $row['customer_name'] = !empty($row['customer_name']) ? $row['customer_name'] : "Customer ({$row['customer_mobile']})";
+            if (empty($row['delivery_address'])) {
+                if (!empty($row['message']) && preg_match('/(?:Address|delivery_address|📍\s*Address):\s*([^\r\n]+)/iu', $row['message'], $mAddr)) {
+                    $row['delivery_address'] = trim($mAddr[1]);
+                } elseif (!empty($row['customer_profile_address'])) {
+                    $row['delivery_address'] = trim($row['customer_profile_address']);
+                }
+            }
+            $orders[] = $row;
+        }
+    }
+    echo json_encode(["success" => true, "orders" => $orders]);
+    exit();
+} elseif ($action == 'get-undelivered-orders') {
+    $location = isset($_GET['location']) ? strtolower(trim($_GET['location'])) : '';
+    $query = "SELECT m.*, c.name as customer_name, s.name as seller_name, s.mobile as seller_mobile, s.location as seller_location 
+              FROM messages m 
+              LEFT JOIN customers c ON (m.customer_mobile = c.mobile OR c.mobile LIKE CONCAT('%', RIGHT(m.customer_mobile, 10))) 
+              LEFT JOIN sellers s ON (m.seller_username = s.username OR LOWER(m.seller_username) = LOWER(s.username)) 
+              WHERE (m.items_json IS NOT NULL OR m.order_id IS NOT NULL OR m.message LIKE '%ORDER%')
+                AND (LOWER(m.order_status) IN ('ready', 'approved') OR LOWER(m.delivery_status) IN ('out for delivery', 'picked up', 'pickup'))
+                AND (m.delivery_status IS NULL OR LOWER(m.delivery_status) NOT IN ('delivered', 'cancelled'))
+                AND (m.order_status IS NULL OR LOWER(m.order_status) NOT IN ('cancelled', 'deleted', 'delivered'))
+              ORDER BY m.id DESC";
+
+    $res = $conn->query($query);
+    $orders = array();
+    if ($res && $res !== true) {
+        while ($row = $res->fetch_assoc()) {
+            $row['id'] = (int)$row['id'];
+            $row['customer_name'] = !empty($row['customer_name']) ? $row['customer_name'] : "Customer ({$row['customer_mobile']})";
+            $row['seller_name'] = !empty($row['seller_name']) ? $row['seller_name'] : $row['seller_username'];
+            if (!empty($location)) {
+                $sLoc = strtolower(trim($row['seller_location'] ?? ''));
+                if (!empty($sLoc) && $sLoc !== $location) {
+                    continue;
+                }
+            }
             $orders[] = $row;
         }
     }
@@ -1315,6 +1653,71 @@ if ($action == 'get-header-theme') {
 
     echo json_encode(["success" => true, "orders" => $orders]);
     exit();
+} elseif ($action == 'check-first-order') {
+    $customer_mobile = isset($_GET['customer_mobile']) ? trim($_GET['customer_mobile']) : (isset($input['customer_mobile']) ? trim($input['customer_mobile']) : '');
+    $digits = preg_replace('/[^0-9]/', '', $customer_mobile);
+    $last10 = (strlen($digits) >= 10) ? substr($digits, -10) : $digits;
+
+    if (empty($last10)) {
+        echo json_encode(["success" => true, "is_first_order" => false, "order_count" => 0]);
+        exit();
+    }
+
+    $escapedLike = "%" . $conn->real_escape_string($last10) . "%";
+
+    // 1. Check for DELIVERED orders (if delivered > 0, customer is no longer eligible for first order gift)
+    $deliveredCount = 0;
+    $msgDelivQuery = "SELECT COUNT(*) as cnt FROM messages WHERE (customer_mobile = '$customer_mobile' OR customer_mobile LIKE '$escapedLike' OR customer_mobile LIKE '%$last10%') AND (LOWER(order_status) = 'delivered' OR LOWER(delivery_status) = 'delivered')";
+    $resDeliv = $conn->query($msgDelivQuery);
+    if ($resDeliv && $rowDeliv = $resDeliv->fetch_assoc()) {
+        $deliveredCount = (int)$rowDeliv['cnt'];
+    }
+
+    $checkTable = $conn->query("SHOW TABLES LIKE 'customer_orders'");
+    if ($checkTable && $checkTable->num_rows > 0) {
+        $coDelivQuery = "SELECT COUNT(*) as cnt FROM customer_orders WHERE (customer_mobile = '$customer_mobile' OR customer_mobile LIKE '$escapedLike') AND (LOWER(order_status) = 'delivered' OR LOWER(delivery_status) = 'delivered')";
+        $resCoDeliv = $conn->query($coDelivQuery);
+        if ($resCoDeliv && $rowCoDeliv = $resCoDeliv->fetch_assoc()) {
+            $deliveredCount = max($deliveredCount, (int)$rowCoDeliv['cnt']);
+        }
+    }
+
+    if ($deliveredCount > 0) {
+        echo json_encode([
+            "success" => true,
+            "is_first_order" => false,
+            "has_delivered_order" => true,
+            "delivered_count" => $deliveredCount,
+            "active_count" => 0
+        ]);
+        exit();
+    }
+
+    // 2. Check for active (pending / in-progress non-cancelled) orders
+    $activeCount = 0;
+    $msgActiveQuery = "SELECT COUNT(*) as cnt FROM messages WHERE (customer_mobile = '$customer_mobile' OR customer_mobile LIKE '$escapedLike' OR customer_mobile LIKE '%$last10%') AND (items_json IS NOT NULL OR order_id IS NOT NULL OR message LIKE '%ORDER%') AND (order_status IS NULL OR LOWER(order_status) NOT IN ('cancelled', 'deleted', 'delivered')) AND (delivery_status IS NULL OR LOWER(delivery_status) NOT IN ('cancelled', 'deleted', 'delivered'))";
+    $resActive = $conn->query($msgActiveQuery);
+    if ($resActive && $rowActive = $resActive->fetch_assoc()) {
+        $activeCount = (int)$rowActive['cnt'];
+    }
+
+    if ($checkTable && $checkTable->num_rows > 0) {
+        $coActiveQuery = "SELECT COUNT(*) as cnt FROM customer_orders WHERE (customer_mobile = '$customer_mobile' OR customer_mobile LIKE '$escapedLike') AND (order_status IS NULL OR LOWER(order_status) NOT IN ('cancelled', 'deleted', 'delivered')) AND (delivery_status IS NULL OR LOWER(delivery_status) NOT IN ('cancelled', 'deleted', 'delivered'))";
+        $resCoActive = $conn->query($coActiveQuery);
+        if ($resCoActive && $rowCoActive = $resCoActive->fetch_assoc()) {
+            $activeCount = max($activeCount, (int)$rowCoActive['cnt']);
+        }
+    }
+
+    $isFirst = ($deliveredCount == 0 && $activeCount == 0);
+
+    echo json_encode([
+        "success" => true,
+        "is_first_order" => $isFirst,
+        "delivered_count" => $deliveredCount,
+        "active_count" => $activeCount
+    ]);
+    exit();
 } elseif ($action == 'get-customer-conversations') {
     $customer_mobile = isset($_GET['customer_mobile']) ? trim($_GET['customer_mobile']) : '';
     $digits = preg_replace('/[^0-9]/', '', $customer_mobile);
@@ -1435,6 +1838,8 @@ if ($action == 'get-header-theme') {
     $rate = isset($input['rate']) ? (float)$input['rate'] : 0.0;
     $purchase_rate = isset($input['purchase_rate']) ? (float)$input['purchase_rate'] : (isset($input['p_rate']) ? (float)$input['p_rate'] : 0.0);
     $button_text = isset($input['button_text']) && !empty(trim($input['button_text'])) ? trim($input['button_text']) : 'Buy Now';
+    $variants_raw = isset($input['variants']) ? $input['variants'] : '[]';
+    $variants = is_array($variants_raw) ? json_encode($variants_raw) : (string)$variants_raw;
 
     if (empty($seller_username) || empty($name)) {
         echo json_encode(["success" => false, "message" => "Seller username and product name are required"]);
@@ -1459,11 +1864,17 @@ if ($action == 'get-header-theme') {
         @$conn->query("ALTER TABLE seller_products ADD COLUMN purchase_rate DECIMAL(10,2) DEFAULT 0.00");
     }
 
-    $stmt = $conn->prepare("INSERT INTO seller_products (seller_username, name, description, unit, category, section, qty, rate, purchase_rate, image_url, button_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $colCheckVariants = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'variants'");
+    if (!$colCheckVariants || $colCheckVariants->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_products ADD COLUMN variants LONGTEXT DEFAULT NULL");
+    }
+
+    $stmt = $conn->prepare("INSERT INTO seller_products (seller_username, name, description, unit, category, section, qty, rate, purchase_rate, image_url, button_text, variants) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     if ($stmt) {
-        $stmt->bind_param("sssssiddsss", $seller_username, $name, $description, $unit, $category, $section, $qty, $rate, $purchase_rate, $image_url, $button_text);
+        $stmt->bind_param("sssssiddssss", $seller_username, $name, $description, $unit, $category, $section, $qty, $rate, $purchase_rate, $image_url, $button_text, $variants);
         if ($stmt->execute()) {
             $newId = $stmt->insert_id;
+            $decodedVariants = json_decode($variants, true);
             echo json_encode([
                 "success" => true,
                 "message" => "Product added successfully",
@@ -1479,7 +1890,8 @@ if ($action == 'get-header-theme') {
                     "rate" => $rate,
                     "purchase_rate" => $purchase_rate,
                     "image_url" => $image_url,
-                    "button_text" => $button_text
+                    "button_text" => $button_text,
+                    "variants" => is_array($decodedVariants) ? $decodedVariants : array()
                 ]
             ]);
             exit();
@@ -1597,6 +2009,10 @@ if ($action == 'get-header-theme') {
     if (!$colCheckBtnText || $colCheckBtnText->num_rows == 0) {
         @$conn->query("ALTER TABLE seller_products ADD COLUMN button_text VARCHAR(100) DEFAULT 'Buy Now'");
     }
+    $colCheckVariants = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'variants'");
+    if (!$colCheckVariants || $colCheckVariants->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_products ADD COLUMN variants LONGTEXT DEFAULT NULL");
+    }
 
     $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
     $escapedSeller = $conn->real_escape_string($seller_username);
@@ -1615,6 +2031,12 @@ if ($action == 'get-header-theme') {
             $row['section'] = isset($row['section']) ? $row['section'] : '';
             $row['image_url'] = isset($row['image_url']) ? $row['image_url'] : (isset($row['image']) ? $row['image'] : '');
             $row['button_text'] = isset($row['button_text']) && !empty($row['button_text']) ? $row['button_text'] : 'Buy Now';
+            if (isset($row['variants']) && is_string($row['variants']) && !empty($row['variants'])) {
+                $decodedVar = json_decode($row['variants'], true);
+                $row['variants'] = is_array($decodedVar) ? $decodedVar : array();
+            } elseif (!isset($row['variants']) || !is_array($row['variants'])) {
+                $row['variants'] = array();
+            }
             $products[] = $row;
         }
     }
@@ -1629,6 +2051,12 @@ if ($action == 'get-header-theme') {
                 $row['section'] = isset($row['section']) ? $row['section'] : '';
                 $row['image_url'] = isset($row['image_url']) ? $row['image_url'] : (isset($row['image']) ? $row['image'] : '');
                 $row['button_text'] = isset($row['button_text']) && !empty($row['button_text']) ? $row['button_text'] : 'Buy Now';
+                if (isset($row['variants']) && is_string($row['variants']) && !empty($row['variants'])) {
+                    $decodedVar = json_decode($row['variants'], true);
+                    $row['variants'] = is_array($decodedVar) ? $decodedVar : array();
+                } elseif (!isset($row['variants']) || !is_array($row['variants'])) {
+                    $row['variants'] = array();
+                }
                 $products[] = $row;
             }
         }
@@ -1639,6 +2067,10 @@ if ($action == 'get-header-theme') {
     $colCheckBtnText = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'button_text'");
     if (!$colCheckBtnText || $colCheckBtnText->num_rows == 0) {
         @$conn->query("ALTER TABLE seller_products ADD COLUMN button_text VARCHAR(100) DEFAULT 'Buy Now'");
+    }
+    $colCheckVariants = $conn->query("SHOW COLUMNS FROM seller_products LIKE 'variants'");
+    if (!$colCheckVariants || $colCheckVariants->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_products ADD COLUMN variants LONGTEXT DEFAULT NULL");
     }
 
     $id = isset($input['id']) ? (int)$input['id'] : 0;
@@ -1653,6 +2085,8 @@ if ($action == 'get-header-theme') {
     $purchase_rate = isset($input['purchase_rate']) ? (float)$input['purchase_rate'] : (isset($input['p_rate']) ? (float)$input['p_rate'] : 0.0);
     $image_url = isset($input['image_url']) ? trim($input['image_url']) : (isset($input['image']) ? trim($input['image']) : '');
     $button_text = isset($input['button_text']) && !empty(trim($input['button_text'])) ? trim($input['button_text']) : 'Buy Now';
+    $variants_raw = isset($input['variants']) ? $input['variants'] : '[]';
+    $variants = is_array($variants_raw) ? json_encode($variants_raw) : (string)$variants_raw;
 
     if ($id <= 0 || empty($name)) {
         echo json_encode(["success" => false, "message" => "Product ID and name required"]);
@@ -1664,9 +2098,9 @@ if ($action == 'get-header-theme') {
         @$conn->query("ALTER TABLE seller_products ADD COLUMN purchase_rate DECIMAL(10,2) DEFAULT 0.00");
     }
 
-    $stmt = $conn->prepare("UPDATE seller_products SET name = ?, description = ?, unit = ?, category = ?, section = ?, qty = ?, rate = ?, purchase_rate = ?, image_url = ?, button_text = ? WHERE id = ?");
+    $stmt = $conn->prepare("UPDATE seller_products SET name = ?, description = ?, unit = ?, category = ?, section = ?, qty = ?, rate = ?, purchase_rate = ?, image_url = ?, button_text = ?, variants = ? WHERE id = ?");
     if ($stmt) {
-        $stmt->bind_param("sssssiddssi", $name, $description, $unit, $category, $section, $qty, $rate, $purchase_rate, $image_url, $button_text, $id);
+        $stmt->bind_param("sssssiddsssi", $name, $description, $unit, $category, $section, $qty, $rate, $purchase_rate, $image_url, $button_text, $variants, $id);
         if ($stmt->execute()) {
             echo json_encode(["success" => true, "message" => "Product updated successfully"]);
             exit();
@@ -1698,6 +2132,30 @@ if ($action == 'get-header-theme') {
     if (!$colCheckMaxItems || $colCheckMaxItems->num_rows == 0) {
         @$conn->query("ALTER TABLE seller_sections ADD COLUMN max_items INT DEFAULT 0");
     }
+    $colCheckSecFullWidth = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'full_width'");
+    if (!$colCheckSecFullWidth || $colCheckSecFullWidth->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN full_width INT DEFAULT 0");
+    }
+    $colCheckSecPosterFullWidth = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'poster_full_width'");
+    if (!$colCheckSecPosterFullWidth || $colCheckSecPosterFullWidth->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN poster_full_width INT DEFAULT 0");
+    }
+    $colCheckHideTitle = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'hide_title'");
+    if (!$colCheckHideTitle || $colCheckHideTitle->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN hide_title INT DEFAULT 0");
+    }
+    $colCheckHideItemCount = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'hide_item_count'");
+    if (!$colCheckHideItemCount || $colCheckHideItemCount->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN hide_item_count INT DEFAULT 0");
+    }
+    $colCheckImgBg = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'image_bg_color'");
+    if (!$colCheckImgBg || $colCheckImgBg->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN image_bg_color VARCHAR(50) DEFAULT '#F8FAFC'");
+    }
+    $colCheckHeadingImg = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'heading_image'");
+    if (!$colCheckHeadingImg || $colCheckHeadingImg->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN heading_image LONGTEXT DEFAULT NULL");
+    }
 
     $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
     if (empty($seller_username)) {
@@ -1714,6 +2172,12 @@ if ($action == 'get-header-theme') {
             $row['text_color'] = isset($row['text_color']) && !empty($row['text_color']) ? $row['text_color'] : '#0F172A';
             $row['columns'] = isset($row['columns']) ? (int)$row['columns'] : 2;
             $row['max_items'] = isset($row['max_items']) ? (int)$row['max_items'] : 0;
+            $row['full_width'] = isset($row['full_width']) ? (int)$row['full_width'] : 0;
+            $row['poster_full_width'] = isset($row['poster_full_width']) ? (int)$row['poster_full_width'] : 0;
+            $row['hide_title'] = isset($row['hide_title']) ? (int)$row['hide_title'] : 0;
+            $row['hide_item_count'] = isset($row['hide_item_count']) ? (int)$row['hide_item_count'] : 0;
+            $row['image_bg_color'] = isset($row['image_bg_color']) && !empty($row['image_bg_color']) ? $row['image_bg_color'] : '#F8FAFC';
+            $row['heading_image'] = isset($row['heading_image']) ? $row['heading_image'] : '';
             $sections[] = $row;
         }
     }
@@ -1732,6 +2196,30 @@ if ($action == 'get-header-theme') {
     if (!$colCheckMaxItems || $colCheckMaxItems->num_rows == 0) {
         @$conn->query("ALTER TABLE seller_sections ADD COLUMN max_items INT DEFAULT 0");
     }
+    $colCheckSecFullWidth = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'full_width'");
+    if (!$colCheckSecFullWidth || $colCheckSecFullWidth->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN full_width INT DEFAULT 0");
+    }
+    $colCheckSecPosterFullWidth = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'poster_full_width'");
+    if (!$colCheckSecPosterFullWidth || $colCheckSecPosterFullWidth->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN poster_full_width INT DEFAULT 0");
+    }
+    $colCheckHideTitle = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'hide_title'");
+    if (!$colCheckHideTitle || $colCheckHideTitle->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN hide_title INT DEFAULT 0");
+    }
+    $colCheckHideItemCount = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'hide_item_count'");
+    if (!$colCheckHideItemCount || $colCheckHideItemCount->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN hide_item_count INT DEFAULT 0");
+    }
+    $colCheckImgBg = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'image_bg_color'");
+    if (!$colCheckImgBg || $colCheckImgBg->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN image_bg_color VARCHAR(50) DEFAULT '#F8FAFC'");
+    }
+    $colCheckHeadingImg = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'heading_image'");
+    if (!$colCheckHeadingImg || $colCheckHeadingImg->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN heading_image LONGTEXT DEFAULT NULL");
+    }
 
     $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : (isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($_POST['seller_username']) ? trim($_POST['seller_username']) : ''));
     $name = isset($input['name']) ? trim($input['name']) : (isset($_GET['name']) ? trim($_GET['name']) : (isset($_POST['name']) ? trim($_POST['name']) : ''));
@@ -1742,6 +2230,17 @@ if ($action == 'get-header-theme') {
     if ($columns <= 0 || $columns > 3) $columns = 2;
     $max_items = isset($input['max_items']) ? (int)$input['max_items'] : 0;
     if ($max_items < 0) $max_items = 0;
+    $full_width = isset($input['full_width']) ? (int)$input['full_width'] : (isset($_POST['full_width']) ? (int)$_POST['full_width'] : 0);
+    if ($full_width != 1) $full_width = 0;
+    $poster_full_width = isset($input['poster_full_width']) ? (int)$input['poster_full_width'] : (isset($_POST['poster_full_width']) ? (int)$_POST['poster_full_width'] : 0);
+    if ($poster_full_width != 1) $poster_full_width = 0;
+    $hide_title = isset($input['hide_title']) ? (int)$input['hide_title'] : (isset($_POST['hide_title']) ? (int)$_POST['hide_title'] : 0);
+    if ($hide_title != 1) $hide_title = 0;
+    $hide_item_count = isset($input['hide_item_count']) ? (int)$input['hide_item_count'] : (isset($_POST['hide_item_count']) ? (int)$_POST['hide_item_count'] : 0);
+    if ($hide_item_count != 1) $hide_item_count = 0;
+    $image_bg_color = isset($input['image_bg_color']) ? trim($input['image_bg_color']) : (isset($_POST['image_bg_color']) ? trim($_POST['image_bg_color']) : '#F8FAFC');
+    if (empty($image_bg_color)) $image_bg_color = '#F8FAFC';
+    $heading_image = isset($input['heading_image']) ? trim($input['heading_image']) : (isset($_POST['heading_image']) ? trim($_POST['heading_image']) : '');
 
     if (empty($seller_username) || empty($name)) {
         echo json_encode(["success" => false, "message" => "Seller username and section name required"]);
@@ -1750,12 +2249,16 @@ if ($action == 'get-header-theme') {
 
     $escapedSeller = $conn->real_escape_string($seller_username);
     $escapedName = $conn->real_escape_string($name);
+
+    // Sync matching sliders full_width
+    @$conn->query("UPDATE seller_sliders SET full_width = $poster_full_width WHERE (seller_username = '$escapedSeller' OR LOWER(seller_username) = LOWER('$escapedSeller')) AND LOWER(section) = LOWER('$escapedName')");
+
     $chk = $conn->query("SELECT id FROM seller_sections WHERE seller_username = '$escapedSeller' AND name = '$escapedName' LIMIT 1");
     if ($chk && $row = $chk->fetch_assoc()) {
         $existingId = (int)$row['id'];
-        $stmtUp = $conn->prepare("UPDATE seller_sections SET icon = ?, bg_color = ?, text_color = ?, columns = ?, max_items = ? WHERE id = ?");
+        $stmtUp = $conn->prepare("UPDATE seller_sections SET icon = ?, bg_color = ?, text_color = ?, columns = ?, max_items = ?, full_width = ?, poster_full_width = ?, hide_title = ?, hide_item_count = ?, image_bg_color = ?, heading_image = ? WHERE id = ?");
         if ($stmtUp) {
-            $stmtUp->bind_param("sssiii", $icon, $bg_color, $text_color, $columns, $max_items, $existingId);
+            $stmtUp->bind_param("sssiiiiisssi", $icon, $bg_color, $text_color, $columns, $max_items, $full_width, $poster_full_width, $hide_title, $hide_item_count, $image_bg_color, $heading_image, $existingId);
             $stmtUp->execute();
         }
         echo json_encode([
@@ -1769,29 +2272,41 @@ if ($action == 'get-header-theme') {
                 "bg_color" => $bg_color,
                 "text_color" => $text_color,
                 "columns" => $columns,
-                "max_items" => $max_items
+                "max_items" => $max_items,
+                "full_width" => $full_width,
+                "poster_full_width" => $poster_full_width,
+                "hide_title" => $hide_title,
+                "hide_item_count" => $hide_item_count,
+                "image_bg_color" => $image_bg_color,
+                "heading_image" => $heading_image
             ]
         ]);
         exit();
     }
 
-    $stmt = $conn->prepare("INSERT INTO seller_sections (seller_username, name, icon, bg_color, text_color, columns, max_items) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    $stmt = $conn->prepare("INSERT INTO seller_sections (seller_username, name, icon, bg_color, text_color, columns, max_items, full_width, poster_full_width, hide_title, hide_item_count, image_bg_color, heading_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     if ($stmt) {
-        $stmt->bind_param("sssssii", $seller_username, $name, $icon, $bg_color, $text_color, $columns, $max_items);
+        $stmt->bind_param("sssssiiiiisss", $seller_username, $name, $icon, $bg_color, $text_color, $columns, $max_items, $full_width, $poster_full_width, $hide_title, $hide_item_count, $image_bg_color, $heading_image);
         if ($stmt->execute()) {
-            $newId = $stmt->insert_id;
+            $insertedId = $conn->insert_id;
             echo json_encode([
                 "success" => true,
                 "message" => "Section added",
                 "section" => [
-                    "id" => $newId,
+                    "id" => $insertedId,
                     "seller_username" => $seller_username,
                     "name" => $name,
                     "icon" => $icon,
                     "bg_color" => $bg_color,
                     "text_color" => $text_color,
                     "columns" => $columns,
-                    "max_items" => $max_items
+                    "max_items" => $max_items,
+                    "full_width" => $full_width,
+                    "poster_full_width" => $poster_full_width,
+                    "hide_title" => $hide_title,
+                    "hide_item_count" => $hide_item_count,
+                    "image_bg_color" => $image_bg_color,
+                    "heading_image" => $heading_image
                 ]
             ]);
             exit();
@@ -1812,6 +2327,30 @@ if ($action == 'get-header-theme') {
     if (!$colCheckMaxItems || $colCheckMaxItems->num_rows == 0) {
         @$conn->query("ALTER TABLE seller_sections ADD COLUMN max_items INT DEFAULT 0");
     }
+    $colCheckSecFullWidth = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'full_width'");
+    if (!$colCheckSecFullWidth || $colCheckSecFullWidth->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN full_width INT DEFAULT 0");
+    }
+    $colCheckSecPosterFullWidth = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'poster_full_width'");
+    if (!$colCheckSecPosterFullWidth || $colCheckSecPosterFullWidth->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN poster_full_width INT DEFAULT 0");
+    }
+    $colCheckHideTitle = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'hide_title'");
+    if (!$colCheckHideTitle || $colCheckHideTitle->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN hide_title INT DEFAULT 0");
+    }
+    $colCheckHideItemCount = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'hide_item_count'");
+    if (!$colCheckHideItemCount || $colCheckHideItemCount->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN hide_item_count INT DEFAULT 0");
+    }
+    $colCheckImgBg = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'image_bg_color'");
+    if (!$colCheckImgBg || $colCheckImgBg->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN image_bg_color VARCHAR(50) DEFAULT '#F8FAFC'");
+    }
+    $colCheckHeadingImg = $conn->query("SHOW COLUMNS FROM seller_sections LIKE 'heading_image'");
+    if (!$colCheckHeadingImg || $colCheckHeadingImg->num_rows == 0) {
+        @$conn->query("ALTER TABLE seller_sections ADD COLUMN heading_image LONGTEXT DEFAULT NULL");
+    }
 
     $id = isset($input['id']) ? (int)$input['id'] : (isset($_POST['id']) ? (int)$_POST['id'] : 0);
     $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : (isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($_POST['seller_username']) ? trim($_POST['seller_username']) : ''));
@@ -1823,6 +2362,17 @@ if ($action == 'get-header-theme') {
     if ($columns <= 0 || $columns > 3) $columns = 2;
     $max_items = isset($input['max_items']) ? (int)$input['max_items'] : 0;
     if ($max_items < 0) $max_items = 0;
+    $full_width = isset($input['full_width']) ? (int)$input['full_width'] : (isset($_POST['full_width']) ? (int)$_POST['full_width'] : 0);
+    if ($full_width != 1) $full_width = 0;
+    $poster_full_width = isset($input['poster_full_width']) ? (int)$input['poster_full_width'] : (isset($_POST['poster_full_width']) ? (int)$_POST['poster_full_width'] : 0);
+    if ($poster_full_width != 1) $poster_full_width = 0;
+    $hide_title = isset($input['hide_title']) ? (int)$input['hide_title'] : (isset($_POST['hide_title']) ? (int)$_POST['hide_title'] : 0);
+    if ($hide_title != 1) $hide_title = 0;
+    $hide_item_count = isset($input['hide_item_count']) ? (int)$input['hide_item_count'] : (isset($_POST['hide_item_count']) ? (int)$_POST['hide_item_count'] : 0);
+    if ($hide_item_count != 1) $hide_item_count = 0;
+    $image_bg_color = isset($input['image_bg_color']) ? trim($input['image_bg_color']) : (isset($_POST['image_bg_color']) ? trim($_POST['image_bg_color']) : '#F8FAFC');
+    if (empty($image_bg_color)) $image_bg_color = '#F8FAFC';
+    $heading_image = isset($input['heading_image']) ? trim($input['heading_image']) : (isset($_POST['heading_image']) ? trim($_POST['heading_image']) : '');
 
     if (empty($name)) {
         echo json_encode(["success" => false, "message" => "Section name required"]);
@@ -1832,11 +2382,14 @@ if ($action == 'get-header-theme') {
     $escapedSeller = $conn->real_escape_string($seller_username);
     $escapedName = $conn->real_escape_string($name);
 
+    // Sync matching sliders full_width
+    @$conn->query("UPDATE seller_sliders SET full_width = $poster_full_width WHERE (seller_username = '$escapedSeller' OR LOWER(seller_username) = LOWER('$escapedSeller')) AND LOWER(section) = LOWER('$escapedName')");
+
     $updated = false;
     if ($id > 0) {
-        $stmt = $conn->prepare("UPDATE seller_sections SET name = ?, icon = ?, bg_color = ?, text_color = ?, columns = ?, max_items = ? WHERE id = ?");
+        $stmt = $conn->prepare("UPDATE seller_sections SET name = ?, icon = ?, bg_color = ?, text_color = ?, columns = ?, max_items = ?, full_width = ?, poster_full_width = ?, hide_title = ?, hide_item_count = ?, image_bg_color = ?, heading_image = ? WHERE id = ?");
         if ($stmt) {
-            $stmt->bind_param("ssssiii", $name, $icon, $bg_color, $text_color, $columns, $max_items, $id);
+            $stmt->bind_param("ssssiiiiisssi", $name, $icon, $bg_color, $text_color, $columns, $max_items, $full_width, $poster_full_width, $hide_title, $hide_item_count, $image_bg_color, $heading_image, $id);
             if ($stmt->execute()) {
                 $updated = true;
             }
@@ -1844,9 +2397,9 @@ if ($action == 'get-header-theme') {
     }
 
     if (!$updated && !empty($seller_username)) {
-        $stmt = $conn->prepare("UPDATE seller_sections SET icon = ?, bg_color = ?, text_color = ?, columns = ?, max_items = ? WHERE seller_username = ? AND name = ?");
+        $stmt = $conn->prepare("UPDATE seller_sections SET icon = ?, bg_color = ?, text_color = ?, columns = ?, max_items = ?, full_width = ?, poster_full_width = ?, hide_title = ?, hide_item_count = ?, image_bg_color = ?, heading_image = ? WHERE seller_username = ? AND name = ?");
         if ($stmt) {
-            $stmt->bind_param("sssissi", $icon, $bg_color, $text_color, $columns, $max_items, $seller_username, $name);
+            $stmt->bind_param("sssiiiiisssss", $icon, $bg_color, $text_color, $columns, $max_items, $full_width, $poster_full_width, $hide_title, $hide_item_count, $image_bg_color, $heading_image, $seller_username, $name);
             if ($stmt->execute()) {
                 $updated = true;
             }
@@ -1854,14 +2407,25 @@ if ($action == 'get-header-theme') {
     }
 
     if (!$updated && !empty($seller_username)) {
-        $stmtIns = $conn->prepare("INSERT INTO seller_sections (seller_username, name, icon, bg_color, text_color, columns, max_items) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmtIns = $conn->prepare("INSERT INTO seller_sections (seller_username, name, icon, bg_color, text_color, columns, max_items, full_width, poster_full_width, hide_title, hide_item_count, image_bg_color, heading_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         if ($stmtIns) {
-            $stmtIns->bind_param("sssssii", $seller_username, $name, $icon, $bg_color, $text_color, $columns, $max_items);
+            $stmtIns->bind_param("sssssiiiiisss", $seller_username, $name, $icon, $bg_color, $text_color, $columns, $max_items, $full_width, $poster_full_width, $hide_title, $hide_item_count, $image_bg_color, $heading_image);
             $stmtIns->execute();
         }
     }
 
-    echo json_encode(["success" => true, "message" => "Section updated", "columns" => $columns, "max_items" => $max_items]);
+    echo json_encode([
+        "success" => true,
+        "message" => "Section updated",
+        "columns" => $columns,
+        "max_items" => $max_items,
+        "full_width" => $full_width,
+        "poster_full_width" => $poster_full_width,
+        "hide_title" => $hide_title,
+        "hide_item_count" => $hide_item_count,
+        "image_bg_color" => $image_bg_color,
+        "heading_image" => $heading_image
+    ]);
     exit();
 } elseif ($action == 'delete-seller-section') {
     $id = isset($input['id']) ? (int)$input['id'] : (isset($_GET['id']) ? (int)$_GET['id'] : 0);
@@ -1996,6 +2560,13 @@ if ($action == 'get-header-theme') {
     $name = isset($input['name']) ? trim($input['name']) : '';
     $image_url = isset($input['image_url']) ? trim($input['image_url']) : '';
     $color = isset($input['color']) ? trim($input['color']) : '#8B5CF6';
+    $icon_url = isset($input['icon_url']) ? trim($input['icon_url']) : '';
+    $poster_url = isset($input['poster_url']) ? trim($input['poster_url']) : '';
+    $item_bg_color = isset($input['item_bg_color']) ? trim($input['item_bg_color']) : (isset($_GET['item_bg_color']) ? trim($_GET['item_bg_color']) : '#F8FAFC');
+    if (empty($item_bg_color)) $item_bg_color = '#F8FAFC';
+    $sections = isset($input['sections']) ? trim($input['sections']) : (isset($_GET['sections']) ? trim($_GET['sections']) : '');
+    $hide_name = isset($input['hide_name']) ? (int)$input['hide_name'] : (isset($_GET['hide_name']) ? (int)$_GET['hide_name'] : 0);
+    $full_size_image = isset($input['full_size_image']) ? (int)$input['full_size_image'] : (isset($_GET['full_size_image']) ? (int)$_GET['full_size_image'] : 0);
 
     if (empty($seller_username) || empty($name)) {
         echo json_encode(["success" => false, "message" => "Seller username and category name required"]);
@@ -2004,40 +2575,46 @@ if ($action == 'get-header-theme') {
 
     $escapedSeller = $conn->real_escape_string($seller_username);
     $escapedName = $conn->real_escape_string($name);
-    $chk = $conn->query("SELECT id, image_url, color FROM seller_categories WHERE seller_username = '$escapedSeller' AND name = '$escapedName' LIMIT 1");
+    $chk = $conn->query("SELECT id, image_url, color, icon_url, poster_url, item_bg_color, sections, hide_name, full_size_image FROM seller_categories WHERE seller_username = '$escapedSeller' AND name = '$escapedName' LIMIT 1");
     if ($chk && $row = $chk->fetch_assoc()) {
         $cId = (int)$row['id'];
-        if (!empty($image_url)) {
-            $upStmt = $conn->prepare("UPDATE seller_categories SET color = ?, image_url = ? WHERE id = ?");
-            if ($upStmt) {
-                $upStmt->bind_param("ssi", $color, $image_url, $cId);
-                $upStmt->execute();
-            }
-        } else {
-            $upStmt = $conn->prepare("UPDATE seller_categories SET color = ? WHERE id = ?");
-            if ($upStmt) {
-                $upStmt->bind_param("si", $color, $cId);
-                $upStmt->execute();
-            }
+        $finalImg = !empty($image_url) ? $image_url : $row['image_url'];
+        $finalIcon = !empty($icon_url) ? $icon_url : $row['icon_url'];
+        $finalPoster = !empty($poster_url) ? $poster_url : (isset($row['poster_url']) ? $row['poster_url'] : '');
+        $finalItemBg = !empty($item_bg_color) ? $item_bg_color : (isset($row['item_bg_color']) ? $row['item_bg_color'] : '#F8FAFC');
+        $finalSections = !empty($sections) ? $sections : (isset($row['sections']) ? $row['sections'] : '');
+        $finalHideName = $hide_name !== null ? $hide_name : (isset($row['hide_name']) ? (int)$row['hide_name'] : 0);
+        $finalFullSize = $full_size_image !== null ? $full_size_image : (isset($row['full_size_image']) ? (int)$row['full_size_image'] : 0);
+
+        $upStmt = $conn->prepare("UPDATE seller_categories SET color = ?, image_url = ?, icon_url = ?, poster_url = ?, item_bg_color = ?, sections = ?, hide_name = ?, full_size_image = ? WHERE id = ?");
+        if ($upStmt) {
+            $upStmt->bind_param("ssssssiii", $color, $finalImg, $finalIcon, $finalPoster, $finalItemBg, $finalSections, $finalHideName, $finalFullSize, $cId);
+            $upStmt->execute();
         }
 
         echo json_encode([
             "success" => true,
-            "message" => "Category color updated in database",
+            "message" => "Category updated in database",
             "category" => [
                 "id" => $cId,
                 "seller_username" => $seller_username,
                 "name" => $name,
-                "image_url" => !empty($image_url) ? $image_url : $row['image_url'],
-                "color" => $color
+                "image_url" => $finalImg,
+                "color" => $color,
+                "icon_url" => $finalIcon,
+                "poster_url" => $finalPoster,
+                "item_bg_color" => $finalItemBg,
+                "sections" => $finalSections,
+                "hide_name" => $finalHideName,
+                "full_size_image" => $finalFullSize
             ]
         ]);
         exit();
     }
 
-    $stmt = $conn->prepare("INSERT INTO seller_categories (seller_username, name, image_url, color) VALUES (?, ?, ?, ?)");
+    $stmt = $conn->prepare("INSERT INTO seller_categories (seller_username, name, image_url, color, icon_url, poster_url, item_bg_color, sections, hide_name, full_size_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     if ($stmt) {
-        $stmt->bind_param("ssss", $seller_username, $name, $image_url, $color);
+        $stmt->bind_param("ssssssssii", $seller_username, $name, $image_url, $color, $icon_url, $poster_url, $item_bg_color, $sections, $hide_name, $full_size_image);
         if ($stmt->execute()) {
             $newId = $stmt->insert_id;
             echo json_encode([
@@ -2048,7 +2625,13 @@ if ($action == 'get-header-theme') {
                     "seller_username" => $seller_username,
                     "name" => $name,
                     "image_url" => $image_url,
-                    "color" => $color
+                    "color" => $color,
+                    "icon_url" => $icon_url,
+                    "poster_url" => $poster_url,
+                    "item_bg_color" => $item_bg_color,
+                    "sections" => $sections,
+                    "hide_name" => $hide_name,
+                    "full_size_image" => $full_size_image
                 ]
             ]);
             exit();
@@ -2062,6 +2645,12 @@ if ($action == 'get-header-theme') {
     $name = isset($input['name']) ? trim($input['name']) : (isset($_GET['name']) ? trim($_GET['name']) : '');
     $image_url = isset($input['image_url']) ? trim($input['image_url']) : '';
     $color = isset($input['color']) ? trim($input['color']) : '#8B5CF6';
+    $icon_url = isset($input['icon_url']) ? trim($input['icon_url']) : '';
+    $poster_url = isset($input['poster_url']) ? trim($input['poster_url']) : (isset($_GET['poster_url']) ? trim($_GET['poster_url']) : null);
+    $item_bg_color = isset($input['item_bg_color']) ? trim($input['item_bg_color']) : (isset($_GET['item_bg_color']) ? trim($_GET['item_bg_color']) : null);
+    $sections = isset($input['sections']) ? trim($input['sections']) : (isset($_GET['sections']) ? trim($_GET['sections']) : null);
+    $hide_name = isset($input['hide_name']) ? (int)$input['hide_name'] : (isset($_GET['hide_name']) ? (int)$_GET['hide_name'] : null);
+    $full_size_image = isset($input['full_size_image']) ? (int)$input['full_size_image'] : (isset($_GET['full_size_image']) ? (int)$_GET['full_size_image'] : null);
 
     if (empty($name)) {
         echo json_encode(["success" => false, "message" => "Category name required"]);
@@ -2072,54 +2661,43 @@ if ($action == 'get-header-theme') {
 
     // 1. Update by ID if ID > 0
     if ($id > 0) {
-        if (!empty($image_url)) {
-            $stmt = $conn->prepare("UPDATE seller_categories SET name = ?, image_url = ?, color = ? WHERE id = ?");
-            if ($stmt) {
-                $stmt->bind_param("sssi", $name, $image_url, $color, $id);
-                if ($stmt->execute() && $stmt->affected_rows > 0) $updated = true;
-            }
-        } else {
-            $stmt = $conn->prepare("UPDATE seller_categories SET name = ?, color = ? WHERE id = ?");
-            if ($stmt) {
-                $stmt->bind_param("ssi", $name, $color, $id);
-                if ($stmt->execute() && $stmt->affected_rows > 0) $updated = true;
-            }
+        $curRes = $conn->query("SELECT image_url, icon_url, poster_url, item_bg_color, sections, hide_name, full_size_image FROM seller_categories WHERE id = $id LIMIT 1");
+        $curRow = $curRes ? $curRes->fetch_assoc() : null;
+        $finalImg = !empty($image_url) ? $image_url : ($curRow ? $curRow['image_url'] : '');
+        $finalIcon = !empty($icon_url) ? $icon_url : ($curRow ? $curRow['icon_url'] : '');
+        $finalPoster = $poster_url !== null ? $poster_url : ($curRow ? (isset($curRow['poster_url']) ? $curRow['poster_url'] : '') : '');
+        $finalItemBg = $item_bg_color !== null ? $item_bg_color : ($curRow ? (isset($curRow['item_bg_color']) ? $curRow['item_bg_color'] : '#F8FAFC') : '#F8FAFC');
+        $finalSections = $sections !== null ? $sections : ($curRow ? (isset($curRow['sections']) ? $curRow['sections'] : '') : '');
+        $finalHideName = $hide_name !== null ? $hide_name : ($curRow && isset($curRow['hide_name']) ? (int)$curRow['hide_name'] : 0);
+        $finalFullSize = $full_size_image !== null ? $full_size_image : ($curRow && isset($curRow['full_size_image']) ? (int)$curRow['full_size_image'] : 0);
+
+        $stmt = $conn->prepare("UPDATE seller_categories SET name = ?, image_url = ?, color = ?, icon_url = ?, poster_url = ?, item_bg_color = ?, sections = ?, hide_name = ?, full_size_image = ? WHERE id = ?");
+        if ($stmt) {
+            $stmt->bind_param("sssssssiii", $name, $finalImg, $color, $finalIcon, $finalPoster, $finalItemBg, $finalSections, $finalHideName, $finalFullSize, $id);
+            if ($stmt->execute() && $stmt->affected_rows > 0) $updated = true;
         }
     }
 
     // 2. Fallback update by seller_username & name
-    if (!empty($seller_username)) {
-        if (!empty($image_url)) {
-            $stmt2 = $conn->prepare("UPDATE seller_categories SET color = ?, image_url = ? WHERE seller_username = ? AND name = ?");
-            if ($stmt2) {
-                $stmt2->bind_param("ssss", $color, $image_url, $seller_username, $name);
-                if ($stmt2->execute() && $stmt2->affected_rows > 0) $updated = true;
-            }
-        } else {
-            $stmt2 = $conn->prepare("UPDATE seller_categories SET color = ? WHERE seller_username = ? AND name = ?");
-            if ($stmt2) {
-                $stmt2->bind_param("sss", $color, $seller_username, $name);
-                if ($stmt2->execute() && $stmt2->affected_rows > 0) $updated = true;
-            }
-        }
-    } else {
-        // Fallback update by name only
-        if (!empty($image_url)) {
-            $stmt3 = $conn->prepare("UPDATE seller_categories SET color = ?, image_url = ? WHERE name = ?");
-            if ($stmt3) {
-                $stmt3->bind_param("sss", $color, $image_url, $name);
-                if ($stmt3->execute() && $stmt3->affected_rows > 0) $updated = true;
-            }
-        } else {
-            $stmt3 = $conn->prepare("UPDATE seller_categories SET color = ? WHERE name = ?");
-            if ($stmt3) {
-                $stmt3->bind_param("ss", $color, $name);
-                if ($stmt3->execute() && $stmt3->affected_rows > 0) $updated = true;
-            }
+    if (!$updated && !empty($seller_username)) {
+        $curRes = $conn->query("SELECT id, image_url, icon_url, poster_url, item_bg_color, sections, hide_name, full_size_image FROM seller_categories WHERE seller_username = '" . $conn->real_escape_string($seller_username) . "' AND name = '" . $conn->real_escape_string($name) . "' LIMIT 1");
+        $curRow = $curRes ? $curRes->fetch_assoc() : null;
+        $finalImg = !empty($image_url) ? $image_url : ($curRow ? $curRow['image_url'] : '');
+        $finalIcon = !empty($icon_url) ? $icon_url : ($curRow ? $curRow['icon_url'] : '');
+        $finalPoster = $poster_url !== null ? $poster_url : ($curRow ? (isset($curRow['poster_url']) ? $curRow['poster_url'] : '') : '');
+        $finalItemBg = $item_bg_color !== null ? $item_bg_color : ($curRow ? (isset($curRow['item_bg_color']) ? $curRow['item_bg_color'] : '#F8FAFC') : '#F8FAFC');
+        $finalSections = $sections !== null ? $sections : ($curRow ? (isset($curRow['sections']) ? $curRow['sections'] : '') : '');
+        $finalHideName = $hide_name !== null ? $hide_name : ($curRow && isset($curRow['hide_name']) ? (int)$curRow['hide_name'] : 0);
+        $finalFullSize = $full_size_image !== null ? $full_size_image : ($curRow && isset($curRow['full_size_image']) ? (int)$curRow['full_size_image'] : 0);
+
+        $stmt2 = $conn->prepare("UPDATE seller_categories SET color = ?, image_url = ?, icon_url = ?, poster_url = ?, item_bg_color = ?, sections = ?, hide_name = ?, full_size_image = ? WHERE seller_username = ? AND name = ?");
+        if ($stmt2) {
+            $stmt2->bind_param("ssssssiiss", $color, $finalImg, $finalIcon, $finalPoster, $finalItemBg, $finalSections, $finalHideName, $finalFullSize, $seller_username, $name);
+            if ($stmt2->execute() && $stmt2->affected_rows > 0) $updated = true;
         }
     }
 
-    echo json_encode(["success" => true, "message" => "Category color updated in database", "color" => $color, "updated" => $updated]);
+    echo json_encode(["success" => true, "message" => "Category updated in database", "color" => $color, "poster_url" => $poster_url, "item_bg_color" => $item_bg_color, "sections" => $sections, "hide_name" => $hide_name, "full_size_image" => $full_size_image, "updated" => $updated]);
     exit();
 } elseif ($action == 'delete-seller-category') {
     $id = isset($input['id']) ? (int)$input['id'] : (isset($_GET['id']) ? (int)$_GET['id'] : 0);
@@ -2140,6 +2718,872 @@ if ($action == 'get-header-theme') {
         }
     }
     echo json_encode(["success" => true, "message" => "Category deleted"]);
+    exit();
+} elseif ($action == 'save-seller-product-border') {
+    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : (isset($_GET['seller_username']) ? trim($_GET['seller_username']) : '');
+    if (empty($seller_username) && isset($input['username'])) $seller_username = trim($input['username']);
+
+    $border_image = isset($input['border_image']) ? trim($input['border_image']) : '';
+    if (empty($border_image) && isset($input['product_border'])) $border_image = trim($input['product_border']);
+    if (empty($border_image) && isset($input['border'])) $border_image = trim($input['border']);
+
+    if (empty($seller_username)) {
+        echo json_encode(["success" => false, "message" => "Seller username required"]);
+        exit();
+    }
+
+    $colCheckBorder = $conn->query("SHOW COLUMNS FROM sellers LIKE 'border_image'");
+    if (!$colCheckBorder || $colCheckBorder->num_rows == 0) {
+        @$conn->query("ALTER TABLE sellers ADD COLUMN border_image LONGTEXT DEFAULT NULL");
+    }
+
+    // 1. Save into seller_borders table
+    $stmt1 = $conn->prepare("INSERT INTO seller_borders (seller_username, border_image) VALUES (?, ?) ON DUPLICATE KEY UPDATE border_image = VALUES(border_image)");
+    if ($stmt1) {
+        $stmt1->bind_param("ss", $seller_username, $border_image);
+        $stmt1->execute();
+    }
+
+    // 2. Also save into sellers table for redundancy
+    $stmt2 = $conn->prepare("UPDATE sellers SET border_image = ? WHERE username = ? OR LOWER(username) = LOWER(?)");
+    if ($stmt2) {
+        $stmt2->bind_param("sss", $border_image, $seller_username, $seller_username);
+        $stmt2->execute();
+    }
+
+    echo json_encode([
+        "success" => true,
+        "message" => "Product border saved in database successfully",
+        "seller_username" => $seller_username,
+        "border_image" => $border_image
+    ]);
+    exit();
+} elseif ($action == 'get-seller-product-border') {
+    $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
+    if (empty($seller_username) && isset($_GET['username'])) $seller_username = trim($_GET['username']);
+    if (empty($seller_username) && isset($input['username'])) $seller_username = trim($input['username']);
+
+    $border_image = '';
+    if (!empty($seller_username)) {
+        $escapedSeller = $conn->real_escape_string($seller_username);
+
+        // Check seller_borders table
+        $chk1 = $conn->query("SHOW TABLES LIKE 'seller_borders'");
+        if ($chk1 && $chk1->num_rows > 0) {
+            $res1 = $conn->query("SELECT border_image FROM seller_borders WHERE seller_username = '$escapedSeller' OR LOWER(seller_username) = LOWER('$escapedSeller') LIMIT 1");
+            if ($res1 && $row1 = $res1->fetch_assoc()) {
+                $border_image = trim($row1['border_image'] ?? '');
+            }
+        }
+
+        // Fallback: check sellers table
+        if (empty($border_image)) {
+            $colCheckBorder = $conn->query("SHOW COLUMNS FROM sellers LIKE 'border_image'");
+            if ($colCheckBorder && $colCheckBorder->num_rows > 0) {
+                $res2 = $conn->query("SELECT border_image FROM sellers WHERE username = '$escapedSeller' OR LOWER(username) = LOWER('$escapedSeller') LIMIT 1");
+                if ($res2 && $row2 = $res2->fetch_assoc()) {
+                    $border_image = trim($row2['border_image'] ?? '');
+                }
+            }
+        }
+    }
+
+    echo json_encode([
+        "success" => true,
+        "seller_username" => $seller_username,
+        "border_image" => $border_image,
+        "product_border" => $border_image,
+        "border" => $border_image
+    ]);
+    exit();
+} elseif ($action == 'save-seller-header-animations') {
+    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : (isset($_GET['seller_username']) ? trim($_GET['seller_username']) : '');
+    if (empty($seller_username) && isset($input['username'])) $seller_username = trim($input['username']);
+
+    $header_animations = '';
+    if (isset($input['header_animations'])) {
+        $header_animations = is_array($input['header_animations']) ? json_encode($input['header_animations']) : trim($input['header_animations']);
+    } elseif (isset($input['animations'])) {
+        $header_animations = is_array($input['animations']) ? json_encode($input['animations']) : trim($input['animations']);
+    } elseif (isset($input['animations_list'])) {
+        $header_animations = is_array($input['animations_list']) ? json_encode($input['animations_list']) : trim($input['animations_list']);
+    }
+
+    if (empty($seller_username)) {
+        echo json_encode(["success" => false, "message" => "Seller username required"]);
+        exit();
+    }
+
+    $colCheckAnim = $conn->query("SHOW COLUMNS FROM sellers LIKE 'header_animations'");
+    if (!$colCheckAnim || $colCheckAnim->num_rows == 0) {
+        @$conn->query("ALTER TABLE sellers ADD COLUMN header_animations LONGTEXT DEFAULT NULL");
+    }
+
+    // 1. Save into seller_animations table
+    $stmt1 = $conn->prepare("INSERT INTO seller_animations (seller_username, header_animations) VALUES (?, ?) ON DUPLICATE KEY UPDATE header_animations = VALUES(header_animations)");
+    if ($stmt1) {
+        $stmt1->bind_param("ss", $seller_username, $header_animations);
+        $stmt1->execute();
+    }
+
+    // 2. Also save into sellers table
+    $stmt2 = $conn->prepare("UPDATE sellers SET header_animations = ? WHERE username = ? OR LOWER(username) = LOWER(?)");
+    if ($stmt2) {
+        $stmt2->bind_param("sss", $header_animations, $seller_username, $seller_username);
+        $stmt2->execute();
+    }
+
+    echo json_encode([
+        "success" => true,
+        "message" => "Header animations saved in database successfully",
+        "seller_username" => $seller_username,
+        "header_animations" => $header_animations
+    ]);
+    exit();
+} elseif ($action == 'get-seller-header-animations') {
+    $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
+    if (empty($seller_username) && isset($_GET['username'])) $seller_username = trim($_GET['username']);
+    if (empty($seller_username) && isset($input['username'])) $seller_username = trim($input['username']);
+
+    $header_animations = '[]';
+    if (!empty($seller_username)) {
+        $escapedSeller = $conn->real_escape_string($seller_username);
+
+        // 1. Check seller_animations table
+        $chk1 = $conn->query("SHOW TABLES LIKE 'seller_animations'");
+        if ($chk1 && $chk1->num_rows > 0) {
+            $res1 = $conn->query("SELECT header_animations FROM seller_animations WHERE seller_username = '$escapedSeller' OR LOWER(seller_username) = LOWER('$escapedSeller') LIMIT 1");
+            if ($res1 && $row1 = $res1->fetch_assoc()) {
+                if (!empty($row1['header_animations'])) {
+                    $header_animations = $row1['header_animations'];
+                }
+            }
+        }
+
+        // 2. Fallback: check sellers table
+        if ($header_animations === '[]') {
+            $colCheckAnim = $conn->query("SHOW COLUMNS FROM sellers LIKE 'header_animations'");
+            if ($colCheckAnim && $colCheckAnim->num_rows > 0) {
+                $res2 = $conn->query("SELECT header_animations FROM sellers WHERE username = '$escapedSeller' OR LOWER(username) = LOWER('$escapedSeller') LIMIT 1");
+                if ($res2 && $row2 = $res2->fetch_assoc()) {
+                    if (!empty($row2['header_animations'])) {
+                        $header_animations = $row2['header_animations'];
+                    }
+                }
+            }
+        }
+    }
+
+    $decoded = json_decode($header_animations, true);
+
+    echo json_encode([
+        "success" => true,
+        "seller_username" => $seller_username,
+        "header_animations" => is_array($decoded) ? $decoded : $header_animations,
+        "lottie_animations" => is_array($decoded) ? $decoded : $header_animations,
+        "animations" => is_array($decoded) ? $decoded : $header_animations,
+        "raw_json" => $header_animations
+    ]);
+    exit();
+} elseif ($action == 'update-seller-profile') {
+    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : (isset($input['username']) ? trim($input['username']) : '');
+    $border_image = isset($input['border_image']) ? trim($input['border_image']) : (isset($input['product_border']) ? trim($input['product_border']) : '');
+    $header_animations = isset($input['header_animations']) ? (is_array($input['header_animations']) ? json_encode($input['header_animations']) : trim($input['header_animations'])) : '';
+
+    if (!empty($seller_username) && !empty($border_image)) {
+        $stmt = $conn->prepare("INSERT INTO seller_borders (seller_username, border_image) VALUES (?, ?) ON DUPLICATE KEY UPDATE border_image = VALUES(border_image)");
+        if ($stmt) {
+            $stmt->bind_param("ss", $seller_username, $border_image);
+            $stmt->execute();
+        }
+    }
+
+    if (!empty($seller_username) && !empty($header_animations)) {
+        $stmt2 = $conn->prepare("INSERT INTO seller_animations (seller_username, header_animations) VALUES (?, ?) ON DUPLICATE KEY UPDATE header_animations = VALUES(header_animations)");
+        if ($stmt2) {
+            $stmt2->bind_param("ss", $seller_username, $header_animations);
+            $stmt2->execute();
+        }
+    }
+
+    $welcome_popup = isset($input['welcome_popup']) ? trim($input['welcome_popup']) : (isset($input['popup_image']) ? trim($input['popup_image']) : '');
+    if (!empty($seller_username) && !empty($welcome_popup)) {
+        $chkTable = $conn->query("SHOW TABLES LIKE 'seller_welcome_popups'");
+        if (!$chkTable || $chkTable->num_rows == 0) {
+            @$conn->query("CREATE TABLE IF NOT EXISTS seller_welcome_popups (
+                seller_username VARCHAR(100) PRIMARY KEY,
+                popup_image LONGTEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )");
+        }
+        $stmt3 = $conn->prepare("INSERT INTO seller_welcome_popups (seller_username, popup_image) VALUES (?, ?) ON DUPLICATE KEY UPDATE popup_image = VALUES(popup_image)");
+        if ($stmt3) {
+            $stmt3->bind_param("ss", $seller_username, $welcome_popup);
+            $stmt3->execute();
+        }
+    }
+    echo json_encode(["success" => true, "message" => "Seller profile updated"]);
+    exit();
+} elseif ($action == 'save-seller-welcome-popup') {
+    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : (isset($_GET['seller_username']) ? trim($_GET['seller_username']) : '');
+    if (empty($seller_username) && isset($input['username'])) $seller_username = trim($input['username']);
+    if (empty($seller_username) && isset($_GET['username'])) $seller_username = trim($_GET['username']);
+
+    $popup_image = isset($input['popup_image']) ? trim($input['popup_image']) : '';
+    if (empty($popup_image) && isset($input['image'])) $popup_image = trim($input['image']);
+    if (empty($popup_image) && isset($input['welcome_popup'])) $popup_image = trim($input['welcome_popup']);
+
+    if (empty($seller_username)) {
+        echo json_encode(["success" => false, "message" => "Seller username required"]);
+        exit();
+    }
+
+    $colCheckPopup = $conn->query("SHOW COLUMNS FROM sellers LIKE 'welcome_popup'");
+    if (!$colCheckPopup || $colCheckPopup->num_rows == 0) {
+        @$conn->query("ALTER TABLE sellers ADD COLUMN welcome_popup LONGTEXT DEFAULT NULL");
+    }
+
+    $chkTable = $conn->query("SHOW TABLES LIKE 'seller_welcome_popups'");
+    if (!$chkTable || $chkTable->num_rows == 0) {
+        @$conn->query("CREATE TABLE IF NOT EXISTS seller_welcome_popups (
+            seller_username VARCHAR(100) PRIMARY KEY,
+            popup_image LONGTEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )");
+    }
+
+    // 1. Save in seller_welcome_popups table
+    $stmt1 = $conn->prepare("INSERT INTO seller_welcome_popups (seller_username, popup_image) VALUES (?, ?) ON DUPLICATE KEY UPDATE popup_image = VALUES(popup_image)");
+    if ($stmt1) {
+        $stmt1->bind_param("ss", $seller_username, $popup_image);
+        $stmt1->execute();
+    }
+
+    // 2. Also save into sellers table
+    $stmt2 = $conn->prepare("UPDATE sellers SET welcome_popup = ? WHERE username = ? OR LOWER(username) = LOWER(?)");
+    if ($stmt2) {
+        $stmt2->bind_param("sss", $popup_image, $seller_username, $seller_username);
+        $stmt2->execute();
+    }
+
+    echo json_encode([
+        "success" => true,
+        "message" => "Welcome popup image saved successfully",
+        "seller_username" => $seller_username,
+        "popup_image" => $popup_image
+    ]);
+    exit();
+} elseif ($action == 'get-seller-welcome-popup') {
+    $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
+    if (empty($seller_username) && isset($_GET['username'])) $seller_username = trim($_GET['username']);
+    if (empty($seller_username) && isset($input['username'])) $seller_username = trim($input['username']);
+
+    $popup_image = '';
+    if (!empty($seller_username)) {
+        $escapedSeller = $conn->real_escape_string($seller_username);
+
+        // Check seller_welcome_popups table
+        $chk1 = $conn->query("SHOW TABLES LIKE 'seller_welcome_popups'");
+        if ($chk1 && $chk1->num_rows > 0) {
+            $res1 = $conn->query("SELECT popup_image FROM seller_welcome_popups WHERE seller_username = '$escapedSeller' OR LOWER(seller_username) = LOWER('$escapedSeller') LIMIT 1");
+            if ($res1 && $row1 = $res1->fetch_assoc()) {
+                $popup_image = trim($row1['popup_image'] ?? '');
+            }
+        }
+
+        // Fallback: check sellers table
+        if (empty($popup_image)) {
+            $colCheck = $conn->query("SHOW COLUMNS FROM sellers LIKE 'welcome_popup'");
+            if ($colCheck && $colCheck->num_rows > 0) {
+                $res2 = $conn->query("SELECT welcome_popup FROM sellers WHERE username = '$escapedSeller' OR LOWER(username) = LOWER('$escapedSeller') LIMIT 1");
+                if ($res2 && $row2 = $res2->fetch_assoc()) {
+                    $popup_image = trim($row2['welcome_popup'] ?? '');
+                }
+            }
+        }
+    }
+
+    echo json_encode([
+        "success" => true,
+        "seller_username" => $seller_username,
+        "popup_image" => $popup_image,
+        "welcome_popup" => $popup_image
+    ]);
+    exit();
+} elseif ($action == 'save-seller-festival-animation') {
+    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : (isset($_GET['seller_username']) ? trim($_GET['seller_username']) : '');
+    if (empty($seller_username) && isset($input['username'])) $seller_username = trim($input['username']);
+    if (empty($seller_username) && isset($_GET['username'])) $seller_username = trim($_GET['username']);
+
+    $festival_animation = '';
+    if (isset($input['festival_animation'])) {
+        $festival_animation = is_array($input['festival_animation']) ? json_encode($input['festival_animation']) : trim($input['festival_animation']);
+    } elseif (isset($input['animation'])) {
+        $festival_animation = is_array($input['animation']) ? json_encode($input['animation']) : trim($input['animation']);
+    }
+
+    if (empty($seller_username)) {
+        echo json_encode(["success" => false, "message" => "Seller username required"]);
+        exit();
+    }
+
+    $chkTable = $conn->query("SHOW TABLES LIKE 'seller_festival_animations'");
+    if (!$chkTable || $chkTable->num_rows == 0) {
+        @$conn->query("CREATE TABLE IF NOT EXISTS seller_festival_animations (
+            seller_username VARCHAR(100) PRIMARY KEY,
+            festival_animation LONGTEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )");
+    }
+
+    $colCheck = $conn->query("SHOW COLUMNS FROM sellers LIKE 'festival_animation'");
+    if (!$colCheck || $colCheck->num_rows == 0) {
+        @$conn->query("ALTER TABLE sellers ADD COLUMN festival_animation LONGTEXT DEFAULT NULL");
+    }
+
+    $stmt1 = $conn->prepare("INSERT INTO seller_festival_animations (seller_username, festival_animation) VALUES (?, ?) ON DUPLICATE KEY UPDATE festival_animation = VALUES(festival_animation)");
+    if ($stmt1) {
+        $stmt1->bind_param("ss", $seller_username, $festival_animation);
+        $stmt1->execute();
+    }
+
+    $stmt2 = $conn->prepare("UPDATE sellers SET festival_animation = ? WHERE username = ? OR LOWER(username) = LOWER(?)");
+    if ($stmt2) {
+        $stmt2->bind_param("sss", $festival_animation, $seller_username, $seller_username);
+        $stmt2->execute();
+    }
+
+    echo json_encode([
+        "success" => true,
+        "message" => "Festival animation saved successfully",
+        "seller_username" => $seller_username,
+        "festival_animation" => $festival_animation
+    ]);
+    exit();
+} elseif ($action == 'get-seller-festival-animation') {
+    $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
+    if (empty($seller_username) && isset($_GET['username'])) $seller_username = trim($_GET['username']);
+    if (empty($seller_username) && isset($input['username'])) $seller_username = trim($input['username']);
+
+    $festival_animation = '';
+    if (!empty($seller_username)) {
+        $escapedSeller = $conn->real_escape_string($seller_username);
+
+        $chk1 = $conn->query("SHOW TABLES LIKE 'seller_festival_animations'");
+        if ($chk1 && $chk1->num_rows > 0) {
+            $res1 = $conn->query("SELECT festival_animation FROM seller_festival_animations WHERE seller_username = '$escapedSeller' OR LOWER(seller_username) = LOWER('$escapedSeller') LIMIT 1");
+            if ($res1 && $row1 = $res1->fetch_assoc()) {
+                $festival_animation = trim($row1['festival_animation'] ?? '');
+            }
+        }
+
+        if (empty($festival_animation)) {
+            $colCheck = $conn->query("SHOW COLUMNS FROM sellers LIKE 'festival_animation'");
+            if ($colCheck && $colCheck->num_rows > 0) {
+                $res2 = $conn->query("SELECT festival_animation FROM sellers WHERE username = '$escapedSeller' OR LOWER(username) = LOWER('$escapedSeller') LIMIT 1");
+                if ($res2 && $row2 = $res2->fetch_assoc()) {
+                    $festival_animation = trim($row2['festival_animation'] ?? '');
+                }
+            }
+        }
+    }
+
+    echo json_encode([
+        "success" => true,
+        "seller_username" => $seller_username,
+        "festival_animation" => $festival_animation
+    ]);
+    exit();
+} elseif ($action == 'save-seller-related-item-bg') {
+    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : (isset($_GET['seller_username']) ? trim($_GET['seller_username']) : '');
+    if (empty($seller_username) && isset($input['username'])) $seller_username = trim($input['username']);
+    if (empty($seller_username) && isset($_GET['username'])) $seller_username = trim($_GET['username']);
+
+    $color = isset($input['color']) ? trim($input['color']) : (isset($_GET['color']) ? trim($_GET['color']) : '');
+    if (empty($color) && isset($input['item_bg_color'])) $color = trim($input['item_bg_color']);
+    if (empty($color) && isset($input['related_item_bg'])) $color = trim($input['related_item_bg']);
+    if (empty($color)) $color = '#F8FAFC';
+
+    if (empty($seller_username)) {
+        echo json_encode(["success" => false, "message" => "Seller username required"]);
+        exit();
+    }
+
+    $chkTable = $conn->query("SHOW TABLES LIKE 'seller_related_item_bgs'");
+    if (!$chkTable || $chkTable->num_rows == 0) {
+        @$conn->query("CREATE TABLE IF NOT EXISTS seller_related_item_bgs (
+            seller_username VARCHAR(100) PRIMARY KEY,
+            item_bg_color VARCHAR(50) DEFAULT '#F8FAFC',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )");
+    }
+
+    $colCheck = $conn->query("SHOW COLUMNS FROM sellers LIKE 'related_item_bg'");
+    if (!$colCheck || $colCheck->num_rows == 0) {
+        @$conn->query("ALTER TABLE sellers ADD COLUMN related_item_bg VARCHAR(50) DEFAULT '#F8FAFC'");
+    }
+
+    $stmt1 = $conn->prepare("INSERT INTO seller_related_item_bgs (seller_username, item_bg_color) VALUES (?, ?) ON DUPLICATE KEY UPDATE item_bg_color = VALUES(item_bg_color)");
+    if ($stmt1) {
+        $stmt1->bind_param("ss", $seller_username, $color);
+        $stmt1->execute();
+    }
+
+    $stmt2 = $conn->prepare("UPDATE sellers SET related_item_bg = ? WHERE username = ? OR LOWER(username) = LOWER(?)");
+    if ($stmt2) {
+        $stmt2->bind_param("sss", $color, $seller_username, $seller_username);
+        $stmt2->execute();
+    }
+
+    echo json_encode([
+        "success" => true,
+        "message" => "Related item background color saved successfully",
+        "seller_username" => $seller_username,
+        "color" => $color
+    ]);
+    exit();
+} elseif ($action == 'get-seller-related-item-bg') {
+    $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
+    if (empty($seller_username) && isset($_GET['username'])) $seller_username = trim($_GET['username']);
+    if (empty($seller_username) && isset($input['username'])) $seller_username = trim($input['username']);
+
+    $color = '#F8FAFC';
+    if (!empty($seller_username)) {
+        $escapedSeller = $conn->real_escape_string($seller_username);
+
+        $chk1 = $conn->query("SHOW TABLES LIKE 'seller_related_item_bgs'");
+        if ($chk1 && $chk1->num_rows > 0) {
+            $res1 = $conn->query("SELECT item_bg_color FROM seller_related_item_bgs WHERE seller_username = '$escapedSeller' OR LOWER(seller_username) = LOWER('$escapedSeller') LIMIT 1");
+            if ($res1 && $row1 = $res1->fetch_assoc()) {
+                $c = trim($row1['item_bg_color'] ?? '');
+                if (!empty($c)) $color = $c;
+            }
+        }
+
+        if ($color === '#F8FAFC') {
+            $colCheck = $conn->query("SHOW COLUMNS FROM sellers LIKE 'related_item_bg'");
+            if ($colCheck && $colCheck->num_rows > 0) {
+                $res2 = $conn->query("SELECT related_item_bg FROM sellers WHERE username = '$escapedSeller' OR LOWER(username) = LOWER('$escapedSeller') LIMIT 1");
+                if ($res2 && $row2 = $res2->fetch_assoc()) {
+                    $c = trim($row2['related_item_bg'] ?? '');
+                    if (!empty($c)) $color = $c;
+                }
+            }
+        }
+    }
+
+    echo json_encode([
+        "success" => true,
+        "seller_username" => $seller_username,
+        "color" => $color
+    ]);
+    exit();
+} elseif ($action == 'save-seller-category-sections') {
+    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : (isset($_GET['seller_username']) ? trim($_GET['seller_username']) : '');
+    if (empty($seller_username) && isset($input['username'])) $seller_username = trim($input['username']);
+    if (empty($seller_username) && isset($_GET['username'])) $seller_username = trim($_GET['username']);
+
+    $category_sections = '';
+    if (isset($input['category_sections'])) {
+        $category_sections = is_array($input['category_sections']) ? json_encode($input['category_sections']) : trim($input['category_sections']);
+    } elseif (isset($input['sections'])) {
+        $category_sections = is_array($input['sections']) ? json_encode($input['sections']) : trim($input['sections']);
+    }
+
+    if (empty($seller_username)) {
+        echo json_encode(["success" => false, "message" => "Seller username required"]);
+        exit();
+    }
+
+    $chkTable = $conn->query("SHOW TABLES LIKE 'seller_category_sections'");
+    if (!$chkTable || $chkTable->num_rows == 0) {
+        @$conn->query("CREATE TABLE IF NOT EXISTS seller_category_sections (
+            seller_username VARCHAR(100) PRIMARY KEY,
+            category_sections LONGTEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )");
+    }
+
+    $colCheck = $conn->query("SHOW COLUMNS FROM sellers LIKE 'category_sections'");
+    if (!$colCheck || $colCheck->num_rows == 0) {
+        @$conn->query("ALTER TABLE sellers ADD COLUMN category_sections LONGTEXT DEFAULT NULL");
+    }
+
+    $stmt1 = $conn->prepare("INSERT INTO seller_category_sections (seller_username, category_sections) VALUES (?, ?) ON DUPLICATE KEY UPDATE category_sections = VALUES(category_sections)");
+    if ($stmt1) {
+        $stmt1->bind_param("ss", $seller_username, $category_sections);
+        $stmt1->execute();
+    }
+
+    $stmt2 = $conn->prepare("UPDATE sellers SET category_sections = ? WHERE username = ? OR LOWER(username) = LOWER(?)");
+    if ($stmt2) {
+        $stmt2->bind_param("sss", $category_sections, $seller_username, $seller_username);
+        $stmt2->execute();
+    }
+
+    echo json_encode([
+        "success" => true,
+        "message" => "Category sections saved successfully",
+        "seller_username" => $seller_username,
+        "category_sections" => json_decode($category_sections, true) ?? []
+    ]);
+    exit();
+} elseif ($action == 'get-seller-category-sections') {
+    $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
+    if (empty($seller_username) && isset($_GET['username'])) $seller_username = trim($_GET['username']);
+    if (empty($seller_username) && isset($input['username'])) $seller_username = trim($input['username']);
+
+    $category_sections = [];
+    if (!empty($seller_username)) {
+        $escapedSeller = $conn->real_escape_string($seller_username);
+
+        $chk1 = $conn->query("SHOW TABLES LIKE 'seller_category_sections'");
+        if ($chk1 && $chk1->num_rows > 0) {
+            $res1 = $conn->query("SELECT category_sections FROM seller_category_sections WHERE seller_username = '$escapedSeller' OR LOWER(seller_username) = LOWER('$escapedSeller') LIMIT 1");
+            if ($res1 && $row1 = $res1->fetch_assoc()) {
+                $raw = trim($row1['category_sections'] ?? '');
+                if (!empty($raw)) {
+                    $decoded = json_decode($raw, true);
+                    if (is_array($decoded)) $category_sections = $decoded;
+                }
+            }
+        }
+
+        if (empty($category_sections)) {
+            $colCheck = $conn->query("SHOW COLUMNS FROM sellers LIKE 'category_sections'");
+            if ($colCheck && $colCheck->num_rows > 0) {
+                $res2 = $conn->query("SELECT category_sections FROM sellers WHERE username = '$escapedSeller' OR LOWER(username) = LOWER('$escapedSeller') LIMIT 1");
+                if ($res2 && $row2 = $res2->fetch_assoc()) {
+                    $raw = trim($row2['category_sections'] ?? '');
+                    if (!empty($raw)) {
+                        $decoded = json_decode($raw, true);
+                        if (is_array($decoded)) $category_sections = $decoded;
+                    }
+                }
+            }
+        }
+    }
+
+    echo json_encode([
+        "success" => true,
+        "seller_username" => $seller_username,
+        "category_sections" => $category_sections
+    ]);
+    exit();
+} elseif ($action == 'save-seller-home-layout') {
+    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : (isset($_POST['seller_username']) ? trim($_POST['seller_username']) : '');
+    if (empty($seller_username) && isset($input['username'])) $seller_username = trim($input['username']);
+    if (empty($seller_username) && isset($_GET['username'])) $seller_username = trim($_GET['username']);
+
+    $layout_order = '';
+    if (isset($input['layout_order'])) {
+        $layout_order = is_array($input['layout_order']) ? json_encode($input['layout_order']) : trim($input['layout_order']);
+    } elseif (isset($input['layout'])) {
+        $layout_order = is_array($input['layout']) ? json_encode($input['layout']) : trim($input['layout']);
+    }
+
+    if (empty($seller_username)) {
+        echo json_encode(["success" => false, "message" => "Seller username required"]);
+        exit();
+    }
+
+    $chkTable = $conn->query("SHOW TABLES LIKE 'seller_home_layouts'");
+    if (!$chkTable || $chkTable->num_rows == 0) {
+        @$conn->query("CREATE TABLE IF NOT EXISTS seller_home_layouts (
+            seller_username VARCHAR(100) PRIMARY KEY,
+            layout_order LONGTEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )");
+    }
+
+    $colCheck = $conn->query("SHOW COLUMNS FROM sellers LIKE 'home_layout_order'");
+    if (!$colCheck || $colCheck->num_rows == 0) {
+        @$conn->query("ALTER TABLE sellers ADD COLUMN home_layout_order LONGTEXT DEFAULT NULL");
+    }
+
+    $stmt1 = $conn->prepare("INSERT INTO seller_home_layouts (seller_username, layout_order) VALUES (?, ?) ON DUPLICATE KEY UPDATE layout_order = VALUES(layout_order)");
+    if ($stmt1) {
+        $stmt1->bind_param("ss", $seller_username, $layout_order);
+        $stmt1->execute();
+    }
+
+    $stmt2 = $conn->prepare("UPDATE sellers SET home_layout_order = ? WHERE username = ? OR LOWER(username) = LOWER(?)");
+    if ($stmt2) {
+        $stmt2->bind_param("sss", $layout_order, $seller_username, $seller_username);
+        $stmt2->execute();
+    }
+
+    echo json_encode([
+        "success" => true,
+        "message" => "Home layout saved successfully",
+        "seller_username" => $seller_username,
+        "layout_order" => json_decode($layout_order, true) ?? []
+    ]);
+    exit();
+} elseif ($action == 'get-seller-home-layout') {
+    $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
+    if (empty($seller_username) && isset($_GET['username'])) $seller_username = trim($_GET['username']);
+    if (empty($seller_username) && isset($input['username'])) $seller_username = trim($input['username']);
+
+    $layout_order = [];
+    if (!empty($seller_username)) {
+        $escapedSeller = $conn->real_escape_string($seller_username);
+
+        $chk1 = $conn->query("SHOW TABLES LIKE 'seller_home_layouts'");
+        if ($chk1 && $chk1->num_rows > 0) {
+            $res1 = $conn->query("SELECT layout_order FROM seller_home_layouts WHERE seller_username = '$escapedSeller' OR LOWER(seller_username) = LOWER('$escapedSeller') LIMIT 1");
+            if ($res1 && $row1 = $res1->fetch_assoc()) {
+                $raw = trim($row1['layout_order'] ?? '');
+                if (!empty($raw)) {
+                    $decoded = json_decode($raw, true);
+                    if (is_array($decoded)) $layout_order = $decoded;
+                }
+            }
+        }
+
+        if (empty($layout_order)) {
+            $colCheck = $conn->query("SHOW COLUMNS FROM sellers LIKE 'home_layout_order'");
+            if ($colCheck && $colCheck->num_rows > 0) {
+                $res2 = $conn->query("SELECT home_layout_order FROM sellers WHERE username = '$escapedSeller' OR LOWER(username) = LOWER('$escapedSeller') LIMIT 1");
+                if ($res2 && $row2 = $res2->fetch_assoc()) {
+                    $raw = trim($row2['home_layout_order'] ?? '');
+                    if (!empty($raw)) {
+                        $decoded = json_decode($raw, true);
+                        if (is_array($decoded)) $layout_order = $decoded;
+                    }
+                }
+            }
+        }
+    }
+
+    echo json_encode([
+        "success" => true,
+        "seller_username" => $seller_username,
+        "layout_order" => $layout_order
+    ]);
+    exit();
+} elseif ($action == 'save-seller-search-bar-style' || $action == 'save-seller-search-hints') {
+    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : (isset($_POST['seller_username']) ? trim($_POST['seller_username']) : '');
+    if (empty($seller_username) && isset($input['username'])) $seller_username = trim($input['username']);
+    if (empty($seller_username) && isset($_GET['username'])) $seller_username = trim($_GET['username']);
+
+    $search_hints = '';
+    if (isset($input['search_hints'])) {
+        $search_hints = is_array($input['search_hints']) ? json_encode($input['search_hints']) : trim($input['search_hints']);
+    } elseif (isset($input['hints'])) {
+        $search_hints = is_array($input['hints']) ? json_encode($input['hints']) : trim($input['hints']);
+    }
+
+    $search_bg_color = isset($input['search_bg_color']) ? trim($input['search_bg_color']) : '#FFFFFF';
+    $search_opacity = isset($input['search_opacity']) ? floatval($input['search_opacity']) : 1.0;
+    $search_text_color = isset($input['search_text_color']) ? trim($input['search_text_color']) : '#0F172A';
+
+    if (empty($seller_username)) {
+        echo json_encode(["success" => false, "message" => "Seller username required"]);
+        exit();
+    }
+
+    $chkTable = $conn->query("SHOW TABLES LIKE 'seller_search_bar_styles'");
+    if (!$chkTable || $chkTable->num_rows == 0) {
+        @$conn->query("CREATE TABLE IF NOT EXISTS seller_search_bar_styles (
+            seller_username VARCHAR(100) PRIMARY KEY,
+            search_hints LONGTEXT,
+            search_bg_color VARCHAR(50) DEFAULT '#FFFFFF',
+            search_opacity FLOAT DEFAULT 1.0,
+            search_text_color VARCHAR(50) DEFAULT '#0F172A',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    }
+
+    $colCheckHints = $conn->query("SHOW COLUMNS FROM sellers LIKE 'search_hints'");
+    if (!$colCheckHints || $colCheckHints->num_rows == 0) {
+        @$conn->query("ALTER TABLE sellers ADD COLUMN search_hints LONGTEXT DEFAULT NULL");
+    }
+
+    $colCheckStyle = $conn->query("SHOW COLUMNS FROM sellers LIKE 'search_bar_style'");
+    if (!$colCheckStyle || $colCheckStyle->num_rows == 0) {
+        @$conn->query("ALTER TABLE sellers ADD COLUMN search_bar_style LONGTEXT DEFAULT NULL");
+    }
+
+    $stmt1 = $conn->prepare("INSERT INTO seller_search_bar_styles (seller_username, search_hints, search_bg_color, search_opacity, search_text_color) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE search_hints = VALUES(search_hints), search_bg_color = VALUES(search_bg_color), search_opacity = VALUES(search_opacity), search_text_color = VALUES(search_text_color)");
+    if ($stmt1) {
+        $stmt1->bind_param("sssds", $seller_username, $search_hints, $search_bg_color, $search_opacity, $search_text_color);
+        $stmt1->execute();
+    }
+
+    $stylePayload = json_encode([
+        'search_bg_color' => $search_bg_color,
+        'search_opacity' => $search_opacity,
+        'search_text_color' => $search_text_color
+    ]);
+    $stmt2 = $conn->prepare("UPDATE sellers SET search_hints = ?, search_bar_style = ? WHERE username = ? OR LOWER(username) = LOWER(?)");
+    if ($stmt2) {
+        $stmt2->bind_param("ssss", $search_hints, $stylePayload, $seller_username, $seller_username);
+        $stmt2->execute();
+    }
+
+    echo json_encode([
+        "success" => true,
+        "message" => "Search bar style & watermarks saved successfully in database",
+        "seller_username" => $seller_username,
+        "search_hints" => json_decode($search_hints, true) ?: [],
+        "search_bg_color" => $search_bg_color,
+        "search_opacity" => $search_opacity,
+        "search_text_color" => $search_text_color
+    ]);
+    exit();
+} elseif ($action == 'get-seller-search-bar-style' || $action == 'get-seller-search-hints') {
+    $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
+    if (empty($seller_username) && isset($_GET['username'])) $seller_username = trim($_GET['username']);
+    if (empty($seller_username) && isset($input['username'])) $seller_username = trim($input['username']);
+
+    $search_hints = [];
+    $search_bg_color = '#FFFFFF';
+    $search_opacity = 1.0;
+    $search_text_color = '#0F172A';
+
+    if (!empty($seller_username)) {
+        $escapedSeller = $conn->real_escape_string($seller_username);
+
+        $chk1 = $conn->query("SHOW TABLES LIKE 'seller_search_bar_styles'");
+        if ($chk1 && $chk1->num_rows > 0) {
+            $res1 = $conn->query("SELECT * FROM seller_search_bar_styles WHERE seller_username = '$escapedSeller' OR LOWER(seller_username) = LOWER('$escapedSeller') LIMIT 1");
+            if ($res1 && $row1 = $res1->fetch_assoc()) {
+                $rawHints = trim($row1['search_hints'] ?? '');
+                if (!empty($rawHints)) {
+                    $decoded = json_decode($rawHints, true);
+                    if (is_array($decoded)) $search_hints = $decoded;
+                }
+                if (!empty($row1['search_bg_color'])) $search_bg_color = $row1['search_bg_color'];
+                if (isset($row1['search_opacity'])) $search_opacity = floatval($row1['search_opacity']);
+                if (!empty($row1['search_text_color'])) $search_text_color = $row1['search_text_color'];
+            }
+        }
+
+        if (empty($search_hints)) {
+            $colCheck = $conn->query("SHOW COLUMNS FROM sellers LIKE 'search_hints'");
+            if ($colCheck && $colCheck->num_rows > 0) {
+                $res2 = $conn->query("SELECT search_hints, search_bar_style FROM sellers WHERE username = '$escapedSeller' OR LOWER(username) = LOWER('$escapedSeller') LIMIT 1");
+                if ($res2 && $row2 = $res2->fetch_assoc()) {
+                    $rawHints = trim($row2['search_hints'] ?? '');
+                    if (!empty($rawHints)) {
+                        $decoded = json_decode($rawHints, true);
+                        if (is_array($decoded)) $search_hints = $decoded;
+                    }
+                    $rawStyle = trim($row2['search_bar_style'] ?? '');
+                    if (!empty($rawStyle)) {
+                        $styleDec = json_decode($rawStyle, true);
+                        if (is_array($styleDec)) {
+                            if (!empty($styleDec['search_bg_color'])) $search_bg_color = $styleDec['search_bg_color'];
+                            if (isset($styleDec['search_opacity'])) $search_opacity = floatval($styleDec['search_opacity']);
+                            if (!empty($styleDec['search_text_color'])) $search_text_color = $styleDec['search_text_color'];
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    echo json_encode([
+        "success" => true,
+        "seller_username" => $seller_username,
+        "search_hints" => $search_hints,
+        "search_bg_color" => $search_bg_color,
+        "search_opacity" => $search_opacity,
+        "search_text_color" => $search_text_color
+    ]);
+    exit();
+} elseif ($action == 'save-seller-action-buttons') {
+    $seller_username = isset($input['seller_username']) ? trim($input['seller_username']) : (isset($_POST['seller_username']) ? trim($_POST['seller_username']) : '');
+    if (empty($seller_username) && isset($input['username'])) $seller_username = trim($input['username']);
+    if (empty($seller_username) && isset($_GET['username'])) $seller_username = trim($_GET['username']);
+
+    $action_buttons = '';
+    if (isset($input['action_buttons'])) {
+        $action_buttons = is_array($input['action_buttons']) ? json_encode($input['action_buttons']) : trim($input['action_buttons']);
+    } elseif (isset($input['buttons'])) {
+        $action_buttons = is_array($input['buttons']) ? json_encode($input['buttons']) : trim($input['buttons']);
+    }
+
+    if (empty($seller_username)) {
+        echo json_encode(["success" => false, "message" => "Seller username required"]);
+        exit();
+    }
+
+    $chkTable = $conn->query("SHOW TABLES LIKE 'seller_action_buttons'");
+    if (!$chkTable || $chkTable->num_rows == 0) {
+        @$conn->query("CREATE TABLE IF NOT EXISTS seller_action_buttons (
+            seller_username VARCHAR(100) PRIMARY KEY,
+            action_buttons LONGTEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    }
+
+    $colCheck = $conn->query("SHOW COLUMNS FROM sellers LIKE 'action_buttons'");
+    if (!$colCheck || $colCheck->num_rows == 0) {
+        @$conn->query("ALTER TABLE sellers ADD COLUMN action_buttons LONGTEXT DEFAULT NULL");
+    }
+
+    $stmt1 = $conn->prepare("INSERT INTO seller_action_buttons (seller_username, action_buttons) VALUES (?, ?) ON DUPLICATE KEY UPDATE action_buttons = VALUES(action_buttons)");
+    if ($stmt1) {
+        $stmt1->bind_param("ss", $seller_username, $action_buttons);
+        $stmt1->execute();
+    }
+
+    $stmt2 = $conn->prepare("UPDATE sellers SET action_buttons = ? WHERE username = ? OR LOWER(username) = LOWER(?)");
+    if ($stmt2) {
+        $stmt2->bind_param("sss", $action_buttons, $seller_username, $seller_username);
+        $stmt2->execute();
+    }
+
+    echo json_encode([
+        "success" => true,
+        "message" => "Action buttons style saved successfully in database",
+        "seller_username" => $seller_username,
+        "action_buttons" => json_decode($action_buttons, true) ?: new stdClass()
+    ]);
+    exit();
+} elseif ($action == 'get-seller-action-buttons') {
+    $seller_username = isset($_GET['seller_username']) ? trim($_GET['seller_username']) : (isset($input['seller_username']) ? trim($input['seller_username']) : '');
+    if (empty($seller_username) && isset($_GET['username'])) $seller_username = trim($_GET['username']);
+    if (empty($seller_username) && isset($input['username'])) $seller_username = trim($input['username']);
+
+    $action_buttons = new stdClass();
+
+    if (!empty($seller_username)) {
+        $escapedSeller = $conn->real_escape_string($seller_username);
+        $chkTable = $conn->query("SHOW TABLES LIKE 'seller_action_buttons'");
+        if ($chkTable && $chkTable->num_rows > 0) {
+            $res = $conn->query("SELECT action_buttons FROM seller_action_buttons WHERE seller_username = '$escapedSeller' OR LOWER(seller_username) = LOWER('$escapedSeller') LIMIT 1");
+            if ($res && $row = $res->fetch_assoc()) {
+                $raw = trim($row['action_buttons'] ?? '');
+                if (!empty($raw)) {
+                    $decoded = json_decode($raw, true);
+                    if (is_array($decoded)) $action_buttons = $decoded;
+                }
+            }
+        }
+
+        if (empty((array)$action_buttons)) {
+            $colCheck = $conn->query("SHOW COLUMNS FROM sellers LIKE 'action_buttons'");
+            if ($colCheck && $colCheck->num_rows > 0) {
+                $res2 = $conn->query("SELECT action_buttons FROM sellers WHERE username = '$escapedSeller' OR LOWER(username) = LOWER('$escapedSeller') LIMIT 1");
+                if ($res2 && $row2 = $res2->fetch_assoc()) {
+                    $raw2 = trim($row2['action_buttons'] ?? '');
+                    if (!empty($raw2)) {
+                        $decoded2 = json_decode($raw2, true);
+                        if (is_array($decoded2)) $action_buttons = $decoded2;
+                    }
+                }
+            }
+        }
+    }
+
+    echo json_encode([
+        "success" => true,
+        "seller_username" => $seller_username,
+        "action_buttons" => $action_buttons
+    ]);
     exit();
 } else {
     echo json_encode(["success" => true, "message" => "Daily Mart API Active"]);

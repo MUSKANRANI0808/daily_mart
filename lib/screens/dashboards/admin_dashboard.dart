@@ -30,11 +30,13 @@ class AdminDashboard extends StatefulWidget {
 }
 
 class _AdminDashboardState extends State<AdminDashboard> {
-  int _selectedIndex = 0; // 0: Sellers, 1: Delivery Boys, 2: Order Details
+  int _selectedIndex = 0; // 0: Sellers, 1: Delivery Boys, 2: Order Details, 3: Customers
   List<Map<String, dynamic>> _sellers = [];
   List<Map<String, dynamic>> _deliveryBoys = [];
   List<Map<String, dynamic>> _flatOrdersList = [];
+  List<Map<String, dynamic>> _customers = [];
   bool _isLoading = true;
+  bool _isLoadingCustomers = false;
 
   DateTime? _startDate;
   DateTime? _endDate;
@@ -42,6 +44,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
   String _selectedStatusFilter = 'All'; // 'All', 'Pending', 'Pickup', 'Delivered', 'Cancelled'
   String _tableSearchQuery = '';
   final TextEditingController _tableSearchController = TextEditingController();
+
+  String _customerSearchQuery = '';
+  String _customerFilterStatus = 'All'; // 'All', 'Active', 'Blocked'
+  final TextEditingController _customerSearchController = TextEditingController();
 
   final ScrollController _horizontalScrollController = ScrollController();
   double _dragStartX = 0.0;
@@ -65,6 +71,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     _pollingTimer?.cancel();
     _horizontalScrollController.dispose();
     _tableSearchController.dispose();
+    _customerSearchController.dispose();
     super.dispose();
   }
 
@@ -123,13 +130,27 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final sellers = await AuthService.getSellersList();
     final deliveryBoys = await AuthService.getDeliveryBoys();
     final flatOrders = await AuthService.getAllOrdersFlatListForAdmin();
+    final customers = await AuthService.getAllCustomersForAdmin();
 
     if (mounted) {
       setState(() {
         _sellers = sellers;
         _deliveryBoys = deliveryBoys;
         _flatOrdersList = flatOrders;
+        _customers = customers;
         _isLoading = false;
+        _isLoadingCustomers = false;
+      });
+    }
+  }
+
+  Future<void> _loadCustomersOnly() async {
+    setState(() => _isLoadingCustomers = true);
+    final customers = await AuthService.getAllCustomersForAdmin();
+    if (mounted) {
+      setState(() {
+        _customers = customers;
+        _isLoadingCustomers = false;
       });
     }
   }
@@ -1857,7 +1878,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     Expanded(
                       child: _selectedIndex == 0
                           ? _buildSellersTab()
-                          : (_selectedIndex == 1 ? _buildDeliveryBoysTab() : _buildOrderDetailsTab()),
+                          : (_selectedIndex == 1
+                              ? _buildDeliveryBoysTab()
+                              : (_selectedIndex == 2
+                                  ? _buildOrderDetailsTab()
+                                  : _buildCustomersTab())),
                     ),
                   ],
                 ),
@@ -1961,6 +1986,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
             subtitle: '${_filteredOrders.length} Filtered (${_flatOrdersList.length} Total)',
             icon: Icons.inventory_2_rounded,
             activeColor: const Color(0xFF10B981),
+          ),
+
+          const SizedBox(height: 6),
+
+          // Menu Option 4: Manage Customers
+          _buildSidebarMenuItem(
+            index: 3,
+            title: 'Manage Customers',
+            subtitle: '${_customers.length} Customers Registered',
+            icon: Icons.people_alt_rounded,
+            activeColor: const Color(0xFFF59E0B),
           ),
 
           const Spacer(),
@@ -2196,6 +2232,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
             selected: _selectedIndex == 2,
             onTap: () {
               setState(() => _selectedIndex = 2);
+              Navigator.pop(context);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.people_alt_rounded, color: Color(0xFFF59E0B)),
+            title: const Text('Manage Customers', style: TextStyle(color: Colors.white)),
+            selected: _selectedIndex == 3,
+            onTap: () {
+              setState(() => _selectedIndex = 3);
               Navigator.pop(context);
             },
           ),
@@ -3093,6 +3138,492 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ),
     );
   }
+
+  /// -------------------------------------------------------------
+  /// CUSTOMER MANAGEMENT TAB (_selectedIndex == 3)
+  /// -------------------------------------------------------------
+
+  List<Map<String, dynamic>> get _filteredCustomers {
+    return _customers.where((c) {
+      final name = (c['name'] ?? '').toString().toLowerCase();
+      final mobile = (c['mobile'] ?? '').toString().toLowerCase();
+      final isBlocked = ((c['is_blocked'] as num?)?.toInt() ?? 0) == 1;
+
+      if (_customerFilterStatus == 'Active' && isBlocked) return false;
+      if (_customerFilterStatus == 'Blocked' && !isBlocked) return false;
+
+      if (_customerSearchQuery.isNotEmpty) {
+        final q = _customerSearchQuery.toLowerCase().trim();
+        final matches = name.contains(q) || mobile.contains(q);
+        if (!matches) return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  void _confirmToggleBlockCustomer(Map<String, dynamic> customer) {
+    final String custName = (customer['name'] ?? 'Customer').toString();
+    final String custMobile = (customer['mobile'] ?? '').toString();
+    final int custId = (customer['id'] as num?)?.toInt() ?? 0;
+    final bool isCurrentlyBlocked = ((customer['is_blocked'] as num?)?.toInt() ?? 0) == 1;
+    final bool targetBlocked = !isCurrentlyBlocked;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(
+              targetBlocked ? Icons.block_rounded : Icons.check_circle_rounded,
+              color: targetBlocked ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+              size: 24,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              targetBlocked ? 'Block Customer?' : 'Unblock Customer?',
+              style: const TextStyle(color: Color(0xFF0F172A), fontSize: 17, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Text(
+          targetBlocked
+              ? 'Are you sure you want to block $custName ($custMobile)?\n\nWhen blocked, this user will not be able to browse or place orders, and will only see the Blocked Screen with support instructions.'
+              : 'Are you sure you want to unblock $custName ($custMobile)?\n\nThis customer will immediately regain full access to Daily Mart.',
+          style: const TextStyle(fontSize: 13.5, color: Color(0xFF334155), height: 1.45),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: targetBlocked ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final messenger = ScaffoldMessenger.of(context);
+              final success = await AuthService.toggleCustomerBlockStatus(
+                mobile: custMobile,
+                isBlocked: targetBlocked,
+                id: custId,
+              );
+              if (success) {
+                await _loadCustomersOnly();
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(targetBlocked ? '$custName has been blocked' : '$custName has been unblocked'),
+                    backgroundColor: targetBlocked ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+                  ),
+                );
+              } else {
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('Failed to update status. Please try again.'), backgroundColor: Colors.redAccent),
+                );
+              }
+            },
+            child: Text(
+              targetBlocked ? 'Block' : 'Unblock',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCustomersTab() {
+    final filtered = _filteredCustomers;
+    final totalCount = _customers.length;
+    final activeCount = _customers.where((c) => ((c['is_blocked'] as num?)?.toInt() ?? 0) != 1).length;
+    final blockedCount = _customers.where((c) => ((c['is_blocked'] as num?)?.toInt() ?? 0) == 1).length;
+
+    return RefreshIndicator(
+      onRefresh: _loadCustomersOnly,
+      color: const Color(0xFFF59E0B),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // 1. Header Bar: Title + Quick Refresh
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Registered Customers',
+                        style: TextStyle(color: Color(0xFF0F172A), fontSize: 20, fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Total $totalCount users in database',
+                        style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: _isLoadingCustomers ? null : _loadCustomersOnly,
+                  icon: _isLoadingCustomers
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFF59E0B)))
+                      : const Icon(Icons.refresh_rounded, color: Color(0xFFF59E0B)),
+                  tooltip: 'Reload Customer List',
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            // 2. Summary Counters Bar
+            Row(
+              children: [
+                _buildStatPill('Total', totalCount.toString(), const Color(0xFF0F172A), const Color(0xFFF1F5F9)),
+                const SizedBox(width: 10),
+                _buildStatPill('Active', activeCount.toString(), const Color(0xFF16A34A), const Color(0xFFDCFCE7)),
+                const SizedBox(width: 10),
+                _buildStatPill('Blocked', blockedCount.toString(), const Color(0xFFDC2626), const Color(0xFFFEE2E2)),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            // 3. Search Field
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 6, offset: const Offset(0, 2)),
+                ],
+              ),
+              child: TextField(
+                controller: _customerSearchController,
+                onChanged: (val) {
+                  setState(() {
+                    _customerSearchQuery = val;
+                  });
+                },
+                decoration: InputDecoration(
+                  hintText: 'Search customer name or mobile number...',
+                  hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                  prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 20),
+                  suffixIcon: _customerSearchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear_rounded, size: 18, color: Color(0xFF64748B)),
+                          onPressed: () {
+                            _customerSearchController.clear();
+                            setState(() => _customerSearchQuery = '');
+                          },
+                        )
+                      : null,
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // 4. Filter Chips (All, Active, Blocked)
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _buildCustomerFilterChip('All', 'All ($totalCount)'),
+                  const SizedBox(width: 8),
+                  _buildCustomerFilterChip('Active', 'Active ($activeCount)'),
+                  const SizedBox(width: 8),
+                  _buildCustomerFilterChip('Blocked', 'Blocked ($blockedCount)'),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // 5. Customer Cards List
+            if (_isLoadingCustomers && _customers.isEmpty)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(40.0),
+                  child: CircularProgressIndicator(color: Color(0xFFF59E0B)),
+                ),
+              )
+            else if (filtered.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(40),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.person_search_rounded, size: 48, color: Color(0xFF94A3B8)),
+                    SizedBox(height: 12),
+                    Text(
+                      'No matching customers found',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Try adjusting your search query or status filter.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    ),
+                  ],
+                ),
+              )
+            else
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: filtered.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 10),
+                itemBuilder: (ctx, i) {
+                  final c = filtered[i];
+                  final custName = (c['name'] ?? 'Customer').toString().trim();
+                  final custMobile = (c['mobile'] ?? '').toString().trim();
+                  final isBlocked = ((c['is_blocked'] as num?)?.toInt() ?? 0) == 1;
+                  final totalOrders = (c['total_orders'] as num?)?.toInt() ?? 0;
+
+                  // Parse delivery address snippet if available
+                  String addressSnippet = '';
+                  final rawAddr = c['address'] ?? c['address_json'] ?? '';
+                  if (rawAddr is String && rawAddr.isNotEmpty && rawAddr != '[]' && rawAddr != 'null') {
+                    addressSnippet = rawAddr.replaceAll(RegExp(r'[\[\]\{\}\"]'), '').replaceAll('address:', '').trim();
+                    if (addressSnippet.length > 50) {
+                      addressSnippet = '${addressSnippet.substring(0, 50)}...';
+                    }
+                  }
+
+                  return Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isBlocked ? const Color(0xFFFECACA) : const Color(0xFFE2E8F0),
+                        width: isBlocked ? 1.2 : 1.0,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.02),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Avatar Icon
+                            CircleAvatar(
+                              radius: 20,
+                              backgroundColor: isBlocked ? const Color(0xFFFEE2E2) : const Color(0xFFFEF3C7),
+                              child: Icon(
+                                isBlocked ? Icons.person_off_rounded : Icons.person_rounded,
+                                color: isBlocked ? const Color(0xFFDC2626) : const Color(0xFFD97706),
+                                size: 22,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          custName.isNotEmpty ? custName : 'Customer',
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      // Status Badge
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: isBlocked ? const Color(0xFFFEE2E2) : const Color(0xFFDCFCE7),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              isBlocked ? Icons.block_rounded : Icons.check_circle_rounded,
+                                              size: 11,
+                                              color: isBlocked ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              isBlocked ? 'BLOCKED' : 'ACTIVE',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                                color: isBlocked ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.phone_rounded, size: 12, color: Color(0xFF64748B)),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        custMobile,
+                                        style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      // Orders count chip
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF1F5F9),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          '📦 $totalOrders Orders',
+                                          style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF334155)),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (addressSnippet.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.location_on_outlined, size: 12, color: Color(0xFF94A3B8)),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            addressSnippet,
+                                            style: const TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8)),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 10),
+                        const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                        const SizedBox(height: 8),
+
+                        // Action Button Row
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            if (isBlocked)
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF16A34A),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                onPressed: () => _confirmToggleBlockCustomer(c),
+                                icon: const Icon(Icons.lock_open_rounded, size: 15),
+                                label: const Text('Unblock Customer', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                              )
+                            else
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: Color(0xFFDC2626), width: 1.1),
+                                  foregroundColor: const Color(0xFFDC2626),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                onPressed: () => _confirmToggleBlockCustomer(c),
+                                icon: const Icon(Icons.block_rounded, size: 15),
+                                label: const Text('Block Customer', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatPill(String label, String count, Color textColor, Color bgColor) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          children: [
+            Text(
+              count,
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: textColor),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: textColor.withValues(alpha: 0.8)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomerFilterChip(String filterKey, String label) {
+    final isSelected = _customerFilterStatus == filterKey;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _customerFilterStatus = filterKey;
+        });
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF0F172A) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isSelected ? const Color(0xFF0F172A) : const Color(0xFFCBD5E1)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            color: isSelected ? Colors.white : const Color(0xFF475569),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class SpectrumCanvasPainter extends CustomPainter {
@@ -3555,3 +4086,4 @@ class _SpectrumColorPickerDialogState extends State<SpectrumColorPickerDialog> {
     );
   }
 }
+

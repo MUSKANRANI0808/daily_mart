@@ -7,9 +7,9 @@ class VpsApiService {
   static String? authToken;
 
   static List<String> get candidateBaseUrls => [
-        'http://89.116.52.173/api.php',
-        VpsConfig.apiBaseUrl,
         'http://200.141.4.137/api.php',
+        VpsConfig.apiBaseUrl,
+        'http://89.116.52.173/api.php',
         'http://localhost/vps_backend/api.php',
       ];
 
@@ -49,7 +49,7 @@ class VpsApiService {
         final response = await http.get(
           uri,
           headers: _headers,
-        ).timeout(const Duration(milliseconds: 2500));
+        ).timeout(const Duration(milliseconds: 8000));
 
         if (response.statusCode >= 200 && response.statusCode < 300) {
           final resData = _handleResponse(response);
@@ -78,7 +78,7 @@ class VpsApiService {
           uri,
           headers: _headers,
           body: jsonEncode(data),
-        ).timeout(const Duration(milliseconds: 2500));
+        ).timeout(const Duration(milliseconds: 8000));
 
         if (response.statusCode >= 200 && response.statusCode < 300) {
           final resData = _handleResponse(response);

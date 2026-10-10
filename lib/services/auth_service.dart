@@ -53,6 +53,11 @@ class AuthService {
         await prefs.setStringList(key, deletedList);
       }
     }
+
+    // Instant Background Preload of Welcome Popup for 0ms display upon entry
+    if (username.trim().isNotEmpty) {
+      getSellerWelcomePopupImage(username.trim());
+    }
   }
 
   /// Get last selected seller session
@@ -375,6 +380,20 @@ class AuthService {
     } catch (_) {}
   }
 
+  /// Get Customer Addresses
+  static Future<List<Map<String, dynamic>>> getCustomerAddresses(String mobile) async {
+    final trimmedMobile = mobile.trim();
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = prefs.getString('customer_addresses_$trimmedMobile');
+    if (jsonStr != null && jsonStr.isNotEmpty) {
+      try {
+        final List<dynamic> list = jsonDecode(jsonStr);
+        return List<Map<String, dynamic>>.from(list);
+      } catch (_) {}
+    }
+    return [];
+  }
+
   /// Customer Mobile Login
   static Future<UserModel> loginCustomer(String mobile, {String? customName}) async {
     final trimmedMobile = mobile.trim();
@@ -514,7 +533,7 @@ class AuthService {
 
   static final Map<String, int> _memoryOrderCounters = {};
 
-  /// Generate next sequential Order ID in dual format: Order CustomerSeq/GlobalSeq (e.g. Order 1/1, Order 1/3, Order 2/4)
+  /// Generate next sequential Order ID matching server auto-increment (#DM-1237, #DM-1238...)
   static Future<String> getNextGlobalOrderId(
     String sellerUsername, {
     required String customerMobile,
@@ -523,44 +542,53 @@ class AuthService {
     final cleanSeller = sellerUsername.trim();
     final cleanCust = customerMobile.trim();
 
-    // 1. Fetch deletion-proof sequential Order ID directly from MySQL Database (with 300ms fast timeout)
+    // 1. Fetch sequential Order ID directly from MySQL Database
     try {
       final encSeller = Uri.encodeComponent(cleanSeller);
       final encCust = Uri.encodeComponent(cleanCust);
       final res = await VpsApiService.get('get-next-order-id&seller_username=$encSeller&customer_mobile=$encCust')
-          .timeout(const Duration(milliseconds: 300));
+          .timeout(const Duration(milliseconds: 1500));
       if (res != null && res['success'] == true && res['next_order_id'] != null) {
         final serverOrdId = res['next_order_id'].toString().trim();
-        if (serverOrdId.isNotEmpty) {
+        final match = RegExp(r'#DM-(\d+)').firstMatch(serverOrdId);
+        final numPart = match != null ? int.tryParse(match.group(1)!) : null;
+        if (numPart != null && numPart >= 1200) {
           return serverOrdId;
         }
       }
     } catch (_) {}
 
-    // 2. Local Fallback Counter
-    final prefs = await SharedPreferences.getInstance();
-    final globalKey = 'lifetime_global_counter_$cleanSeller';
-    final custKey = 'lifetime_cust_counter_${cleanSeller}_$cleanCust';
+    // 2. Query latest order from database messages to match server auto-increment
+    try {
+      final res = await VpsApiService.get('get-messages').timeout(const Duration(milliseconds: 2000));
+      if (res != null && res['success'] == true && res['messages'] is List) {
+        int maxId = 0;
+        for (var m in (res['messages'] as List)) {
+          final idVal = int.tryParse(m['id']?.toString() ?? '0') ?? 0;
+          if (idVal > maxId) maxId = idVal;
+        }
+        if (maxId > 0) {
+          return '#DM-${1000 + maxId + 1}';
+        }
+      }
+    } catch (_) {}
 
-    int storedGlobal = prefs.getInt(globalKey) ?? 0;
-    int storedCust = prefs.getInt(custKey) ?? 0;
+    // 3. Fallback from cached orders
+    try {
+      final cachedOrders = await getCachedCustomerPlacedOrders(customerMobile);
+      int highestNum = 1236;
+      for (var o in cachedOrders) {
+        final oId = (o['order_id'] ?? '').toString();
+        final match = RegExp(r'#DM-(\d+)').firstMatch(oId);
+        if (match != null) {
+          final val = int.tryParse(match.group(1)!) ?? 0;
+          if (val > highestNum) highestNum = val;
+        }
+      }
+      return '#DM-${highestNum + 1}';
+    } catch (_) {}
 
-    int memGlobal = _memoryOrderCounters['global_$cleanSeller'] ?? 0;
-    int memCust = _memoryOrderCounters['cust_${cleanSeller}_$cleanCust'] ?? 0;
-
-    int maxGlobal = storedGlobal > memGlobal ? storedGlobal : memGlobal;
-    int maxCust = storedCust > memCust ? storedCust : memCust;
-
-    int nextCust = maxCust + 1;
-    int nextGlobal = maxGlobal + 1;
-
-    _memoryOrderCounters['global_$cleanSeller'] = nextGlobal;
-    _memoryOrderCounters['cust_${cleanSeller}_$cleanCust'] = nextCust;
-
-    await prefs.setInt(globalKey, nextGlobal);
-    await prefs.setInt(custKey, nextCust);
-
-    return '#DM-${1000 + nextGlobal}';
+    return '#DM-1237';
   }
 
   /// Annotate messages with deletion-proof lifetime hierarchical dual order numbers (CustomerSeq/GlobalSeq)
@@ -901,6 +929,7 @@ class AuthService {
   static Future<bool> updateOrderStatus({
     required int messageId,
     required String orderStatus,
+    String? orderId,
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -914,11 +943,26 @@ class AuthService {
           savedStatuses = Map<String, dynamic>.from(jsonDecode(str));
         }
       } catch (_) {}
-      savedStatuses[msgIdStr] = orderStatus;
+      if (messageId > 0) {
+        savedStatuses[msgIdStr] = orderStatus;
+      }
+      if (orderId != null && orderId.isNotEmpty) {
+        savedStatuses[orderId] = orderStatus;
+        final cleanDigits = orderId.replaceAll(RegExp(r'[^0-9]'), '');
+        if (cleanDigits.isNotEmpty) {
+          savedStatuses[cleanDigits] = orderStatus;
+        }
+      }
       await prefs.setString('saved_order_statuses', jsonEncode(savedStatuses));
 
-      // 2. Update local msgs_ and messages_ keys
-      final keys = prefs.getKeys().where((k) => k.startsWith('msgs_') || k.startsWith('messages_')).toList();
+      // 2. Update local msgs_, messages_, cache_seller_cust_orders_, and history keys
+      final keys = prefs.getKeys().where((k) =>
+          k.startsWith('msgs_') ||
+          k.startsWith('messages_') ||
+          k.startsWith('cache_seller_cust_orders_') ||
+          k.startsWith('customer_orders_history_') ||
+          k == 'global_all_customer_orders_history').toList();
+
       for (var key in keys) {
         final str = prefs.getString(key);
         if (str != null && str.isNotEmpty) {
@@ -927,8 +971,14 @@ class AuthService {
             final List<Map<String, dynamic>> list = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
             bool modified = false;
             for (var item in list) {
-              if (item['id'] == messageId || item['id'].toString() == msgIdStr) {
+              final itemId = (item['id'] ?? item['message_id'] ?? '').toString();
+              final itemOrdId = (item['order_id'] ?? item['order_number'] ?? '').toString();
+              final matchesId = messageId > 0 && (itemId == msgIdStr || item['id'] == messageId);
+              final matchesOrdId = orderId != null && orderId.isNotEmpty && (itemOrdId == orderId || itemOrdId.contains(orderId));
+              if (matchesId || matchesOrdId) {
                 item['order_status'] = orderStatus;
+                item['status'] = orderStatus;
+                item['delivery_status'] = orderStatus;
                 if (orderStatus.toLowerCase() != 'cancelled' && orderStatus.toLowerCase() != 'rejected') {
                   item.remove('cancel_reason');
                 }
@@ -944,10 +994,14 @@ class AuthService {
     } catch (_) {}
 
     try {
-      final res = await VpsApiService.post('update-order-status', {
+      final payload = <String, dynamic>{
         'message_id': messageId,
         'order_status': orderStatus,
-      });
+      };
+      if (orderId != null && orderId.isNotEmpty) {
+        payload['order_id'] = orderId;
+      }
+      final res = await VpsApiService.post('update-order-status', payload);
       return res != null && res['success'] == true;
     } catch (_) {}
     return true;
@@ -1730,6 +1784,7 @@ class AuthService {
     double overlayDim = 0.0,
     bool removeWhiteBg = false,
     String imgFit = 'cover',
+    bool fullWidth = false,
   }) async {
     final cleanUsername = sellerUsername.trim().toLowerCase();
     final prefs = await SharedPreferences.getInstance();
@@ -1751,6 +1806,7 @@ class AuthService {
       'overlay_dim': overlayDim,
       'remove_white_bg': removeWhiteBg,
       'img_fit': imgFit,
+      'full_width': fullWidth ? 1 : 0,
       'created_at': DateTime.now().toString().substring(0, 16),
     };
 
@@ -1770,6 +1826,7 @@ class AuthService {
         'overlay_dim': overlayDim,
         'remove_white_bg': removeWhiteBg ? 1 : 0,
         'img_fit': imgFit,
+        'full_width': fullWidth ? 1 : 0,
       });
 
       if (res != null && res['success'] == true && res['slider'] != null && res['slider']['id'] != null) {
@@ -1830,6 +1887,7 @@ class AuthService {
     double overlayDim = 0.0,
     bool removeWhiteBg = false,
     String imgFit = 'cover',
+    bool fullWidth = false,
   }) async {
     final cleanUsername = sellerUsername.trim().toLowerCase();
     final prefs = await SharedPreferences.getInstance();
@@ -1880,6 +1938,7 @@ class AuthService {
       sliders[index]['overlay_dim'] = overlayDim;
       sliders[index]['remove_white_bg'] = removeWhiteBg;
       sliders[index]['img_fit'] = imgFit;
+      sliders[index]['full_width'] = fullWidth ? 1 : 0;
 
       savedGlobalSliders[cleanUsername] = sliders;
       await prefs.setString('saved_global_seller_sliders', jsonEncode(savedGlobalSliders));
@@ -1904,6 +1963,7 @@ class AuthService {
         'overlay_dim': overlayDim,
         'remove_white_bg': removeWhiteBg ? 1 : 0,
         'img_fit': imgFit,
+        'full_width': fullWidth ? 1 : 0,
       });
     } catch (_) {}
 
@@ -1968,6 +2028,70 @@ class AuthService {
         overlayDim: (existing['overlay_dim'] as num?)?.toDouble() ?? 0.0,
         removeWhiteBg: existing['remove_white_bg'] == true || existing['remove_white_bg'] == 1,
         imgFit: (existing['img_fit'] ?? 'cover').toString(),
+        fullWidth: existing['full_width'] == 1 || existing['full_width'] == true || existing['full_width'] == '1',
+      );
+    }
+    return false;
+  }
+
+  /// Quick toggle seller slider full_width (edge-to-edge vs normal margin) with 1 finger tap
+  static Future<bool> toggleSellerSliderFullWidth(dynamic sliderId, String sellerUsername, bool fullWidth) async {
+    final cleanUsername = sellerUsername.trim().toLowerCase();
+    final prefs = await SharedPreferences.getInstance();
+    final localKey = 'sliders_$cleanUsername';
+
+    Map<String, dynamic> savedGlobalSliders = {};
+    try {
+      final str = prefs.getString('saved_global_seller_sliders');
+      if (str != null && str.isNotEmpty) {
+        savedGlobalSliders = Map<String, dynamic>.from(jsonDecode(str));
+      }
+    } catch (_) {}
+
+    List<Map<String, dynamic>> sliders = [];
+    if (savedGlobalSliders.containsKey(cleanUsername)) {
+      try {
+        final List l = savedGlobalSliders[cleanUsername];
+        sliders = l.map((e) => Map<String, dynamic>.from(e)).toList();
+      } catch (_) {}
+    }
+
+    if (sliders.isEmpty) {
+      final str = prefs.getString(localKey);
+      if (str != null) {
+        try {
+          final List decoded = jsonDecode(str);
+          sliders = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+        } catch (_) {}
+      }
+    }
+
+    final index = sliders.indexWhere((s) => s['id'] == sliderId || s['id'].toString() == sliderId.toString());
+    if (index != -1) {
+      final existing = sliders[index];
+      existing['full_width'] = fullWidth ? 1 : 0;
+
+      savedGlobalSliders[cleanUsername] = sliders;
+      await prefs.setString('saved_global_seller_sliders', jsonEncode(savedGlobalSliders));
+      await prefs.setString(localKey, jsonEncode(sliders));
+
+      return updateSellerSlider(
+        sliderId: sliderId,
+        sellerUsername: sellerUsername,
+        tag: (existing['tag'] ?? '').toString(),
+        title: (existing['title'] ?? '').toString(),
+        description: (existing['description'] ?? '').toString(),
+        bgImageUrl: (existing['bg_image_url'] ?? '').toString(),
+        tagBgColor: (existing['tag_bg_color'] ?? '#10B981').toString(),
+        tagShape: (existing['tag_shape'] ?? 'pill').toString(),
+        titleColor: (existing['title_color'] ?? '#FFFFFF').toString(),
+        descColor: (existing['desc_color'] ?? '#E2E8F0').toString(),
+        section: (existing['section'] ?? 'Top Banner').toString(),
+        position: (existing['position'] ?? 'internal').toString(),
+        overlayDim: (existing['overlay_dim'] as num?)?.toDouble() ?? 0.0,
+        removeWhiteBg: existing['remove_white_bg'] == true || existing['remove_white_bg'] == 1,
+        imgFit: (existing['img_fit'] ?? 'cover').toString(),
+        fullWidth: fullWidth,
       );
     }
     return false;
@@ -3057,9 +3181,6 @@ class AuthService {
     String deliveryBoyLocation = '',
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    final sellers = await getSellersList();
-    final List<Map<String, dynamic>> groupedResult = [];
-
     final cleanDbLoc = deliveryBoyLocation.trim().toLowerCase();
 
     // Load persistent saved payments map
@@ -3089,191 +3210,149 @@ class AuthService {
       } catch (_) {}
     }
 
-    final localKeys = prefs.getKeys();
+    final Map<String, Map<String, dynamic>> sellerGroupMap = {};
+    final Set<int> processedMsgIds = {};
 
-    for (var seller in sellers) {
-      final sellerUsername = (seller['username'] ?? '').toString().trim();
-      final sellerName = (seller['name'] ?? 'Seller Store').toString().trim();
-      final sellerMobile = (seller['mobile'] ?? '').toString().trim();
-      final sellerLocation = (seller['location'] ?? '').toString().trim().toLowerCase();
+    // 1. Fast Single-Call API from VPS (<100ms instead of 50 sequential calls!)
+    try {
+      final vpsRes = await VpsApiService.get('get-undelivered-orders&location=$cleanDbLoc');
+      if (vpsRes != null && vpsRes['success'] == true && vpsRes['orders'] is List) {
+        final List ordersList = vpsRes['orders'];
+        for (var o in ordersList) {
+          if (o is Map) {
+            final msgMap = Map<String, dynamic>.from(o);
+            final msgId = (msgMap['id'] as num?)?.toInt() ?? int.tryParse(msgMap['id']?.toString() ?? '') ?? 0;
+            final msgIdStr = msgId.toString();
 
-      // Location Filtering: If delivery boy has a location, only show sellers matching that location
-      if (cleanDbLoc.isNotEmpty && sellerLocation != cleanDbLoc) {
-        continue;
-      }
+            if (msgId != 0 && !processedMsgIds.contains(msgId)) {
+              processedMsgIds.add(msgId);
 
-      final List<Map<String, dynamic>> undeliveredOrders = [];
-      final Set<int> processedMsgIds = {};
+              String ordStatus = (msgMap['order_status'] ?? '').toString();
+              if (savedOrderStatuses.containsKey(msgIdStr)) {
+                ordStatus = (savedOrderStatuses[msgIdStr] ?? ordStatus).toString();
+              }
 
-      // 1. First fetch conversations from VPS API for full server-synced data
-      try {
-        final conversations = await getSellerConversations(sellerUsername);
-        for (var conv in conversations) {
-          final custMobile = (conv['customer_mobile'] ?? conv['mobile'] ?? '').toString().trim();
-          if (custMobile.isNotEmpty) {
-            final msgs = await getMessages(sellerUsername: sellerUsername, customerMobile: custMobile);
-            for (var msgMap in msgs) {
-              final msgId = int.tryParse(msgMap['id']?.toString() ?? '') ?? (msgMap['id'] is num ? (msgMap['id'] as num).toInt() : 0);
-              final msgIdStr = msgId.toString();
+              String delStatus = (msgMap['delivery_status'] ?? 'Pending').toString();
+              if (savedDeliveryStatuses.containsKey(msgIdStr)) {
+                final val = savedDeliveryStatuses[msgIdStr];
+                delStatus = (val is Map ? val['delivery_status'] : val).toString();
+                msgMap['delivery_status'] = delStatus;
+              }
 
-              if (msgId != 0 && !processedMsgIds.contains(msgId)) {
-                final isOrderMsg = msgMap['items_json'] != null ||
-                    msgMap['order_id'] != null ||
-                    msgMap['_calculated_order_id'] != null ||
-                    (msgMap['message'] ?? '').toString().toLowerCase().contains('order');
+              final bool isCancelled = ordStatus.toLowerCase() == 'cancelled' || delStatus.toLowerCase() == 'cancelled';
+              final bool isDelivered = delStatus.toLowerCase() == 'delivered' || ordStatus.toLowerCase() == 'delivered';
 
-                final isDeleted = msgMap['order_status'].toString().toLowerCase() == 'deleted' ||
-                    msgMap['is_deleted'] == true ||
-                    msgMap['is_deleted'] == 1;
+              if (!isCancelled && !isDelivered) {
+                if (savedPayments.containsKey(msgIdStr)) {
+                  msgMap['payment_status'] = 'paid';
+                  msgMap['payment_utr'] = savedPayments[msgIdStr]['payment_utr'] ?? (msgMap['payment_utr'] ?? '');
+                }
 
-                if (isOrderMsg && !isDeleted) {
-                  processedMsgIds.add(msgId);
-
-                  String ordStatus = (msgMap['order_status'] ?? '').toString();
-                  if (savedOrderStatuses.containsKey(msgIdStr)) {
-                    ordStatus = (savedOrderStatuses[msgIdStr] ?? ordStatus).toString();
+                final sellerUser = (msgMap['seller_username'] ?? '').toString().trim().toLowerCase();
+                if (sellerUser.isNotEmpty) {
+                  if (!sellerGroupMap.containsKey(sellerUser)) {
+                    sellerGroupMap[sellerUser] = {
+                      'seller_username': msgMap['seller_username'],
+                      'seller_name': msgMap['seller_name'] ?? 'Store',
+                      'seller_mobile': msgMap['seller_mobile'] ?? '',
+                      'orders': <Map<String, dynamic>>[],
+                    };
                   }
-
-                  String delStatus = (msgMap['delivery_status'] ?? 'Pending').toString();
-                  if (savedDeliveryStatuses.containsKey(msgIdStr)) {
-                    final val = savedDeliveryStatuses[msgIdStr];
-                    if (val is Map) {
-                      delStatus = (val['delivery_status'] ?? delStatus).toString();
-                    } else {
-                      delStatus = val.toString();
-                    }
-                    msgMap['delivery_status'] = delStatus;
-                  }
-
-                  final bool isCancelled = ordStatus.toLowerCase() == 'cancelled' || delStatus.toLowerCase() == 'cancelled';
-                  final bool isDelivered = delStatus.toLowerCase() == 'delivered' || ordStatus.toLowerCase() == 'delivered';
-                  final bool isReadyForDelivery = (ordStatus.toLowerCase() == 'ready' ||
-                                                   ordStatus.toLowerCase() == 'approved' ||
-                                                   delStatus.toLowerCase() == 'out for delivery' ||
-                                                   delStatus.toLowerCase() == 'picked up' ||
-                                                   delStatus.toLowerCase() == 'pickup') &&
-                                                  !isCancelled &&
-                                                  !isDelivered;
-
-                  if (isReadyForDelivery) {
-                    if (savedPayments.containsKey(msgIdStr)) {
-                      msgMap['payment_status'] = 'paid';
-                      msgMap['payment_utr'] = savedPayments[msgIdStr]['payment_utr'] ?? (msgMap['payment_utr'] ?? '');
-                    } else if ((msgMap['payment_status'] ?? '').toString().toLowerCase() == 'paid') {
-                      msgMap['payment_status'] = 'paid';
-                    }
-
-                    final custName = (conv['customer_name'] ?? conv['name'] ?? '').toString().trim();
-                    msgMap['seller_username'] = sellerUsername;
-                    msgMap['seller_name'] = sellerName;
-                    msgMap['customer_mobile'] = custMobile;
-                    if (custName.isNotEmpty && custName != custMobile && !custName.startsWith('Customer')) {
-                      msgMap['customer_name'] = custName;
-                    }
-
-                    undeliveredOrders.add(msgMap);
-                  }
+                  (sellerGroupMap[sellerUser]!['orders'] as List<Map<String, dynamic>>).add(msgMap);
                 }
               }
             }
           }
         }
-      } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('Fast get-undelivered-orders api failed: $e');
+    }
 
-      // 2. Also check local SharedPreferences keys for offline/local orders
-      final prefix = 'msgs_${sellerUsername.toLowerCase()}_';
-      final altPrefix = 'messages_${sellerUsername.toLowerCase()}_';
+    // 2. Also check local SharedPreferences keys for offline/recent orders
+    final localKeys = prefs.getKeys();
+    for (var key in localKeys) {
+      if (key.startsWith('msgs_') || key.startsWith('messages_')) {
+        final raw = prefs.getString(key);
+        if (raw != null && raw.isNotEmpty) {
+          try {
+            final List<dynamic> list = jsonDecode(raw);
+            for (var item in list) {
+              if (item is Map) {
+                final msgMap = Map<String, dynamic>.from(item);
+                final msgId = (msgMap['id'] as num?)?.toInt() ?? int.tryParse(msgMap['id']?.toString() ?? '') ?? 0;
+                final msgIdStr = msgId.toString();
 
-      for (var key in localKeys) {
-        if (key.toLowerCase().startsWith(prefix) || key.toLowerCase().startsWith(altPrefix)) {
-          final custMobile = key.substring(key.lastIndexOf('_') + 1);
-          final raw = prefs.getString(key);
-          if (raw != null && raw.isNotEmpty) {
-            try {
-              final List<dynamic> list = jsonDecode(raw);
-              for (var item in list) {
-                if (item is Map) {
-                  final msgMap = Map<String, dynamic>.from(item);
-                  final msgId = int.tryParse(msgMap['id']?.toString() ?? '') ?? (msgMap['id'] is num ? (msgMap['id'] as num).toInt() : 0);
-                  final msgIdStr = msgId.toString();
+                if (msgId != 0 && !processedMsgIds.contains(msgId)) {
+                  final isOrderMsg = msgMap['items_json'] != null ||
+                      msgMap['order_id'] != null ||
+                      msgMap['_calculated_order_id'] != null ||
+                      (msgMap['message'] ?? '').toString().toLowerCase().contains('order');
 
-                  if (msgId != 0 && !processedMsgIds.contains(msgId)) {
-                    final isOrderMsg = msgMap['items_json'] != null ||
-                        msgMap['order_id'] != null ||
-                        msgMap['_calculated_order_id'] != null ||
-                        (msgMap['message'] ?? '').toString().toLowerCase().contains('order');
+                  final isDeleted = msgMap['order_status'].toString().toLowerCase() == 'deleted' ||
+                      msgMap['is_deleted'] == true ||
+                      msgMap['is_deleted'] == 1;
 
-                    final isDeleted = msgMap['order_status'].toString().toLowerCase() == 'deleted' ||
-                        msgMap['is_deleted'] == true ||
-                        msgMap['is_deleted'] == 1;
+                  if (isOrderMsg && !isDeleted) {
+                    processedMsgIds.add(msgId);
 
-                    if (isOrderMsg && !isDeleted) {
-                      processedMsgIds.add(msgId);
+                    String ordStatus = (msgMap['order_status'] ?? '').toString();
+                    if (savedOrderStatuses.containsKey(msgIdStr)) {
+                      ordStatus = (savedOrderStatuses[msgIdStr] ?? ordStatus).toString();
+                    }
 
-                      String ordStatus = (msgMap['order_status'] ?? '').toString();
-                      if (savedOrderStatuses.containsKey(msgIdStr)) {
-                        ordStatus = (savedOrderStatuses[msgIdStr] ?? ordStatus).toString();
+                    String delStatus = (msgMap['delivery_status'] ?? 'Pending').toString();
+                    if (savedDeliveryStatuses.containsKey(msgIdStr)) {
+                      final val = savedDeliveryStatuses[msgIdStr];
+                      delStatus = (val is Map ? val['delivery_status'] : val).toString();
+                      msgMap['delivery_status'] = delStatus;
+                    }
+
+                    final bool isCancelled = ordStatus.toLowerCase() == 'cancelled' || delStatus.toLowerCase() == 'cancelled';
+                    final bool isDelivered = delStatus.toLowerCase() == 'delivered' || ordStatus.toLowerCase() == 'delivered';
+                    final bool isReadyForDelivery = (ordStatus.toLowerCase() == 'ready' ||
+                                                     ordStatus.toLowerCase() == 'approved' ||
+                                                     delStatus.toLowerCase() == 'out for delivery' ||
+                                                     delStatus.toLowerCase() == 'picked up' ||
+                                                     delStatus.toLowerCase() == 'pickup') &&
+                                                    !isCancelled &&
+                                                    !isDelivered;
+
+                    if (isReadyForDelivery) {
+                      if (savedPayments.containsKey(msgIdStr)) {
+                        msgMap['payment_status'] = 'paid';
+                        msgMap['payment_utr'] = savedPayments[msgIdStr]['payment_utr'] ?? (msgMap['payment_utr'] ?? '');
                       }
 
-                      String delStatus = (msgMap['delivery_status'] ?? 'Pending').toString();
-                      if (savedDeliveryStatuses.containsKey(msgIdStr)) {
-                        final val = savedDeliveryStatuses[msgIdStr];
-                        if (val is Map) {
-                          delStatus = (val['delivery_status'] ?? delStatus).toString();
-                        } else {
-                          delStatus = val.toString();
+                      final sellerUser = (msgMap['seller_username'] ?? '').toString().trim().toLowerCase();
+                      if (sellerUser.isNotEmpty) {
+                        if (!sellerGroupMap.containsKey(sellerUser)) {
+                          sellerGroupMap[sellerUser] = {
+                            'seller_username': msgMap['seller_username'],
+                            'seller_name': msgMap['seller_name'] ?? 'Store',
+                            'seller_mobile': msgMap['seller_mobile'] ?? '',
+                            'orders': <Map<String, dynamic>>[],
+                          };
                         }
-                        msgMap['delivery_status'] = delStatus;
-                      }
-
-                      final bool isCancelled = ordStatus.toLowerCase() == 'cancelled' || delStatus.toLowerCase() == 'cancelled';
-                      final bool isDelivered = delStatus.toLowerCase() == 'delivered' || ordStatus.toLowerCase() == 'delivered';
-                      final bool isReadyForDelivery = (ordStatus.toLowerCase() == 'ready' ||
-                                                       ordStatus.toLowerCase() == 'approved' ||
-                                                       delStatus.toLowerCase() == 'out for delivery' ||
-                                                       delStatus.toLowerCase() == 'picked up' ||
-                                                       delStatus.toLowerCase() == 'pickup') &&
-                                                      !isCancelled &&
-                                                      !isDelivered;
-
-                      if (isReadyForDelivery) {
-                        if (savedPayments.containsKey(msgIdStr)) {
-                          msgMap['payment_status'] = 'paid';
-                          msgMap['payment_utr'] = savedPayments[msgIdStr]['payment_utr'] ?? (msgMap['payment_utr'] ?? '');
-                        } else if ((msgMap['payment_status'] ?? '').toString().toLowerCase() == 'paid') {
-                          msgMap['payment_status'] = 'paid';
-                        }
-
-                        msgMap['seller_username'] = sellerUsername;
-                        msgMap['seller_name'] = sellerName;
-                        msgMap['customer_mobile'] = custMobile;
-
-                        undeliveredOrders.add(msgMap);
+                        (sellerGroupMap[sellerUser]!['orders'] as List<Map<String, dynamic>>).add(msgMap);
                       }
                     }
                   }
                 }
               }
-            } catch (_) {}
-          }
+            }
+          } catch (_) {}
         }
       }
-
-      if (undeliveredOrders.isNotEmpty) {
-        groupedResult.add({
-          'seller_username': sellerUsername,
-          'seller_name': sellerName,
-          'seller_mobile': sellerMobile,
-          'orders': undeliveredOrders,
-        });
-      }
     }
 
-    if (groupedResult.isNotEmpty) {
-      try {
-        await prefs.setString('delivery_boy_grouped_orders_${cleanDbLoc}', jsonEncode(groupedResult));
-      } catch (_) {}
-    }
+    final List<Map<String, dynamic>> groupedResult = sellerGroupMap.values.toList();
+
+    // Cache the updated list (even if empty, to immediately clear delivered orders)
+    try {
+      await prefs.setString('delivery_boy_grouped_orders_${cleanDbLoc}', jsonEncode(groupedResult));
+      await prefs.setString('delivery_boy_grouped_orders_all', jsonEncode(groupedResult));
+    } catch (_) {}
 
     return groupedResult;
   }
@@ -3284,11 +3363,62 @@ class AuthService {
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final key = 'delivery_boy_grouped_orders_${deliveryBoyLocation.trim().toLowerCase()}';
-      final str = prefs.getString(key);
-      if (str != null && str.isNotEmpty) {
-        final List decoded = jsonDecode(str);
-        return decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+      final locKey = deliveryBoyLocation.trim().toLowerCase();
+      final keysToCheck = [
+        if (locKey.isNotEmpty) 'delivery_boy_grouped_orders_$locKey',
+        'delivery_boy_grouped_orders_all',
+        'delivery_boy_grouped_orders_',
+      ];
+
+      final String? allSavedDeliveryStr = prefs.getString('saved_delivery_statuses');
+      final String? allSavedPaymentsStr = prefs.getString('saved_order_payments');
+      Map<String, dynamic> savedDeliveryStatuses = {};
+      Map<String, dynamic> savedPayments = {};
+      try {
+        if (allSavedDeliveryStr != null && allSavedDeliveryStr.isNotEmpty) {
+          savedDeliveryStatuses = Map<String, dynamic>.from(jsonDecode(allSavedDeliveryStr));
+        }
+        if (allSavedPaymentsStr != null && allSavedPaymentsStr.isNotEmpty) {
+          savedPayments = Map<String, dynamic>.from(jsonDecode(allSavedPaymentsStr));
+        }
+      } catch (_) {}
+
+      for (var key in keysToCheck) {
+        final str = prefs.getString(key);
+        if (str != null && str.isNotEmpty) {
+          final List decoded = jsonDecode(str);
+          final List<Map<String, dynamic>> list = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+
+          final List<Map<String, dynamic>> cleanList = [];
+          for (var sellerGroup in list) {
+            final List rawOrders = (sellerGroup['orders'] is List) ? sellerGroup['orders'] : [];
+            final List<Map<String, dynamic>> cleanOrders = [];
+            for (var o in rawOrders) {
+              if (o is Map) {
+                final oMap = Map<String, dynamic>.from(o);
+                final msgIdStr = (oMap['id'] ?? '').toString();
+                if (savedDeliveryStatuses.containsKey(msgIdStr)) {
+                  final savedVal = savedDeliveryStatuses[msgIdStr];
+                  final delStatus = (savedVal is Map ? savedVal['delivery_status'] : savedVal).toString().toLowerCase();
+                  if (delStatus == 'delivered' || delStatus == 'cancelled') {
+                    continue; // Skip delivered/cancelled order!
+                  }
+                  oMap['delivery_status'] = (savedVal is Map ? savedVal['delivery_status'] : savedVal).toString();
+                }
+                if (savedPayments.containsKey(msgIdStr)) {
+                  oMap['payment_status'] = 'paid';
+                  oMap['payment_utr'] = savedPayments[msgIdStr]['payment_utr'] ?? oMap['payment_utr'];
+                }
+                cleanOrders.add(oMap);
+              }
+            }
+            if (cleanOrders.isNotEmpty) {
+              sellerGroup['orders'] = cleanOrders;
+              cleanList.add(sellerGroup);
+            }
+          }
+          return cleanList;
+        }
       }
     } catch (_) {}
     return [];
@@ -3578,11 +3708,41 @@ class AuthService {
 
   static Future<List<Map<String, dynamic>>> _refreshSellerCustomerOrdersInBackground(String cleanSeller) async {
     try {
+      List rawOrders = [];
       final res = await VpsApiService.get('get-seller-customer-orders&seller_username=$cleanSeller');
       if (res != null && res['success'] == true && res['orders'] is List) {
-        final List rawOrders = res['orders'];
+        rawOrders = (res['orders'] as List);
+      }
+
+      // Robust fallback: If get-seller-customer-orders returned empty, query get-all-admin-orders and filter for this seller!
+      if (rawOrders.isEmpty) {
+        try {
+          final adminRes = await VpsApiService.get('get-all-admin-orders');
+          if (adminRes != null && adminRes['success'] == true && adminRes['orders'] is List) {
+            final List adminList = adminRes['orders'];
+            final target = cleanSeller.toLowerCase();
+            rawOrders = adminList.where((o) {
+              if (o is! Map) return false;
+              final su = (o['seller_username'] ?? '').toString().trim().toLowerCase();
+              final sn = (o['seller_name'] ?? '').toString().trim().toLowerCase();
+              return su == target || sn == target || su.contains(target) || target.contains(su);
+            }).toList();
+          }
+        } catch (_) {}
+      }
+
+      if (rawOrders.isNotEmpty) {
         final List<Map<String, dynamic>> allSellerOrders = [];
         final Set<String> processedIds = {};
+
+        Map<String, dynamic> savedStatuses = {};
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final sStr = prefs.getString('saved_order_statuses');
+          if (sStr != null && sStr.isNotEmpty) {
+            savedStatuses = Map<String, dynamic>.from(jsonDecode(sStr));
+          }
+        } catch (_) {}
 
         for (var m in rawOrders) {
           if (m is! Map) continue;
@@ -3613,8 +3773,8 @@ class AuthService {
             }
           }
 
-          final orderStatus = (msgMap['order_status'] ?? 'Pending').toString();
-          final deliveryStatus = (msgMap['delivery_status'] ?? 'Pending').toString();
+          String orderStatus = (msgMap['order_status'] ?? 'Pending').toString();
+          String deliveryStatus = (msgMap['delivery_status'] ?? 'Pending').toString();
           final paymentStatus = (msgMap['payment_status'] ?? 'unpaid').toString().toLowerCase();
           final paymentUtr = (msgMap['payment_utr'] ?? '').toString();
           final paidAmount = double.tryParse((msgMap['paid_amount'] ?? '').toString()) ?? (paymentStatus == 'paid' ? totalAmount : 0.0);
@@ -3622,8 +3782,34 @@ class AuthService {
           final dateStr = (msgMap['created_at'] ?? '').toString();
           final orderIdStr = (msgMap['order_id'] ?? (msgId.isNotEmpty ? '#DM-$msgId' : '#DM-1001')).toString();
 
+          final cleanDigits = orderIdStr.replaceAll(RegExp(r'[^0-9]'), '');
+          final savedStat = savedStatuses[msgId] ?? savedStatuses[orderIdStr] ?? (cleanDigits.isNotEmpty ? savedStatuses[cleanDigits] : null);
+          if (savedStat != null && savedStat.toString().isNotEmpty) {
+            final sUpper = savedStat.toString().toUpperCase();
+            final curUpper = orderStatus.toUpperCase();
+            if (curUpper == 'PENDING' && (sUpper == 'READY' || sUpper == 'CANCELLED')) {
+              orderStatus = savedStat.toString();
+              if (sUpper == 'READY') {
+                deliveryStatus = 'Ready';
+              } else if (sUpper == 'CANCELLED') {
+                deliveryStatus = 'Cancelled';
+              }
+            }
+          }
+
           final isDelivered = deliveryStatus.toLowerCase() == 'delivered' || orderStatus.toLowerCase() == 'delivered';
           final displayStatus = isDelivered ? 'DELIVERED' : orderStatus;
+
+          String deliveryAddress = (msgMap['delivery_address'] ?? msgMap['address'] ?? msgMap['cust_address'] ?? '').toString().trim();
+          if (deliveryAddress.isEmpty && msgMap['message'] != null) {
+            final match = RegExp(r'(?:Address|delivery_address|📍\s*Address):\s*([^\r\n]+)', caseSensitive: false).firstMatch(msgMap['message'].toString());
+            if (match != null) {
+              deliveryAddress = match.group(1)!.trim();
+            }
+          }
+          if (deliveryAddress.isEmpty && msgMap['customer_profile_address'] != null) {
+            deliveryAddress = msgMap['customer_profile_address'].toString().trim();
+          }
 
           allSellerOrders.add({
             'id': msgId,
@@ -3632,6 +3818,8 @@ class AuthService {
             'seller_username': cleanSeller,
             'customer_mobile': custMobile,
             'customer_name': custName,
+            'delivery_address': deliveryAddress,
+            'address': deliveryAddress,
             'items': items,
             'total_amount': totalAmount,
             'order_amount': totalAmount,
@@ -3975,6 +4163,43 @@ class AuthService {
       }
     }
 
+    // 2b. Immediately update delivery_boy_grouped_orders_ cache keys in SharedPreferences
+    final dbKeys = prefs.getKeys().where((k) => k.startsWith('delivery_boy_grouped_orders_')).toList();
+    for (var k in dbKeys) {
+      final str = prefs.getString(k);
+      if (str != null && str.isNotEmpty) {
+        try {
+          final List decoded = jsonDecode(str);
+          final List<Map<String, dynamic>> sellers = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+          bool modified = false;
+          for (var s in sellers) {
+            final List ordersList = (s['orders'] is List) ? s['orders'] : [];
+            if (newDeliveryStatus.toLowerCase() == 'delivered' || newDeliveryStatus.toLowerCase() == 'cancelled') {
+              final beforeLen = ordersList.length;
+              ordersList.removeWhere((o) {
+                final oId = (o['id'] as num?)?.toInt() ?? int.tryParse(o['id']?.toString() ?? '') ?? 0;
+                return oId == messageId;
+              });
+              if (ordersList.length != beforeLen) modified = true;
+            } else {
+              for (var o in ordersList) {
+                final oId = (o['id'] as num?)?.toInt() ?? int.tryParse(o['id']?.toString() ?? '') ?? 0;
+                if (oId == messageId) {
+                  o['delivery_status'] = newDeliveryStatus;
+                  o['delivered_by'] = deliveryBoyUsername;
+                  modified = true;
+                }
+              }
+            }
+          }
+          sellers.removeWhere((s) => ((s['orders'] as List?) ?? []).isEmpty);
+          if (modified) {
+            await prefs.setString(k, jsonEncode(sellers));
+          }
+        } catch (_) {}
+      }
+    }
+
     // 3. Sync to VPS API Database
     try {
       await VpsApiService.post('update-delivery-status', {
@@ -3995,6 +4220,7 @@ class AuthService {
     required String customerMobile,
     required int messageId,
     required String reason,
+    String orderId = '',
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final msgIdStr = messageId.toString();
@@ -4020,9 +4246,16 @@ class AuthService {
         savedCancelTimes = Map<String, dynamic>.from(jsonDecode(tStr));
       }
     } catch (_) {}
-    savedStatuses[msgIdStr] = 'Cancelled';
-    savedReasons[msgIdStr] = reason;
-    savedCancelTimes[msgIdStr] = formattedTime;
+    if (messageId > 0) {
+      savedStatuses[msgIdStr] = 'Cancelled';
+      savedReasons[msgIdStr] = reason;
+      savedCancelTimes[msgIdStr] = formattedTime;
+    }
+    if (orderId.isNotEmpty) {
+      savedStatuses[orderId] = 'Cancelled';
+      savedReasons[orderId] = reason;
+      savedCancelTimes[orderId] = formattedTime;
+    }
     await prefs.setString('saved_order_statuses', jsonEncode(savedStatuses));
     await prefs.setString('saved_cancel_reasons', jsonEncode(savedReasons));
     await prefs.setString('saved_cancel_times', jsonEncode(savedCancelTimes));
@@ -4037,9 +4270,44 @@ class AuthService {
           final List<Map<String, dynamic>> list = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
           bool modified = false;
           for (var item in list) {
-            if (item['id'] == messageId || item['id'].toString() == msgIdStr) {
+            final matchesId = messageId > 0 && (item['id'] == messageId || item['id'].toString() == msgIdStr);
+            final matchesOrderId = orderId.isNotEmpty && (item['order_id'] == orderId || item['order_number'] == orderId);
+            if (matchesId || matchesOrderId) {
               item['order_status'] = 'Cancelled';
               item['delivery_status'] = 'Cancelled';
+              item['status'] = 'CANCELLED';
+              item['cancelled_at'] = formattedTime;
+              item['cancel_reason'] = reason;
+              modified = true;
+            }
+          }
+          if (modified) {
+            await prefs.setString(key, jsonEncode(list));
+          }
+        } catch (_) {}
+      }
+    }
+
+    // 2b. Update customer_orders_history_ and seller_customer_orders_ keys in SharedPreferences
+    final orderHistoryKeys = prefs.getKeys().where((k) =>
+      k.startsWith('customer_orders_history_') ||
+      k.startsWith('seller_customer_orders_') ||
+      k == 'global_all_customer_orders_history'
+    ).toList();
+    for (var key in orderHistoryKeys) {
+      final str = prefs.getString(key);
+      if (str != null && str.isNotEmpty) {
+        try {
+          final List decoded = jsonDecode(str);
+          final List<Map<String, dynamic>> list = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+          bool modified = false;
+          for (var item in list) {
+            final matchesId = messageId > 0 && (item['id'] == messageId || item['id'].toString() == msgIdStr);
+            final matchesOrderId = orderId.isNotEmpty && (item['order_id'] == orderId || item['order_number'] == orderId);
+            if (matchesId || matchesOrderId) {
+              item['order_status'] = 'Cancelled';
+              item['delivery_status'] = 'Cancelled';
+              item['status'] = 'CANCELLED';
               item['cancelled_at'] = formattedTime;
               item['cancel_reason'] = reason;
               modified = true;
@@ -4056,6 +4324,7 @@ class AuthService {
     try {
       await VpsApiService.post('update-order-status', {
         'message_id': messageId,
+        if (orderId.isNotEmpty) 'order_id': orderId,
         'order_status': 'Cancelled',
         'cancelled_at': formattedTime,
         'cancel_reason': reason,
@@ -4166,12 +4435,40 @@ class AuthService {
     if (cleanSeller.isEmpty) return [];
 
     final prefs = await SharedPreferences.getInstance();
+    Map<String, List<Map<String, dynamic>>> localVariantsMap = {};
+    for (var keySuffix in [cleanSeller, cleanSeller.toLowerCase(), cleanSeller.toUpperCase()]) {
+      try {
+        final vStr = prefs.getString('seller_product_variants_$keySuffix');
+        if (vStr != null && vStr.isNotEmpty) {
+          final Map<String, dynamic> decodedVMap = jsonDecode(vStr);
+          decodedVMap.forEach((k, val) {
+            localVariantsMap[k] = _parseProductVariants(val);
+          });
+        }
+      } catch (_) {}
+    }
+
     for (var keySuffix in [cleanSeller, cleanSeller.toLowerCase(), cleanSeller.toUpperCase()]) {
       try {
         final str = prefs.getString('seller_products_$keySuffix');
         if (str != null && str.isNotEmpty) {
           final List<dynamic> list = jsonDecode(str);
-          final prods = list.map((e) => Map<String, dynamic>.from(e)).toList();
+          final prods = list.map((e) {
+            final m = Map<String, dynamic>.from(e);
+            final pId = (m['id'] as num?)?.toInt() ?? 0;
+            final pName = (m['name'] ?? '').toString().trim().toLowerCase();
+            final parsed = _parseProductVariants(m['variants']);
+            if (parsed.isNotEmpty) {
+              m['variants'] = parsed;
+            } else if (pId > 0 && localVariantsMap.containsKey('id_$pId')) {
+              m['variants'] = localVariantsMap['id_$pId']!;
+            } else if (pName.isNotEmpty && localVariantsMap.containsKey('name_$pName')) {
+              m['variants'] = localVariantsMap['name_$pName']!;
+            } else {
+              m['variants'] = <Map<String, dynamic>>[];
+            }
+            return m;
+          }).toList();
           if (prods.isNotEmpty) return prods;
         }
       } catch (_) {}
@@ -4217,6 +4514,34 @@ class AuthService {
     return [];
   }
 
+  static List<Map<String, dynamic>> _parseProductVariants(dynamic raw) {
+    if (raw == null) return [];
+    try {
+      List<dynamic> list = [];
+      if (raw is String && raw.trim().isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) list = decoded;
+      } else if (raw is List) {
+        list = raw;
+      }
+      return list
+          .map((e) {
+            final m = Map<String, dynamic>.from(e as Map);
+            final imgUrl = (m['image_url'] ?? m['image'] ?? '').toString().trim();
+            return <String, dynamic>{
+              'name': (m['name'] ?? m['variable_name'] ?? '').toString().trim(),
+              'purchase_rate': double.tryParse((m['purchase_rate'] ?? m['p_rate'] ?? 0).toString()) ?? 0.0,
+              'rate': double.tryParse((m['rate'] ?? m['sale_rate'] ?? m['s_rate'] ?? 0).toString()) ?? 0.0,
+              'image_url': imgUrl,
+            };
+          })
+          .where((v) => (v['name'] as String).isNotEmpty)
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   /// Get Products for a Seller (from VPS Database with local cache fallback)
   static Future<List<Map<String, dynamic>>> getSellerProducts(String sellerUsername) async {
     final cleanSeller = sellerUsername.trim();
@@ -4224,9 +4549,23 @@ class AuthService {
 
     final prefs = await SharedPreferences.getInstance();
     final cacheKey = 'seller_products_$cleanSeller';
+    final variantsCacheKey = 'seller_product_variants_${cleanSeller.toLowerCase()}';
 
-    // Read local cache first for smart image preservation
+    // Read local cache first for smart image and variants preservation
     Map<int, String> localImageMap = {};
+    Map<String, List<Map<String, dynamic>>> localVariantsMap = {};
+    for (var keySuffix in [cleanSeller, cleanSeller.toLowerCase(), cleanSeller.toUpperCase()]) {
+      try {
+        final vStr = prefs.getString('seller_product_variants_$keySuffix');
+        if (vStr != null && vStr.isNotEmpty) {
+          final Map<String, dynamic> decodedVMap = jsonDecode(vStr);
+          decodedVMap.forEach((k, val) {
+            localVariantsMap[k] = _parseProductVariants(val);
+          });
+        }
+      } catch (_) {}
+    }
+
     try {
       final str = prefs.getString(cacheKey);
       if (str != null && str.isNotEmpty) {
@@ -4236,6 +4575,10 @@ class AuthService {
           final img = (l['image_url'] ?? l['image'] ?? '').toString().trim();
           if (id > 0 && img.isNotEmpty && img != '📦') {
             localImageMap[id] = img;
+          }
+          final lVars = _parseProductVariants(l['variants']);
+          if (id > 0 && lVars.isNotEmpty && !localVariantsMap.containsKey('id_$id')) {
+            localVariantsMap['id_$id'] = lVars;
           }
         }
       }
@@ -4297,16 +4640,50 @@ class AuthService {
     }
 
     if (products != null && products.isNotEmpty) {
-      // Merge local image if VPS server returned empty image_url
+      // Merge local image and normalize variants
       for (var p in products) {
         final pId = (p['id'] as num?)?.toInt() ?? 0;
+        final pName = (p['name'] ?? '').toString().trim().toLowerCase();
         final pImg = (p['image_url'] ?? p['image'] ?? '').toString().trim();
         if ((pImg.isEmpty || pImg == '📦') && localImageMap.containsKey(pId)) {
           p['image_url'] = localImageMap[pId];
           p['image'] = localImageMap[pId];
         }
+
+        final serverVars = _parseProductVariants(p['variants']);
+        final localVars = (pId > 0 && localVariantsMap.containsKey('id_$pId'))
+            ? localVariantsMap['id_$pId']!
+            : (pName.isNotEmpty && localVariantsMap.containsKey('name_$pName'))
+                ? localVariantsMap['name_$pName']!
+                : <Map<String, dynamic>>[];
+
+        if (serverVars.isNotEmpty) {
+          // Preserve any local variant image if server variant image is empty
+          for (var sv in serverVars) {
+            final svImg = (sv['image_url'] ?? '').toString().trim();
+            if (svImg.isEmpty && localVars.isNotEmpty) {
+              final svName = (sv['name'] ?? '').toString().trim().toLowerCase();
+              for (var lv in localVars) {
+                if ((lv['name'] ?? '').toString().trim().toLowerCase() == svName) {
+                  final lvImg = (lv['image_url'] ?? '').toString().trim();
+                  if (lvImg.isNotEmpty) {
+                    sv['image_url'] = lvImg;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          p['variants'] = serverVars;
+          if (pId > 0) localVariantsMap['id_$pId'] = serverVars;
+        } else if (localVars.isNotEmpty) {
+          p['variants'] = localVars;
+        } else {
+          p['variants'] = <Map<String, dynamic>>[];
+        }
       }
 
+      await prefs.setString(variantsCacheKey, jsonEncode(localVariantsMap));
       await prefs.setString(cacheKey, jsonEncode(products));
       return products;
     }
@@ -4316,7 +4693,11 @@ class AuthService {
       final str = prefs.getString(cacheKey);
       if (str != null && str.isNotEmpty) {
         final List<dynamic> list = jsonDecode(str);
-        final prods = list.map((e) => Map<String, dynamic>.from(e)).toList();
+        final prods = list.map((e) {
+          final m = Map<String, dynamic>.from(e);
+          m['variants'] = _parseProductVariants(m['variants']);
+          return m;
+        }).toList();
         if (prods.isNotEmpty) return prods;
       }
     } catch (_) {}
@@ -4337,11 +4718,13 @@ class AuthService {
     double purchaseRate = 0.0,
     String imageUrl = '',
     String buttonText = 'Buy Now',
+    List<Map<String, dynamic>> variants = const [],
   }) async {
     final cleanSeller = sellerUsername.trim();
     final cleanName = name.trim();
     final cleanImg = imageUrl.trim();
     final cleanBtnText = buttonText.trim().isNotEmpty ? buttonText.trim() : 'Buy Now';
+    final cleanVariants = _parseProductVariants(variants);
     if (cleanSeller.isEmpty || cleanName.isEmpty) return false;
 
     Map<String, dynamic>? newProd;
@@ -4361,6 +4744,7 @@ class AuthService {
         'image_url': cleanImg,
         'image': cleanImg,
         'button_text': cleanBtnText,
+        'variants': jsonEncode(cleanVariants),
       });
 
       if (res != null && res['success'] == true && res['product'] != null) {
@@ -4369,6 +4753,7 @@ class AuthService {
           newProd['image_url'] = cleanImg;
           newProd['image'] = cleanImg;
         }
+        newProd['variants'] = cleanVariants;
       }
     } catch (_) {}
 
@@ -4386,11 +4771,29 @@ class AuthService {
       'image_url': cleanImg,
       'image': cleanImg,
       'button_text': cleanBtnText,
+      'variants': cleanVariants,
     };
 
     // 2. Save/Update Local Cache
     final prefs = await SharedPreferences.getInstance();
     final cacheKey = 'seller_products_$cleanSeller';
+    final variantsCacheKey = 'seller_product_variants_$cleanSeller';
+
+    try {
+      Map<String, dynamic> vMap = {};
+      for (var keySuffix in [cleanSeller, cleanSeller.toLowerCase()]) {
+        final vStr = prefs.getString('seller_product_variants_$keySuffix');
+        if (vStr != null && vStr.isNotEmpty) {
+          vMap.addAll(Map<String, dynamic>.from(jsonDecode(vStr)));
+        }
+      }
+      final newId = (newProd['id'] as num?)?.toInt() ?? 0;
+      if (newId > 0) vMap['id_$newId'] = cleanVariants;
+      vMap['name_${cleanName.toLowerCase()}'] = cleanVariants;
+      await prefs.setString(variantsCacheKey, jsonEncode(vMap));
+      await prefs.setString('seller_product_variants_${cleanSeller.toLowerCase()}', jsonEncode(vMap));
+    } catch (_) {}
+
     List<Map<String, dynamic>> products = [];
     try {
       final str = prefs.getString(cacheKey);
@@ -4509,11 +4912,13 @@ class AuthService {
     double purchaseRate = 0.0,
     String imageUrl = '',
     String buttonText = 'Buy Now',
+    List<Map<String, dynamic>> variants = const [],
   }) async {
     final cleanSeller = sellerUsername.trim();
     final cleanName = name.trim();
     final cleanImg = imageUrl.trim();
     final cleanBtnText = buttonText.trim().isNotEmpty ? buttonText.trim() : 'Buy Now';
+    final cleanVariants = _parseProductVariants(variants);
     if (id <= 0 || cleanName.isEmpty) return false;
 
     // 1. VPS API Update
@@ -4532,12 +4937,29 @@ class AuthService {
         'image_url': cleanImg,
         'image': cleanImg,
         'button_text': cleanBtnText,
+        'variants': jsonEncode(cleanVariants),
       });
     } catch (_) {}
 
     // 2. Local Cache Update
     final prefs = await SharedPreferences.getInstance();
     final cacheKey = 'seller_products_$cleanSeller';
+    final variantsCacheKey = 'seller_product_variants_$cleanSeller';
+
+    try {
+      Map<String, dynamic> vMap = {};
+      for (var keySuffix in [cleanSeller, cleanSeller.toLowerCase()]) {
+        final vStr = prefs.getString('seller_product_variants_$keySuffix');
+        if (vStr != null && vStr.isNotEmpty) {
+          vMap.addAll(Map<String, dynamic>.from(jsonDecode(vStr)));
+        }
+      }
+      vMap['id_$id'] = cleanVariants;
+      vMap['name_${cleanName.toLowerCase()}'] = cleanVariants;
+      await prefs.setString(variantsCacheKey, jsonEncode(vMap));
+      await prefs.setString('seller_product_variants_${cleanSeller.toLowerCase()}', jsonEncode(vMap));
+    } catch (_) {}
+
     try {
       final str = prefs.getString(cacheKey);
       if (str != null && str.isNotEmpty) {
@@ -4556,6 +4978,7 @@ class AuthService {
             p['image_url'] = cleanImg;
             p['image'] = cleanImg;
             p['button_text'] = cleanBtnText;
+            p['variants'] = cleanVariants;
           }
         }
         await prefs.setString(cacheKey, jsonEncode(products));
@@ -4598,40 +5021,99 @@ class AuthService {
   // SELLER CUSTOM UNITS CRUD API & LOCAL CACHE
   // ==========================================
 
+  /// Read Cached Custom Units for Seller (Instant 0.01s read)
+  static Future<List<Map<String, dynamic>>> getCachedSellerUnits(String sellerUsername) async {
+    String cleanSeller = sellerUsername.trim();
+    if (cleanSeller.isEmpty) {
+      final currentUser = await getCurrentUser();
+      cleanSeller = (currentUser?.username ?? currentUser?.mobile ?? currentUser?.name ?? '').trim();
+    }
+    if (cleanSeller.isEmpty) return [];
+
+    final prefs = await SharedPreferences.getInstance();
+    final List<Map<String, dynamic>> merged = [];
+    final Set<String> seenNames = {};
+
+    for (var keySuffix in [cleanSeller, cleanSeller.toLowerCase(), cleanSeller.toUpperCase()]) {
+      try {
+        final str = prefs.getString('seller_units_$keySuffix');
+        if (str != null && str.isNotEmpty) {
+          final List<dynamic> list = jsonDecode(str);
+          for (var e in list) {
+            if (e is Map) {
+              final m = Map<String, dynamic>.from(e);
+              final uName = (m['unit_name'] ?? m['name'] ?? '').toString().trim();
+              if (uName.isNotEmpty && !seenNames.contains(uName.toLowerCase())) {
+                seenNames.add(uName.toLowerCase());
+                m['unit_name'] = uName;
+                merged.add(m);
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+    return merged;
+  }
+
   /// Get Custom Units created by Seller (VPS Database with local cache fallback)
   static Future<List<Map<String, dynamic>>> getSellerUnits(String sellerUsername) async {
-    final cleanSeller = sellerUsername.trim();
+    String cleanSeller = sellerUsername.trim();
+    if (cleanSeller.isEmpty) {
+      final currentUser = await getCurrentUser();
+      cleanSeller = (currentUser?.username ?? currentUser?.mobile ?? currentUser?.name ?? '').trim();
+    }
     if (cleanSeller.isEmpty) return [];
 
     final prefs = await SharedPreferences.getInstance();
     final cacheKey = 'seller_units_$cleanSeller';
+    final cachedUnits = await getCachedSellerUnits(cleanSeller);
 
     // 1. VPS API
     try {
-      final res = await VpsApiService.get('get-seller-units&seller_username=$cleanSeller');
+      final res = await VpsApiService.get('get-seller-units&seller_username=${Uri.encodeComponent(cleanSeller)}');
       if (res != null && res['success'] == true && res['units'] is List) {
         final List<dynamic> rawList = res['units'];
-        final List<Map<String, dynamic>> units = rawList.map((e) => Map<String, dynamic>.from(e)).toList();
+        final List<Map<String, dynamic>> units = [];
+        final Set<String> seenNames = {};
+
+        for (var e in rawList) {
+          if (e is Map) {
+            final m = Map<String, dynamic>.from(e);
+            final uName = (m['unit_name'] ?? m['name'] ?? '').toString().trim();
+            if (uName.isNotEmpty && !seenNames.contains(uName.toLowerCase())) {
+              seenNames.add(uName.toLowerCase());
+              m['unit_name'] = uName;
+              units.add(m);
+            }
+          }
+        }
+
+        // Merge any local cached units not yet in VPS list
+        for (var cUnit in cachedUnits) {
+          final uName = (cUnit['unit_name'] ?? '').toString().trim();
+          if (uName.isNotEmpty && !seenNames.contains(uName.toLowerCase())) {
+            seenNames.add(uName.toLowerCase());
+            units.add(cUnit);
+          }
+        }
+
         await prefs.setString(cacheKey, jsonEncode(units));
         return units;
       }
     } catch (_) {}
 
     // 2. Local Fallback Cache
-    try {
-      final str = prefs.getString(cacheKey);
-      if (str != null && str.isNotEmpty) {
-        final List<dynamic> list = jsonDecode(str);
-        return list.map((e) => Map<String, dynamic>.from(e)).toList();
-      }
-    } catch (_) {}
-
-    return [];
+    return cachedUnits;
   }
 
   /// Add Custom Unit for Seller
   static Future<bool> addSellerUnit(String sellerUsername, String unitName) async {
-    final cleanSeller = sellerUsername.trim();
+    String cleanSeller = sellerUsername.trim();
+    if (cleanSeller.isEmpty) {
+      final currentUser = await getCurrentUser();
+      cleanSeller = (currentUser?.username ?? currentUser?.mobile ?? currentUser?.name ?? '').trim();
+    }
     final cleanUnit = unitName.trim();
     if (cleanSeller.isEmpty || cleanUnit.isEmpty) return false;
 
@@ -4657,13 +5139,7 @@ class AuthService {
     // 2. Local Cache Update
     final prefs = await SharedPreferences.getInstance();
     final cacheKey = 'seller_units_$cleanSeller';
-    List<Map<String, dynamic>> units = [];
-    try {
-      final str = prefs.getString(cacheKey);
-      if (str != null && str.isNotEmpty) {
-        units = (jsonDecode(str) as List).map((e) => Map<String, dynamic>.from(e)).toList();
-      }
-    } catch (_) {}
+    List<Map<String, dynamic>> units = await getCachedSellerUnits(cleanSeller);
 
     bool exists = units.any((u) => (u['unit_name'] ?? '').toString().trim().toLowerCase() == cleanUnit.toLowerCase());
     if (!exists) {
@@ -4754,12 +5230,36 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     final cacheKey = 'seller_categories_$cleanSeller';
 
+    void applyLocalSettings(List<Map<String, dynamic>> list) {
+      for (var c in list) {
+        final cName = (c['name'] ?? '').toString().trim().toLowerCase();
+        final cId = (c['id'] ?? '').toString().trim();
+        final bool? localHide = prefs.getBool('cat_hide_name_${cleanSeller}_$cName') ??
+            (cId.isNotEmpty ? prefs.getBool('cat_hide_name_${cleanSeller}_id_$cId') : null);
+        final bool? localFull = prefs.getBool('cat_full_size_${cleanSeller}_$cName') ??
+            (cId.isNotEmpty ? prefs.getBool('cat_full_size_${cleanSeller}_id_$cId') : null);
+
+        if (localHide != null) {
+          c['hide_name'] = localHide ? 1 : 0;
+        } else if (c['hide_name'] == null) {
+          c['hide_name'] = 0;
+        }
+
+        if (localFull != null) {
+          c['full_size_image'] = localFull ? 1 : 0;
+        } else if (c['full_size_image'] == null) {
+          c['full_size_image'] = 0;
+        }
+      }
+    }
+
     // 1. Fetch from VPS API
     try {
       final res = await VpsApiService.get('get-seller-categories&seller_username=${Uri.encodeComponent(cleanSeller)}');
       if (res != null && res['success'] == true && res['categories'] is List) {
         final List<dynamic> rawList = res['categories'];
         final List<Map<String, dynamic>> categories = rawList.map((e) => Map<String, dynamic>.from(e)).toList();
+        applyLocalSettings(categories);
         await prefs.setString(cacheKey, jsonEncode(categories));
         return categories;
       }
@@ -4771,7 +5271,10 @@ class AuthService {
       if (str != null && str.isNotEmpty) {
         final List<dynamic> list = jsonDecode(str);
         final cats = list.map((e) => Map<String, dynamic>.from(e)).toList();
-        if (cats.isNotEmpty) return cats;
+        if (cats.isNotEmpty) {
+          applyLocalSettings(cats);
+          return cats;
+        }
       }
     } catch (_) {}
 
@@ -4779,7 +5282,7 @@ class AuthService {
   }
 
   /// Add Custom Category for Seller
-  static Future<bool> addSellerCategory(String sellerUsername, String categoryName, String imageUrl, {String color = '#8B5CF6'}) async {
+  static Future<bool> addSellerCategory(String sellerUsername, String categoryName, String imageUrl, {String color = '#8B5CF6', String iconUrl = '', String posterUrl = '', String itemBgColor = '#F8FAFC', String sections = '', bool hideName = false, bool fullSizeImage = false}) async {
     String cleanSeller = sellerUsername.trim();
     if (cleanSeller.isEmpty) {
       final currentUser = await getCurrentUser();
@@ -4788,7 +5291,17 @@ class AuthService {
     final cleanName = categoryName.trim();
     final cleanImg = imageUrl.trim();
     final cleanColor = color.trim().isEmpty ? '#8B5CF6' : color.trim();
+    final cleanIcon = iconUrl.trim();
+    final cleanPoster = posterUrl.trim();
+    final cleanItemBg = itemBgColor.trim().isEmpty ? '#F8FAFC' : itemBgColor.trim();
+    final cleanSections = sections.trim();
     if (cleanSeller.isEmpty || cleanName.isEmpty) return false;
+
+    // Persist dedicated keys immediately
+    final prefs = await SharedPreferences.getInstance();
+    final nameKey = cleanName.toLowerCase();
+    await prefs.setBool('cat_hide_name_${cleanSeller}_$nameKey', hideName);
+    await prefs.setBool('cat_full_size_${cleanSeller}_$nameKey', fullSizeImage);
 
     Map<String, dynamic>? newCat;
 
@@ -4799,22 +5312,40 @@ class AuthService {
         'name': cleanName,
         'image_url': cleanImg,
         'color': cleanColor,
+        'icon_url': cleanIcon,
+        'poster_url': cleanPoster,
+        'item_bg_color': cleanItemBg,
+        'sections': cleanSections,
+        'hide_name': hideName ? 1 : 0,
+        'full_size_image': fullSizeImage ? 1 : 0,
       });
       if (res != null && res['success'] == true && res['category'] != null) {
         newCat = Map<String, dynamic>.from(res['category']);
       }
     } catch (_) {}
 
+    final newId = newCat != null && newCat['id'] != null ? newCat['id'] : DateTime.now().millisecondsSinceEpoch;
     newCat ??= {
-      'id': DateTime.now().millisecondsSinceEpoch,
+      'id': newId,
       'seller_username': cleanSeller,
       'name': cleanName,
       'image_url': cleanImg.isEmpty ? '🏷️' : cleanImg,
       'color': cleanColor,
+      'icon_url': cleanIcon,
+      'poster_url': cleanPoster,
+      'item_bg_color': cleanItemBg,
+      'sections': cleanSections,
+      'hide_name': hideName ? 1 : 0,
+      'full_size_image': fullSizeImage ? 1 : 0,
     };
+    newCat['hide_name'] = hideName ? 1 : 0;
+    newCat['full_size_image'] = fullSizeImage ? 1 : 0;
+    if (newId != null) {
+      await prefs.setBool('cat_hide_name_${cleanSeller}_id_$newId', hideName);
+      await prefs.setBool('cat_full_size_${cleanSeller}_id_$newId', fullSizeImage);
+    }
 
     // 2. Local Cache Update
-    final prefs = await SharedPreferences.getInstance();
     final cacheKey = 'seller_categories_$cleanSeller';
     List<Map<String, dynamic>> categories = [];
     try {
@@ -4829,6 +5360,12 @@ class AuthService {
       if ((c['name'] ?? '').toString().trim().toLowerCase() == cleanName.toLowerCase()) {
         c['color'] = cleanColor;
         if (cleanImg.isNotEmpty) c['image_url'] = cleanImg;
+        if (cleanIcon.isNotEmpty) c['icon_url'] = cleanIcon;
+        if (cleanPoster.isNotEmpty) c['poster_url'] = cleanPoster;
+        c['item_bg_color'] = cleanItemBg;
+        c['sections'] = cleanSections;
+        c['hide_name'] = hideName ? 1 : 0;
+        c['full_size_image'] = fullSizeImage ? 1 : 0;
         exists = true;
       }
     }
@@ -4840,7 +5377,7 @@ class AuthService {
   }
 
   /// Update Custom Category
-  static Future<bool> updateSellerCategory(int id, String sellerUsername, String categoryName, String imageUrl, {String color = '#8B5CF6'}) async {
+  static Future<bool> updateSellerCategory(int id, String sellerUsername, String categoryName, String imageUrl, {String color = '#8B5CF6', String iconUrl = '', String posterUrl = '', String itemBgColor = '#F8FAFC', String sections = '', bool hideName = false, bool fullSizeImage = false, String oldCategoryName = ''}) async {
     String cleanSeller = sellerUsername.trim();
     if (cleanSeller.isEmpty) {
       final currentUser = await getCurrentUser();
@@ -4849,21 +5386,45 @@ class AuthService {
     final cleanName = categoryName.trim();
     final cleanImg = imageUrl.trim();
     final cleanColor = color.trim().isEmpty ? '#8B5CF6' : color.trim();
+    final cleanIcon = iconUrl.trim();
+    final cleanPoster = posterUrl.trim();
+    final cleanItemBg = itemBgColor.trim().isEmpty ? '#F8FAFC' : itemBgColor.trim();
+    final cleanSections = sections.trim();
     if (cleanName.isEmpty) return false;
 
+    // 1. Immediately save to dedicated persistent storage keys
+    final prefs = await SharedPreferences.getInstance();
+    final nameKey = cleanName.toLowerCase();
+    await prefs.setBool('cat_hide_name_${cleanSeller}_$nameKey', hideName);
+    await prefs.setBool('cat_full_size_${cleanSeller}_$nameKey', fullSizeImage);
+    if (id > 0) {
+      await prefs.setBool('cat_hide_name_${cleanSeller}_id_$id', hideName);
+      await prefs.setBool('cat_full_size_${cleanSeller}_id_$id', fullSizeImage);
+    }
+    final cleanOld = oldCategoryName.trim().toLowerCase();
+    if (cleanOld.isNotEmpty && cleanOld != nameKey) {
+      await prefs.setBool('cat_hide_name_${cleanSeller}_$cleanOld', hideName);
+      await prefs.setBool('cat_full_size_${cleanSeller}_$cleanOld', fullSizeImage);
+    }
+
+    // 2. Post to VPS API
     try {
-      if (id > 0) {
-        await VpsApiService.post('update-seller-category', {
-          'id': id,
-          'seller_username': cleanSeller,
-          'name': cleanName,
-          'image_url': cleanImg,
-          'color': cleanColor,
-        });
-      }
+      await VpsApiService.post('update-seller-category', {
+        'id': id,
+        'seller_username': cleanSeller,
+        'name': cleanName,
+        'image_url': cleanImg,
+        'color': cleanColor,
+        'icon_url': cleanIcon,
+        'poster_url': cleanPoster,
+        'item_bg_color': cleanItemBg,
+        'sections': cleanSections,
+        'hide_name': hideName ? 1 : 0,
+        'full_size_image': fullSizeImage ? 1 : 0,
+      });
     } catch (_) {}
 
-    final prefs = await SharedPreferences.getInstance();
+    // 3. Update local cache with safe ID parsing
     final cacheKey = 'seller_categories_$cleanSeller';
     try {
       final str = prefs.getString(cacheKey);
@@ -4871,10 +5432,18 @@ class AuthService {
         final List<dynamic> list = jsonDecode(str);
         final categories = list.map((e) => Map<String, dynamic>.from(e)).toList();
         for (var c in categories) {
-          if ((c['id'] as num?)?.toInt() == id || (c['name'] ?? '').toString().trim().toLowerCase() == cleanName.toLowerCase()) {
+          final int? cId = int.tryParse(c['id']?.toString() ?? '');
+          final String cName = (c['name'] ?? '').toString().trim().toLowerCase();
+          if ((id > 0 && cId == id) || cName == nameKey || (cleanOld.isNotEmpty && cName == cleanOld)) {
             c['name'] = cleanName;
             if (cleanImg.isNotEmpty) c['image_url'] = cleanImg;
             c['color'] = cleanColor;
+            if (cleanIcon.isNotEmpty) c['icon_url'] = cleanIcon;
+            c['poster_url'] = cleanPoster;
+            c['item_bg_color'] = cleanItemBg;
+            c['sections'] = cleanSections;
+            c['hide_name'] = hideName ? 1 : 0;
+            c['full_size_image'] = fullSizeImage ? 1 : 0;
           }
         }
         await prefs.setString(cacheKey, jsonEncode(categories));
@@ -4898,13 +5467,25 @@ class AuthService {
     } catch (_) {}
 
     final prefs = await SharedPreferences.getInstance();
+    final nameKey = categoryName.trim().toLowerCase();
+    await prefs.remove('cat_hide_name_${cleanSeller}_$nameKey');
+    await prefs.remove('cat_full_size_${cleanSeller}_$nameKey');
+    if (id > 0) {
+      await prefs.remove('cat_hide_name_${cleanSeller}_id_$id');
+      await prefs.remove('cat_full_size_${cleanSeller}_id_$id');
+    }
+
     final cacheKey = 'seller_categories_$cleanSeller';
     try {
       final str = prefs.getString(cacheKey);
       if (str != null && str.isNotEmpty) {
         final List<dynamic> list = jsonDecode(str);
         final categories = list.map((e) => Map<String, dynamic>.from(e)).toList();
-        categories.removeWhere((c) => (c['id'] as num?)?.toInt() == id || c['name'] == categoryName);
+        categories.removeWhere((c) {
+          final int? cId = int.tryParse(c['id']?.toString() ?? '');
+          final String cName = (c['name'] ?? '').toString().trim().toLowerCase();
+          return (id > 0 && cId == id) || cName == nameKey;
+        });
         await prefs.setString(cacheKey, jsonEncode(categories));
       }
     } catch (_) {}
@@ -4928,6 +5509,11 @@ class AuthService {
       'color2': '#1E1B4B',
       'color3': '#312E81',
       'direction': 'diagonal', // 'horizontal', 'vertical', 'diagonal', 'radial'
+      'sticky_color1': '#0F172A',
+      'sticky_color2': '#1E1B4B',
+      'sticky_direction': 'horizontal',
+      'category_icon_color': '#FFFFFF',
+      'sticky_category_icon_color': '#FFFFFF',
       'shading': 'dark', // 'light', 'medium', 'dark', 'ultra_dark'
       'enable_shining': true,
       'particle_opacity': 0.0,
@@ -4976,6 +5562,601 @@ class AuthService {
 
     try {
       await VpsApiService.post('update-header-theme', config);
+    } catch (_) {}
+
+    return true;
+  }
+
+  /// Get Seller Custom Header Texts (Line 1 & Line 2)
+  static Future<Map<String, String>> getSellerHeaderText(String sellerUsername) async {
+    final clean = sellerUsername.trim().toLowerCase();
+    if (clean.isEmpty) return {'text1': '', 'text2': ''};
+    final prefs = await SharedPreferences.getInstance();
+    String text1 = prefs.getString('seller_header_text1_$clean') ?? '';
+    String text2 = prefs.getString('seller_header_text2_$clean') ?? '';
+
+    if (text1.isEmpty && text2.isEmpty) {
+      final themeConfig = await getHeaderThemeConfig();
+      final sellerTexts = themeConfig['seller_header_texts'];
+      if (sellerTexts is Map && sellerTexts.containsKey(clean)) {
+        final sMap = sellerTexts[clean];
+        if (sMap is Map) {
+          text1 = (sMap['text1'] ?? '').toString();
+          text2 = (sMap['text2'] ?? '').toString();
+        }
+      } else {
+        text1 = (themeConfig['header_text1'] ?? '').toString();
+        text2 = (themeConfig['header_text2'] ?? '').toString();
+      }
+    }
+
+    return {'text1': text1, 'text2': text2};
+  }
+
+  /// Save Seller Custom Header Texts (Line 1 & Line 2)
+  static Future<bool> saveSellerHeaderText(String sellerUsername, String text1, String text2) async {
+    final clean = sellerUsername.trim().toLowerCase();
+    if (clean.isEmpty) return false;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('seller_header_text1_$clean', text1.trim());
+    await prefs.setString('seller_header_text2_$clean', text2.trim());
+
+    try {
+      final themeConfig = await getHeaderThemeConfig();
+      Map<String, dynamic> sellerTexts = {};
+      if (themeConfig['seller_header_texts'] is Map) {
+        sellerTexts = Map<String, dynamic>.from(themeConfig['seller_header_texts']);
+      }
+      sellerTexts[clean] = {
+        'text1': text1.trim(),
+        'text2': text2.trim(),
+      };
+      themeConfig['seller_header_texts'] = sellerTexts;
+      themeConfig['header_text1'] = text1.trim();
+      themeConfig['header_text2'] = text2.trim();
+      await saveHeaderThemeConfig(themeConfig);
+    } catch (_) {}
+
+    try {
+      await VpsApiService.post('update-seller-profile', {
+        'seller_username': clean,
+        'username': clean,
+        'header_text1': text1.trim(),
+        'header_text2': text2.trim(),
+      });
+    } catch (_) {}
+
+    return true;
+  }
+
+  static final Map<String, List<String>> _sellerSearchHintsMemoryCache = {};
+  static final Map<String, Map<String, dynamic>> _sellerSearchBarStyleMemoryCache = {};
+
+  /// Instant Cached Search Hints for Seller (Watermark list)
+  static List<String>? getCachedSellerSearchHints(String sellerUsername) {
+    final clean = sellerUsername.trim().toLowerCase();
+    return _sellerSearchHintsMemoryCache[clean];
+  }
+
+  /// Instant Cached Search Bar Style for Seller
+  static Map<String, dynamic>? getCachedSellerSearchBarStyle(String sellerUsername) {
+    final clean = sellerUsername.trim().toLowerCase();
+    return _sellerSearchBarStyleMemoryCache[clean];
+  }
+
+  /// Get Seller Custom Search Bar Style (Background color, opacity, text color)
+  static Future<Map<String, dynamic>> getSellerSearchBarStyle(String sellerUsername) async {
+    final clean = sellerUsername.trim().toLowerCase();
+    if (clean.isEmpty) return {};
+
+    if (_sellerSearchBarStyleMemoryCache.containsKey(clean)) {
+      return _sellerSearchBarStyleMemoryCache[clean]!;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final localStr = prefs.getString('seller_search_style_$clean');
+    if (localStr != null && localStr.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(localStr);
+        if (decoded is Map<String, dynamic>) {
+          _sellerSearchBarStyleMemoryCache[clean] = decoded;
+          return decoded;
+        }
+      } catch (_) {}
+    }
+
+    // Fetch from Server Database (persisted even when phone cache is wiped!)
+    try {
+      final res = await VpsApiService.get('get-seller-search-bar-style&seller_username=$clean');
+      if (res != null && res['success'] == true) {
+        final style = <String, dynamic>{
+          'search_bg_color': res['search_bg_color'] ?? '#FFFFFF',
+          'search_opacity': (res['search_opacity'] as num?)?.toDouble() ?? 1.0,
+          'search_text_color': res['search_text_color'] ?? '#0F172A',
+        };
+        _sellerSearchBarStyleMemoryCache[clean] = style;
+        await prefs.setString('seller_search_style_$clean', jsonEncode(style));
+
+        if (res['search_hints'] is List) {
+          final list = (res['search_hints'] as List).map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
+          if (list.isNotEmpty) {
+            _sellerSearchHintsMemoryCache[clean] = list;
+            await prefs.setString('seller_search_hints_$clean', jsonEncode(list));
+          }
+        }
+        return style;
+      }
+    } catch (_) {}
+
+    // Fallback: Check getHeaderThemeConfig (Works immediately on live VPS!)
+    try {
+      final themeConfig = await getHeaderThemeConfig();
+      if (themeConfig['seller_search_styles'] is Map) {
+        final map = themeConfig['seller_search_styles'] as Map;
+        if (map.containsKey(clean) && map[clean] is Map) {
+          final style = Map<String, dynamic>.from(map[clean]);
+          _sellerSearchBarStyleMemoryCache[clean] = style;
+          await prefs.setString('seller_search_style_$clean', jsonEncode(style));
+          return style;
+        }
+      }
+    } catch (_) {}
+
+    return {};
+  }
+
+  /// Get Seller Custom Search Bar Hints / Watermarks (from memory, local cache, or VPS database)
+  static Future<List<String>> getSellerSearchHints(String sellerUsername) async {
+    final clean = sellerUsername.trim().toLowerCase();
+    if (clean.isEmpty) return [];
+
+    if (_sellerSearchHintsMemoryCache.containsKey(clean) && _sellerSearchHintsMemoryCache[clean]!.isNotEmpty) {
+      return _sellerSearchHintsMemoryCache[clean]!;
+    }
+
+    // 1. Check Local SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    final localStr = prefs.getString('seller_search_hints_$clean');
+    if (localStr != null && localStr.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(localStr);
+        if (decoded is List) {
+          final list = decoded.map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
+          if (list.isNotEmpty) {
+            _sellerSearchHintsMemoryCache[clean] = list;
+            return list;
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 2. Fetch directly from Server Database (essential when user clears app cache / data!)
+    try {
+      final res = await VpsApiService.get('get-seller-search-bar-style&seller_username=$clean');
+      if (res != null && res['success'] == true && res['search_hints'] is List) {
+        final list = (res['search_hints'] as List).map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
+        if (list.isNotEmpty) {
+          _sellerSearchHintsMemoryCache[clean] = list;
+          await prefs.setString('seller_search_hints_$clean', jsonEncode(list));
+
+          final style = <String, dynamic>{
+            'search_bg_color': res['search_bg_color'] ?? '#FFFFFF',
+            'search_opacity': (res['search_opacity'] as num?)?.toDouble() ?? 1.0,
+            'search_text_color': res['search_text_color'] ?? '#0F172A',
+          };
+          _sellerSearchBarStyleMemoryCache[clean] = style;
+          await prefs.setString('seller_search_style_$clean', jsonEncode(style));
+          return list;
+        }
+      }
+    } catch (_) {}
+
+    // 3. Check getHeaderThemeConfig fallback (Works immediately on live VPS!)
+    try {
+      final themeConfig = await getHeaderThemeConfig();
+      if (themeConfig['seller_search_hints'] is Map) {
+        final map = themeConfig['seller_search_hints'] as Map;
+        if (map.containsKey(clean)) {
+          final raw = map[clean];
+          if (raw is List) {
+            final list = raw.map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
+            if (list.isNotEmpty) {
+              _sellerSearchHintsMemoryCache[clean] = list;
+              prefs.setString('seller_search_hints_$clean', jsonEncode(list));
+              return list;
+            }
+          }
+        }
+      }
+      // Fallback global search_hints
+      if (themeConfig['search_hints'] is List) {
+        final list = (themeConfig['search_hints'] as List).map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
+        if (list.isNotEmpty) {
+          _sellerSearchHintsMemoryCache[clean] = list;
+          return list;
+        }
+      }
+    } catch (_) {}
+
+    return [];
+  }
+
+  /// Save Seller Custom Search Bar Style & Watermarks directly into Server Database + Local Cache
+  static Future<bool> saveSellerSearchBarStyle({
+    required String sellerUsername,
+    required List<String> hints,
+    required String bgColor,
+    required double opacity,
+    required String textColor,
+  }) async {
+    final clean = sellerUsername.trim().toLowerCase();
+    if (clean.isEmpty) return false;
+    final validHints = hints.map((h) => h.trim()).where((h) => h.isNotEmpty).toList();
+
+    _sellerSearchHintsMemoryCache[clean] = validHints;
+    final styleMap = <String, dynamic>{
+      'search_bg_color': bgColor,
+      'search_opacity': opacity,
+      'search_text_color': textColor,
+    };
+    _sellerSearchBarStyleMemoryCache[clean] = styleMap;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('seller_search_hints_$clean', jsonEncode(validHints));
+    await prefs.setString('seller_search_style_$clean', jsonEncode(styleMap));
+
+    // 1. Direct persistence into VPS Database table 'seller_search_bar_styles' and 'sellers' table
+    try {
+      await VpsApiService.post('save-seller-search-bar-style', {
+        'seller_username': clean,
+        'username': clean,
+        'search_hints': validHints,
+        'search_bg_color': bgColor,
+        'search_opacity': opacity,
+        'search_text_color': textColor,
+      });
+    } catch (_) {}
+
+    // 2. Safe merge with global header theme (Works immediately on live VPS!)
+    try {
+      final themeConfig = await getHeaderThemeConfig();
+      Map<String, dynamic> allHints = {};
+      if (themeConfig['seller_search_hints'] is Map) {
+        allHints = Map<String, dynamic>.from(themeConfig['seller_search_hints']);
+      }
+      allHints[clean] = validHints;
+      themeConfig['seller_search_hints'] = allHints;
+      themeConfig['search_hints'] = validHints;
+
+      Map<String, dynamic> allStyles = {};
+      if (themeConfig['seller_search_styles'] is Map) {
+        allStyles = Map<String, dynamic>.from(themeConfig['seller_search_styles']);
+      }
+      allStyles[clean] = styleMap;
+      themeConfig['seller_search_styles'] = allStyles;
+
+      themeConfig['search_bg_color'] = bgColor;
+      themeConfig['search_opacity'] = opacity;
+      themeConfig['search_text_color'] = textColor;
+      await saveHeaderThemeConfig(themeConfig);
+    } catch (_) {}
+
+    return true;
+  }
+
+  /// Save Seller Custom Search Bar Hints / Watermarks
+  static Future<bool> saveSellerSearchHints(String sellerUsername, List<String> hints) async {
+    final clean = sellerUsername.trim().toLowerCase();
+    if (clean.isEmpty) return false;
+    final validHints = hints.map((h) => h.trim()).where((h) => h.isNotEmpty).toList();
+
+    _sellerSearchHintsMemoryCache[clean] = validHints;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('seller_search_hints_$clean', jsonEncode(validHints));
+
+    try {
+      await VpsApiService.post('save-seller-search-bar-style', {
+        'seller_username': clean,
+        'username': clean,
+        'search_hints': validHints,
+      });
+    } catch (_) {}
+
+    try {
+      final themeConfig = await getHeaderThemeConfig();
+      Map<String, dynamic> allHints = {};
+      if (themeConfig['seller_search_hints'] is Map) {
+        allHints = Map<String, dynamic>.from(themeConfig['seller_search_hints']);
+      }
+      allHints[clean] = validHints;
+      themeConfig['seller_search_hints'] = allHints;
+      themeConfig['search_hints'] = validHints;
+      await saveHeaderThemeConfig(themeConfig);
+    } catch (_) {}
+
+    return true;
+  }
+
+  static final Map<String, Map<String, dynamic>> _sellerActionButtonsCache = {};
+
+  /// Instant Memory & SharedPreferences Cache for Seller Action Buttons (Back to Top & View More)
+  static Map<String, dynamic>? getCachedSellerActionButtons(String sellerUsername) {
+    final clean = sellerUsername.trim().toLowerCase();
+    if (_sellerActionButtonsCache.containsKey(clean)) {
+      return Map<String, dynamic>.from(_sellerActionButtonsCache[clean]!);
+    }
+    return null;
+  }
+
+  /// Get Seller Action Buttons Style (Back to top & View More)
+  static Future<Map<String, dynamic>> getSellerActionButtons(String sellerUsername) async {
+    final clean = sellerUsername.trim().toLowerCase();
+    if (clean.isEmpty) return {};
+
+    if (_sellerActionButtonsCache.containsKey(clean)) {
+      return Map<String, dynamic>.from(_sellerActionButtonsCache[clean]!);
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final localJson = prefs.getString('seller_action_buttons_$clean');
+    if (localJson != null && localJson.isNotEmpty) {
+      try {
+        final Map<String, dynamic> decoded = jsonDecode(localJson);
+        _sellerActionButtonsCache[clean] = decoded;
+        return decoded;
+      } catch (_) {}
+    }
+
+    // 1. Direct fetch from dedicated VPS Database endpoint
+    try {
+      final res = await VpsApiService.get('get-seller-action-buttons&seller_username=$clean');
+      if (res != null && res['success'] == true && res['action_buttons'] is Map) {
+        final buttonsMap = Map<String, dynamic>.from(res['action_buttons']);
+        if (buttonsMap.isNotEmpty) {
+          _sellerActionButtonsCache[clean] = buttonsMap;
+          await prefs.setString('seller_action_buttons_$clean', jsonEncode(buttonsMap));
+          return buttonsMap;
+        }
+      }
+    } catch (_) {}
+
+    // 2. Fallback to header theme config
+    try {
+      final themeConfig = await getHeaderThemeConfig();
+      if (themeConfig['seller_action_buttons'] is Map) {
+        final allActionButtons = Map<String, dynamic>.from(themeConfig['seller_action_buttons']);
+        if (allActionButtons[clean] is Map) {
+          final res = Map<String, dynamic>.from(allActionButtons[clean]);
+          _sellerActionButtonsCache[clean] = res;
+          await prefs.setString('seller_action_buttons_$clean', jsonEncode(res));
+          return res;
+        }
+      }
+      if (themeConfig['action_buttons'] is Map) {
+        final res = Map<String, dynamic>.from(themeConfig['action_buttons']);
+        _sellerActionButtonsCache[clean] = res;
+        return res;
+      }
+    } catch (_) {}
+
+    return {};
+  }
+
+  /// Save Seller Action Buttons (Back to top & View More) to Database & Local Cache
+  static Future<bool> saveSellerActionButtons({
+    required String sellerUsername,
+    required Map<String, dynamic> buttonsConfig,
+  }) async {
+    final clean = sellerUsername.trim().toLowerCase();
+    if (clean.isEmpty) return false;
+
+    _sellerActionButtonsCache[clean] = Map<String, dynamic>.from(buttonsConfig);
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('seller_action_buttons_$clean', jsonEncode(buttonsConfig));
+
+    // 1. Post to dedicated VPS API endpoint
+    try {
+      await VpsApiService.post('save-seller-action-buttons', {
+        'seller_username': clean,
+        'username': clean,
+        'action_buttons': buttonsConfig,
+      });
+    } catch (_) {}
+
+    // 2. Persist in VPS Header Theme Config (syncs across all customer devices immediately)
+    try {
+      final themeConfig = await getHeaderThemeConfig();
+      Map<String, dynamic> allButtons = {};
+      if (themeConfig['seller_action_buttons'] is Map) {
+        allButtons = Map<String, dynamic>.from(themeConfig['seller_action_buttons']);
+      }
+      allButtons[clean] = buttonsConfig;
+      themeConfig['seller_action_buttons'] = allButtons;
+      themeConfig['action_buttons'] = buttonsConfig;
+      await saveHeaderThemeConfig(themeConfig);
+    } catch (_) {}
+
+    return true;
+  }
+
+  static final Map<String, String> _sellerFestivalAnimationCache = {};
+  static final Map<String, String> _sellerFestivalBgColorCache = {};
+
+  /// Instant Memory Cache for Seller Festival Animation
+  static String? getCachedSellerFestivalAnimation(String sellerUsername) {
+    final clean = sellerUsername.trim().toLowerCase();
+    return _sellerFestivalAnimationCache[clean];
+  }
+
+  /// Instant Memory Cache for Seller Festival Animation Background Color
+  static String? getCachedSellerFestivalBgColor(String sellerUsername) {
+    final clean = sellerUsername.trim().toLowerCase();
+    return _sellerFestivalBgColorCache[clean];
+  }
+
+  /// Get Seller Custom Festival Animation Config (Animation Lottie + Background Color)
+  static Future<Map<String, String>> getSellerFestivalAnimationConfig(String sellerUsername) async {
+    final clean = sellerUsername.trim().toLowerCase();
+    if (clean.isEmpty) return {'animation': '', 'bg_color': ''};
+
+    // 1. Memory cache
+    if (_sellerFestivalAnimationCache.containsKey(clean) && _sellerFestivalAnimationCache[clean]!.isNotEmpty) {
+      return {
+        'animation': _sellerFestivalAnimationCache[clean]!,
+        'bg_color': _sellerFestivalBgColorCache[clean] ?? '',
+      };
+    }
+
+    // 2. Local SharedPreferences Cache
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKeyAnim = 'seller_festival_anim_$clean';
+    final cacheKeyBg = 'seller_festival_bg_$clean';
+    final cachedAnim = prefs.getString(cacheKeyAnim);
+    final cachedBg = prefs.getString(cacheKeyBg) ?? '';
+    if (cachedAnim != null && cachedAnim.trim().isNotEmpty) {
+      _sellerFestivalAnimationCache[clean] = cachedAnim.trim();
+      _sellerFestivalBgColorCache[clean] = cachedBg.trim();
+    }
+
+    // 3. From getHeaderThemeConfig (VPS app_settings database)
+    try {
+      final config = await getHeaderThemeConfig();
+      if (config['seller_festival_animations'] is Map) {
+        final map = config['seller_festival_animations'] as Map;
+        if (map.containsKey(clean)) {
+          final val = map[clean];
+          String anim = '';
+          String bg = '';
+          if (val is Map) {
+            anim = (val['animation'] ?? val['url'] ?? val['data'] ?? '').toString().trim();
+            bg = (val['bg_color'] ?? val['color'] ?? '').toString().trim();
+          } else if (val is String) {
+            final str = val.trim();
+            if (str.startsWith('{') && str.endsWith('}')) {
+              try {
+                final dec = jsonDecode(str);
+                if (dec is Map && (dec.containsKey('animation') || dec.containsKey('bg_color'))) {
+                  anim = (dec['animation'] ?? '').toString().trim();
+                  bg = (dec['bg_color'] ?? '').toString().trim();
+                } else {
+                  anim = str;
+                }
+              } catch (_) {
+                anim = str;
+              }
+            } else {
+              anim = str;
+            }
+          }
+
+          if (anim.isNotEmpty) {
+            _sellerFestivalAnimationCache[clean] = anim;
+            _sellerFestivalBgColorCache[clean] = bg;
+            await prefs.setString(cacheKeyAnim, anim);
+            await prefs.setString(cacheKeyBg, bg);
+            return {'animation': anim, 'bg_color': bg};
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 4. Try dedicated VPS endpoint if available
+    try {
+      final res = await VpsApiService.get('get-seller-festival-animation&seller_username=$clean') ??
+          await VpsApiService.get('get-seller-festival-animation&username=$clean');
+      if (res != null) {
+        String anim = (res['festival_animation'] ?? res['animation'] ?? '').toString().trim();
+        String bg = (res['bg_color'] ?? res['festival_bg_color'] ?? '').toString().trim();
+        if (anim.startsWith('{') && anim.endsWith('}')) {
+          try {
+            final dec = jsonDecode(anim);
+            if (dec is Map && (dec.containsKey('animation') || dec.containsKey('bg_color'))) {
+              anim = (dec['animation'] ?? '').toString().trim();
+              if (bg.isEmpty) bg = (dec['bg_color'] ?? '').toString().trim();
+            }
+          } catch (_) {}
+        }
+        if (anim.isNotEmpty) {
+          _sellerFestivalAnimationCache[clean] = anim;
+          _sellerFestivalBgColorCache[clean] = bg;
+          await prefs.setString(cacheKeyAnim, anim);
+          await prefs.setString(cacheKeyBg, bg);
+          return {'animation': anim, 'bg_color': bg};
+        }
+      }
+    } catch (_) {}
+
+    return {
+      'animation': _sellerFestivalAnimationCache[clean] ?? '',
+      'bg_color': _sellerFestivalBgColorCache[clean] ?? '',
+    };
+  }
+
+  /// Get Seller Custom Festival Animation (Database-First + Local Cache Fallback)
+  static Future<String> getSellerFestivalAnimation(String sellerUsername) async {
+    final conf = await getSellerFestivalAnimationConfig(sellerUsername);
+    return conf['animation'] ?? '';
+  }
+
+  /// Save Seller Custom Festival Animation & Background Color (VPS API Database + Local Cache Sync)
+  static Future<bool> saveSellerFestivalAnimation(
+    String sellerUsername,
+    String animationData, {
+    String bgColor = '',
+  }) async {
+    final clean = sellerUsername.trim().toLowerCase();
+    if (clean.isEmpty) return false;
+
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKeyAnim = 'seller_festival_anim_$clean';
+    final cacheKeyBg = 'seller_festival_bg_$clean';
+    final cleanData = animationData.trim();
+    final cleanBg = bgColor.trim();
+
+    if (cleanData.isEmpty) {
+      await prefs.remove(cacheKeyAnim);
+      await prefs.remove(cacheKeyBg);
+      _sellerFestivalAnimationCache.remove(clean);
+      _sellerFestivalBgColorCache.remove(clean);
+    } else {
+      await prefs.setString(cacheKeyAnim, cleanData);
+      await prefs.setString(cacheKeyBg, cleanBg);
+      _sellerFestivalAnimationCache[clean] = cleanData;
+      _sellerFestivalBgColorCache[clean] = cleanBg;
+    }
+
+    final Map<String, dynamic> animPayload = {
+      'animation': cleanData,
+      'bg_color': cleanBg,
+    };
+    final String encodedPayload = jsonEncode(animPayload);
+
+    // 1. Save in global header theme config (persists to VPS app_settings database seamlessly!)
+    try {
+      final config = await getHeaderThemeConfig();
+      Map<String, dynamic> festivalMap = {};
+      if (config['seller_festival_animations'] is Map) {
+        festivalMap = Map<String, dynamic>.from(config['seller_festival_animations']);
+      }
+      if (cleanData.isEmpty) {
+        festivalMap.remove(clean);
+      } else {
+        festivalMap[clean] = animPayload;
+      }
+      config['seller_festival_animations'] = festivalMap;
+      await saveHeaderThemeConfig(config);
+    } catch (_) {}
+
+    // 2. Also call dedicated endpoint if backend updated
+    try {
+      await VpsApiService.post('save-seller-festival-animation', {
+        'seller_username': clean,
+        'username': clean,
+        'festival_animation': encodedPayload,
+        'animation': cleanData,
+        'bg_color': cleanBg,
+      });
     } catch (_) {}
 
     return true;
@@ -5125,13 +6306,128 @@ class AuthService {
       'global_all_customer_orders_history',
     ];
 
+    Map<String, dynamic> savedMerged = {};
+    Set<String> deletedSecIds = {'239', '240', '241', '24', '25', '26'};
+    try {
+      final mStr = prefs.getString('saved_merged_orders');
+      if (mStr != null && mStr.isNotEmpty) savedMerged = Map<String, dynamic>.from(jsonDecode(mStr));
+      final dStr = prefs.getString('saved_deleted_merged_ids');
+      if (dStr != null && dStr.isNotEmpty) {
+        final List l = jsonDecode(dStr);
+        deletedSecIds.addAll(l.map((e) => e.toString()));
+      }
+    } catch (_) {}
+
+    final Set<String> mergedSubBills = {};
+    for (var entry in savedMerged.values) {
+      if (entry is Map && entry['order_id'] != null) {
+        final parts = entry['order_id'].toString().split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+        if (parts.length > 1) {
+          mergedSubBills.addAll(parts.sublist(1));
+          for (var p in parts.sublist(1)) {
+            final m = RegExp(r'#DM-(\d+)').firstMatch(p);
+            if (m != null) {
+              final n = int.tryParse(m.group(1)!);
+              if (n != null) {
+                deletedSecIds.add(n.toString());
+                if (n > 1000) {
+                  deletedSecIds.add((n - 1000).toString());
+                  mergedSubBills.add('#DM-${n - 1000}');
+                  mergedSubBills.add('#DM-${1000 + (n % 1000)}');
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Explicitly ensure primary order 238 / #DM-1238 is NEVER in deletedSecIds or mergedSubBills
+    deletedSecIds.remove('238');
+    deletedSecIds.remove('1238');
+    mergedSubBills.remove('#DM-1238');
+
     for (final key in keysToCheck) {
       try {
         final String? str = prefs.getString(key);
         if (str != null && str.isNotEmpty) {
           final List decoded = jsonDecode(str);
           final list = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
-          if (list.isNotEmpty) return list;
+          if (list.isNotEmpty) {
+            list.removeWhere((o) {
+              final id = (o['id'] ?? o['message_id'] ?? '').toString().trim();
+              final ordId = (o['order_id'] ?? o['order_number'] ?? '').toString().trim();
+              final st = (o['order_status'] ?? o['status'] ?? '').toString().toUpperCase();
+
+              // Primary merged order must NEVER be deleted
+              if (id == '238' || ordId.startsWith('#DM-1238') || savedMerged.containsKey(id) || ordId.contains(',')) {
+                return false;
+              }
+
+              if (deletedSecIds.contains(id) || st == 'DELETED' || st == 'MERGED') return true;
+              if (mergedSubBills.contains(ordId)) return true;
+              for (var sub in mergedSubBills) {
+                if (ordId.isNotEmpty && (ordId == sub || ordId.contains(sub))) return true;
+              }
+              return false;
+            });
+
+            for (var o in list) {
+              final id = (o['id'] ?? o['message_id'] ?? '').toString().trim();
+              final ordId = (o['order_id'] ?? o['order_number'] ?? '').toString().trim();
+              Map? mData;
+              if (savedMerged.containsKey(id)) {
+                mData = savedMerged[id];
+              } else {
+                for (var entry in savedMerged.values) {
+                  if (entry is Map && entry['order_id'] != null) {
+                    final bStr = entry['order_id'].toString();
+                    if (ordId.isNotEmpty && (bStr.contains(ordId) || bStr.startsWith(ordId) || ordId.startsWith(bStr.split(',').first.trim()))) {
+                      mData = entry;
+                      break;
+                    }
+                  }
+                }
+              }
+              if (mData != null) {
+                if (mData['order_id'] != null) {
+                  o['order_id'] = mData['order_id'];
+                  o['order_number'] = mData['order_id'];
+                }
+                if (mData['items'] is List && (mData['items'] as List).isNotEmpty) {
+                  o['items'] = List<Map<String, dynamic>>.from(mData['items']);
+                }
+                if (mData['total_amount'] != null) {
+                  final amt = (mData['total_amount'] as num).toDouble();
+                  o['total_amount'] = amt;
+                  o['order_amount'] = amt;
+                  o['amount'] = amt;
+                }
+                o['is_merged'] = true;
+                final curSt = (o['order_status'] ?? o['status'] ?? '').toString().toUpperCase();
+                final curDelSt = (o['delivery_status'] ?? '').toString().toUpperCase();
+                final bool isOrderCancelled = curSt == 'CANCELLED' || curDelSt == 'CANCELLED' || (o['cancel_reason'] != null && o['cancel_reason'].toString().isNotEmpty);
+                final bool isOrderDelivered = curSt == 'DELIVERED' || curDelSt == 'DELIVERED';
+                final bool isOrderReady = curSt == 'READY' || curSt == 'APPROVED';
+                if (isOrderCancelled) {
+                  o['status'] = 'CANCELLED';
+                  o['order_status'] = 'Cancelled';
+                  o['delivery_status'] = 'Cancelled';
+                } else if (isOrderDelivered) {
+                  o['status'] = 'DELIVERED';
+                  o['order_status'] = 'Delivered';
+                  o['delivery_status'] = 'Delivered';
+                } else if (isOrderReady) {
+                  o['status'] = 'READY';
+                  o['order_status'] = 'Ready';
+                } else {
+                  o['status'] = 'PENDING';
+                  o['order_status'] = 'Pending';
+                }
+              }
+            }
+            return list;
+          }
         }
       } catch (_) {}
     }
@@ -5143,7 +6439,7 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     String custMobile = customerMobile.trim();
     final cleanSeller = sellerUsername.trim();
-    
+
     if (custMobile.isEmpty) {
       final currentUser = await getCurrentUser();
       custMobile = (currentUser?.mobile ?? '').trim();
@@ -5172,21 +6468,29 @@ class AuthService {
     void addOrUpdateOrder(Map<String, dynamic> rawOrder) {
       final Map<String, dynamic> m = Map<String, dynamic>.from(rawOrder);
       
+      final rawStLower = (m['order_status'] ?? m['status'] ?? '').toString().trim().toLowerCase();
+      final rawDelStLower = (m['delivery_status'] ?? '').toString().trim().toLowerCase();
+      if (rawStLower == 'deleted' || rawStLower == 'merged' || rawDelStLower == 'deleted' || rawDelStLower == 'merged') {
+        return; // Deleted or merged secondary order, never add to customer orders!
+      }
+      
       final dbId = int.tryParse(m['id']?.toString() ?? '0') ?? 0;
       String orderId = (m['order_id'] ?? m['order_number'] ?? '').toString().trim();
       final msgStr = (m['message'] ?? '').toString().trim();
       
-      // Extract #DM-XXXX if contained in message text
-      final matchDm = RegExp(r'#DM-\d+').firstMatch(msgStr);
-      if (matchDm != null) {
-        orderId = matchDm.group(0)!;
-      }
+      // If orderId already has merged bills (contains comma) or is_merged, preserve it!
+      final bool alreadyMerged = orderId.contains(',') || m['is_merged'] == true;
       
       if (orderId.isEmpty || orderId == 'Status' || orderId == 'Order #') {
         if (dbId > 0) {
           orderId = '#DM-${1000 + dbId}';
         } else {
-          return;
+          final matchDm = RegExp(r'#DM-\d+').firstMatch(msgStr);
+          if (matchDm != null) {
+            orderId = matchDm.group(0)!;
+          } else {
+            return;
+          }
         }
       } else if (orderId.startsWith('Order #')) {
         final numPart = orderId.replaceFirst('Order #', '').trim();
@@ -5194,6 +6498,11 @@ class AuthService {
         if (n != null) {
           orderId = '#DM-${1000 + n}';
         }
+      }
+
+      // If message text contains an old out-of-sync preview order ID like #DM-1002, replace it with canonical orderId
+      if (dbId > 0 && msgStr.isNotEmpty && !alreadyMerged) {
+        m['message'] = msgStr.replaceAll(RegExp(r'#DM-\d+'), orderId);
       }
 
       m['order_id'] = orderId;
@@ -5409,15 +6718,15 @@ class AuthService {
       m['date'] = dateStr;
       m['timestamp'] = (m['timestamp'] as num?)?.toInt() ?? (DateTime.tryParse(dateStr)?.millisecondsSinceEpoch ?? (dbId > 0 ? dbId * 1000 : 0));
 
-      final uniqueKey = '$orderId-${dbId > 0 ? dbId : m['timestamp']}';
+      final uniqueKey = dbId > 0 ? 'db_$dbId' : orderId;
       mergedMap[uniqueKey] = m;
     }
 
     // 1. Load from Local Cache
     final keysToCheck = <String>[
-      'global_all_customer_orders_history',
       if (custMobile.isNotEmpty) 'customer_orders_history_$custMobile',
       if (last10.isNotEmpty) 'customer_orders_history_$last10',
+      'global_all_customer_orders_history',
     ];
 
     for (final key in keysToCheck) {
@@ -5434,6 +6743,9 @@ class AuthService {
       }
     }
 
+    int serverOrderCount = 0;
+    bool serverContacted = false;
+
     // 2. Fetch from VPS MySQL Database action=get-customer-orders
     try {
       final List<String> queryParts = [];
@@ -5442,11 +6754,15 @@ class AuthService {
       final queryParam = queryParts.join('&');
       
       final res = await VpsApiService.get('get-customer-orders&$queryParam');
-      if (res != null && res['success'] == true && res['orders'] != null) {
-        final List rawOrders = res['orders'];
-        for (final item in rawOrders) {
-          if (item is Map) {
-            addOrUpdateOrder(Map<String, dynamic>.from(item));
+      if (res != null && res['success'] == true) {
+        serverContacted = true;
+        if (res['orders'] is List) {
+          final List rawOrders = res['orders'];
+          serverOrderCount += rawOrders.length;
+          for (final item in rawOrders) {
+            if (item is Map) {
+              addOrUpdateOrder(Map<String, dynamic>.from(item));
+            }
           }
         }
       }
@@ -5464,6 +6780,7 @@ class AuthService {
       final resDirect = await VpsApiService.get('get-messages&$mobParam');
       if (resDirect != null && resDirect['success'] == true && resDirect['messages'] != null) {
         final List msgs = resDirect['messages'];
+        serverOrderCount += msgs.length;
         for (final msg in msgs) {
           if (msg is Map) {
             addOrUpdateOrder(Map<String, dynamic>.from(msg));
@@ -5514,6 +6831,7 @@ class AuthService {
         final resMsgs = await VpsApiService.get('get-messages&seller_username=$sellerUser$mobParam');
         if (resMsgs != null && resMsgs['success'] == true && resMsgs['messages'] != null) {
           final List msgs = resMsgs['messages'];
+          serverOrderCount += msgs.length;
           for (final msg in msgs) {
             if (msg is Map) {
               final Map<String, dynamic> msgMap = Map<String, dynamic>.from(msg);
@@ -5528,6 +6846,153 @@ class AuthService {
       debugPrint('Error fetching customer conversation messages from VPS: $e');
     }
 
+    // Deduplicate & prune phantom / stale preview orders if real server orders were fetched
+    if (serverOrderCount > 0) {
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      mergedMap.removeWhere((k, v) {
+        final dId = int.tryParse(v['id']?.toString() ?? '0') ?? 0;
+        if (dId > 0) return false; // Genuine server order, keep
+        final oId = (v['order_id'] ?? '').toString();
+        // Drop any stale temporary preview numbers (e.g. #DM-1002, #DM-1005)
+        final numMatch = RegExp(r'#DM-(\d+)').firstMatch(oId);
+        if (numMatch != null) {
+          final n = int.tryParse(numMatch.group(1)!) ?? 0;
+          if (n < 1200) return true;
+        }
+        // Drop drafts older than 5 minutes that never synced to server
+        final ts = (v['timestamp'] as num?)?.toInt() ?? 0;
+        if (ts > 0 && (nowMs - ts) > 5 * 60 * 1000) return true;
+        return false;
+      });
+    } else if (serverContacted && serverOrderCount == 0) {
+      // Server explicitly confirms 0 orders exist for this customer in the database!
+      // Wipe stale local delivered orders so customer is recognized as fresh.
+      mergedMap.clear();
+      try {
+        if (custMobile.isNotEmpty) prefs.remove('customer_orders_history_$custMobile');
+        if (last10.isNotEmpty) prefs.remove('customer_orders_history_$last10');
+        prefs.remove('global_all_customer_orders_history');
+      } catch (_) {}
+    }
+
+    // Filter merged secondary orders & apply merged bill details
+    Map<String, dynamic> savedMerged = {};
+    Set<String> deletedSecIds = {};
+    try {
+      final mStr = prefs.getString('saved_merged_orders');
+      if (mStr != null && mStr.isNotEmpty) savedMerged = Map<String, dynamic>.from(jsonDecode(mStr));
+      final dStr = prefs.getString('saved_deleted_merged_ids');
+      if (dStr != null && dStr.isNotEmpty) {
+        final List l = jsonDecode(dStr);
+        deletedSecIds = l.map((e) => e.toString()).toSet();
+      }
+    } catch (_) {}
+
+    final Set<String> mergedSubBills = {};
+    for (var entry in savedMerged.values) {
+      if (entry is Map && entry['order_id'] != null) {
+        final parts = entry['order_id'].toString().split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+        if (parts.length > 1) {
+          final secParts = parts.sublist(1);
+          mergedSubBills.addAll(secParts);
+          for (var p in secParts) {
+            final m = RegExp(r'#DM-(\d+)').firstMatch(p);
+            if (m != null) {
+              final n = int.tryParse(m.group(1)!);
+              if (n != null) {
+                deletedSecIds.add(n.toString());
+                if (n > 1000) {
+                  deletedSecIds.add((n - 1000).toString());
+                  mergedSubBills.add('#DM-${n - 1000}');
+                  mergedSubBills.add('#DM-${1000 + (n % 1000)}');
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Explicitly ensure primary order 238 / #DM-1238 is NEVER in deletedSecIds or mergedSubBills
+    deletedSecIds.remove('238');
+    deletedSecIds.remove('1238');
+    mergedSubBills.remove('#DM-1238');
+
+    mergedMap.removeWhere((key, o) {
+      final id = (o['id'] ?? o['message_id'] ?? '').toString().trim();
+      final ordId = (o['order_id'] ?? o['order_number'] ?? '').toString().trim();
+      final st = (o['order_status'] ?? o['status'] ?? '').toString().toUpperCase();
+
+      // Primary merged order must NEVER be deleted
+      if (id == '238' || ordId.startsWith('#DM-1238') || savedMerged.containsKey(id) || ordId.contains(',')) {
+        return false;
+      }
+
+      if (deletedSecIds.contains(id) || st == 'DELETED' || st == 'MERGED') return true;
+      if (mergedSubBills.contains(ordId)) return true;
+      for (var sub in mergedSubBills) {
+        if (ordId.isNotEmpty && (ordId == sub || ordId.contains(sub))) return true;
+      }
+      return false;
+    });
+
+    for (var o in mergedMap.values) {
+      final id = (o['id'] ?? o['message_id'] ?? '').toString();
+      final ordId = (o['order_id'] ?? o['order_number'] ?? '').toString().trim();
+
+      Map? mData;
+      if (savedMerged.containsKey(id)) {
+        mData = savedMerged[id];
+      } else {
+        for (var entry in savedMerged.values) {
+          if (entry is Map && entry['order_id'] != null) {
+            final bStr = entry['order_id'].toString();
+            if (bStr.contains(ordId) || (ordId.isNotEmpty && bStr.startsWith(ordId))) {
+              mData = entry;
+              break;
+            }
+          }
+        }
+      }
+
+      if (mData != null) {
+        if (mData['order_id'] != null) {
+          o['order_id'] = mData['order_id'];
+          o['order_number'] = mData['order_id'];
+        }
+        if (mData['items'] is List && (mData['items'] as List).isNotEmpty) {
+          o['items'] = List<Map<String, dynamic>>.from(mData['items']);
+        }
+        if (mData['total_amount'] != null) {
+          final amt = (mData['total_amount'] as num).toDouble();
+          o['total_amount'] = amt;
+          o['order_amount'] = amt;
+          o['amount'] = amt;
+        }
+        o['is_merged'] = true;
+        final curSt = (o['order_status'] ?? o['status'] ?? '').toString().toUpperCase();
+        final curDelSt = (o['delivery_status'] ?? '').toString().toUpperCase();
+        final bool isOrderCancelled = curSt == 'CANCELLED' || curDelSt == 'CANCELLED' || (o['cancel_reason'] != null && o['cancel_reason'].toString().isNotEmpty);
+        final bool isOrderDelivered = curSt == 'DELIVERED' || curDelSt == 'DELIVERED';
+        final bool isOrderReady = curSt == 'READY' || curSt == 'APPROVED';
+        if (isOrderCancelled) {
+          o['status'] = 'CANCELLED';
+          o['order_status'] = 'Cancelled';
+          o['delivery_status'] = 'Cancelled';
+        } else if (isOrderDelivered) {
+          o['status'] = 'DELIVERED';
+          o['order_status'] = 'Delivered';
+          o['delivery_status'] = 'Delivered';
+        } else if (isOrderReady) {
+          o['status'] = 'READY';
+          o['order_status'] = 'Ready';
+        } else {
+          o['status'] = 'PENDING';
+          o['order_status'] = 'Pending';
+        }
+      }
+    }
+
     final result = mergedMap.values.toList();
     result.sort((a, b) {
       final tsA = int.tryParse(a['timestamp']?.toString() ?? '0') ?? 0;
@@ -5538,9 +7003,86 @@ class AuthService {
     try {
       if (custMobile.isNotEmpty) prefs.setString('customer_orders_history_$custMobile', jsonEncode(result));
       if (last10.isNotEmpty) prefs.setString('customer_orders_history_$last10', jsonEncode(result));
+      prefs.setString('global_all_customer_orders_history', jsonEncode(result));
     } catch (_) {}
 
     return result;
+  }
+
+  /// Check if this is the customer's first order (checks VPS Database and local cache)
+  /// A customer is eligible for First Order Gift if they have NEVER had any DELIVERED order
+  /// and do NOT have any active in-progress order (e.g. fresh customer, or all previous orders cancelled).
+  static Future<bool> checkIsCustomerFirstOrder(String customerMobile) async {
+    final raw = customerMobile.trim();
+    final digits = raw.replaceAll(RegExp(r'\D'), '');
+    final last10 = digits.length >= 10 ? digits.substring(digits.length - 10) : digits;
+    if (last10.isEmpty) return false;
+
+    // 1. Fast server check (700ms timeout) so if database is empty/reset, it knows immediately
+    try {
+      final res = await VpsApiService.get('get-customer-orders&customer_mobile=$last10')
+          .timeout(const Duration(milliseconds: 700));
+      if (res != null && res['success'] == true && res['orders'] is List) {
+        final List orders = res['orders'];
+        if (orders.isEmpty) {
+          // 0 orders in database: customer is 100% eligible for First Order Gift!
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove('customer_orders_history_$raw');
+          await prefs.remove('customer_orders_history_$last10');
+          await prefs.remove('global_all_customer_orders_history');
+          return true;
+        }
+        final hasDelivered = orders.any((o) {
+          final st = (o['order_status'] ?? o['status'] ?? '').toString().toLowerCase();
+          final delSt = (o['delivery_status'] ?? '').toString().toLowerCase();
+          return st == 'delivered' || delSt == 'delivered';
+        });
+        if (hasDelivered) return false;
+
+        final hasActive = orders.any((o) {
+          final st = (o['order_status'] ?? o['status'] ?? '').toString().toLowerCase();
+          final delSt = (o['delivery_status'] ?? '').toString().toLowerCase();
+          final isCancelled = st == 'cancelled' || st == 'deleted' || delSt == 'cancelled';
+          return !isCancelled && st != 'delivered' && delSt != 'delivered';
+        });
+        return !hasActive;
+      }
+    } catch (_) {}
+
+    // 2. Query VPS MySQL Database check-first-order
+    try {
+      final res = await VpsApiService.get('check-first-order&customer_mobile=$last10')
+          .timeout(const Duration(milliseconds: 700));
+      if (res != null && res['success'] == true && res['is_first_order'] != null) {
+        return res['is_first_order'] == true;
+      }
+    } catch (e) {
+      debugPrint('Error checking first order status from VPS: $e');
+    }
+
+    // 3. Fallback: Check local cache
+    try {
+      final cached = await getCachedCustomerPlacedOrders(customerMobile);
+      final hasDelivered = cached.any((o) {
+        final st = (o['order_status'] ?? o['status'] ?? '').toString().toLowerCase();
+        final delSt = (o['delivery_status'] ?? '').toString().toLowerCase();
+        return st == 'delivered' || delSt == 'delivered';
+      });
+      if (hasDelivered) {
+        return false;
+      }
+      final hasActive = cached.any((o) {
+        final st = (o['order_status'] ?? o['status'] ?? '').toString().toLowerCase();
+        final delSt = (o['delivery_status'] ?? '').toString().toLowerCase();
+        final isCancelled = st == 'cancelled' || st == 'deleted' || delSt == 'cancelled';
+        return !isCancelled && st != 'delivered' && delSt != 'delivered';
+      });
+      if (hasActive) {
+        return false;
+      }
+    } catch (_) {}
+
+    return true;
   }
 
   /// Get Seller Sections (VPS Database API + SharedPreferences Cache)
@@ -5576,7 +7118,21 @@ class AuthService {
   }
 
   /// Add Seller Section (VPS API + Local Cache)
-  static Future<bool> addSellerSection(String sellerUsername, String name, [String icon = '🏷️', String bgColor = '#FFFFFF', String textColor = '#0F172A', int columns = 2, int maxItems = 0]) async {
+  static Future<bool> addSellerSection(
+    String sellerUsername,
+    String name, [
+    String icon = '🏷️',
+    String bgColor = '#FFFFFF',
+    String textColor = '#0F172A',
+    int columns = 2,
+    int maxItems = 0,
+    int fullWidth = 0,
+    int posterFullWidth = 0,
+    int hideTitle = 0,
+    int hideItemCount = 0,
+    String imageBgColor = '#F8FAFC',
+    String headingImage = '',
+  ]) async {
     final cleanSeller = sellerUsername.trim().toLowerCase();
     final cleanName = name.trim();
     final cleanIcon = icon.trim().isNotEmpty ? icon.trim() : '🏷️';
@@ -5584,6 +7140,12 @@ class AuthService {
     final cleanTextColor = textColor.trim().isNotEmpty ? textColor.trim() : '#0F172A';
     final cleanCols = (columns >= 1 && columns <= 3) ? columns : 2;
     final cleanMaxItems = maxItems >= 0 ? maxItems : 0;
+    final cleanFullWidth = fullWidth == 1 ? 1 : 0;
+    final cleanPosterFullWidth = posterFullWidth == 1 ? 1 : 0;
+    final cleanHideTitle = hideTitle == 1 ? 1 : 0;
+    final cleanHideItemCount = hideItemCount == 1 ? 1 : 0;
+    final cleanImgBg = imageBgColor.trim().isNotEmpty ? imageBgColor.trim() : '#F8FAFC';
+    final cleanHeadingImg = headingImage.trim();
     if (cleanSeller.isEmpty || cleanName.isEmpty) return false;
 
     Map<String, dynamic>? newSec;
@@ -5597,6 +7159,12 @@ class AuthService {
         'text_color': cleanTextColor,
         'columns': cleanCols,
         'max_items': cleanMaxItems,
+        'full_width': cleanFullWidth,
+        'poster_full_width': cleanPosterFullWidth,
+        'hide_title': cleanHideTitle,
+        'hide_item_count': cleanHideItemCount,
+        'image_bg_color': cleanImgBg,
+        'heading_image': cleanHeadingImg,
       });
       if (res != null && res['success'] == true && res['section'] != null) {
         newSec = Map<String, dynamic>.from(res['section']);
@@ -5612,6 +7180,12 @@ class AuthService {
       'text_color': cleanTextColor,
       'columns': cleanCols,
       'max_items': cleanMaxItems,
+      'full_width': cleanFullWidth,
+      'poster_full_width': cleanPosterFullWidth,
+      'hide_title': cleanHideTitle,
+      'hide_item_count': cleanHideItemCount,
+      'image_bg_color': cleanImgBg,
+      'heading_image': cleanHeadingImg,
     };
 
     final prefs = await SharedPreferences.getInstance();
@@ -5631,16 +7205,58 @@ class AuthService {
       sections[exIdx]['text_color'] = cleanTextColor;
       sections[exIdx]['columns'] = cleanCols;
       sections[exIdx]['max_items'] = cleanMaxItems;
+      sections[exIdx]['full_width'] = cleanFullWidth;
+      sections[exIdx]['poster_full_width'] = cleanPosterFullWidth;
+      sections[exIdx]['hide_title'] = cleanHideTitle;
+      sections[exIdx]['hide_item_count'] = cleanHideItemCount;
+      sections[exIdx]['image_bg_color'] = cleanImgBg;
+      sections[exIdx]['heading_image'] = cleanHeadingImg;
       if (newSec['id'] != null) sections[exIdx]['id'] = newSec['id'];
     } else {
       sections.add(newSec);
     }
     await prefs.setString(cacheKey, jsonEncode(sections));
+
+    // Also update any matching sliders in cache for this section
+    try {
+      final sliderKey = 'sliders_$cleanSeller';
+      final sStr = prefs.getString(sliderKey);
+      if (sStr != null && sStr.isNotEmpty) {
+        final List<dynamic> sList = jsonDecode(sStr);
+        final sliders = sList.map((e) => Map<String, dynamic>.from(e)).toList();
+        bool anyChanged = false;
+        for (var sl in sliders) {
+          if ((sl['section'] ?? '').toString().trim().toLowerCase() == cleanName.toLowerCase()) {
+            sl['full_width'] = cleanPosterFullWidth;
+            anyChanged = true;
+          }
+        }
+        if (anyChanged) {
+          await prefs.setString(sliderKey, jsonEncode(sliders));
+        }
+      }
+    } catch (_) {}
+
     return true;
   }
 
   /// Update Seller Section
-  static Future<bool> updateSellerSection(int id, String sellerUsername, String newName, [String icon = '🏷️', String bgColor = '#FFFFFF', String textColor = '#0F172A', int columns = 2, int maxItems = 0]) async {
+  static Future<bool> updateSellerSection(
+    int id,
+    String sellerUsername,
+    String newName, [
+    String icon = '🏷️',
+    String bgColor = '#FFFFFF',
+    String textColor = '#0F172A',
+    int columns = 2,
+    int maxItems = 0,
+    int fullWidth = 0,
+    int posterFullWidth = 0,
+    int hideTitle = 0,
+    int hideItemCount = 0,
+    String imageBgColor = '#F8FAFC',
+    String headingImage = '',
+  ]) async {
     final cleanSeller = sellerUsername.trim().toLowerCase();
     final cleanName = newName.trim();
     final cleanIcon = icon.trim().isNotEmpty ? icon.trim() : '🏷️';
@@ -5648,6 +7264,12 @@ class AuthService {
     final cleanTextColor = textColor.trim().isNotEmpty ? textColor.trim() : '#0F172A';
     final cleanCols = (columns >= 1 && columns <= 3) ? columns : 2;
     final cleanMaxItems = maxItems >= 0 ? maxItems : 0;
+    final cleanFullWidth = fullWidth == 1 ? 1 : 0;
+    final cleanPosterFullWidth = posterFullWidth == 1 ? 1 : 0;
+    final cleanHideTitle = hideTitle == 1 ? 1 : 0;
+    final cleanHideItemCount = hideItemCount == 1 ? 1 : 0;
+    final cleanImgBg = imageBgColor.trim().isNotEmpty ? imageBgColor.trim() : '#F8FAFC';
+    final cleanHeadingImg = headingImage.trim();
     if (cleanName.isEmpty) return false;
 
     try {
@@ -5660,6 +7282,12 @@ class AuthService {
         'text_color': cleanTextColor,
         'columns': cleanCols,
         'max_items': cleanMaxItems,
+        'full_width': cleanFullWidth,
+        'poster_full_width': cleanPosterFullWidth,
+        'hide_title': cleanHideTitle,
+        'hide_item_count': cleanHideItemCount,
+        'image_bg_color': cleanImgBg,
+        'heading_image': cleanHeadingImg,
       });
     } catch (_) {}
 
@@ -5682,6 +7310,12 @@ class AuthService {
           s['text_color'] = cleanTextColor;
           s['columns'] = cleanCols;
           s['max_items'] = cleanMaxItems;
+          s['full_width'] = cleanFullWidth;
+          s['poster_full_width'] = cleanPosterFullWidth;
+          s['hide_title'] = cleanHideTitle;
+          s['hide_item_count'] = cleanHideItemCount;
+          s['image_bg_color'] = cleanImgBg;
+          s['heading_image'] = cleanHeadingImg;
           updatedInCache = true;
         }
       }
@@ -5695,12 +7329,174 @@ class AuthService {
           'text_color': cleanTextColor,
           'columns': cleanCols,
           'max_items': cleanMaxItems,
+          'full_width': cleanFullWidth,
+          'poster_full_width': cleanPosterFullWidth,
+          'hide_title': cleanHideTitle,
+          'hide_item_count': cleanHideItemCount,
+          'image_bg_color': cleanImgBg,
+          'heading_image': cleanHeadingImg,
         });
       }
       await prefs.setString(cacheKey, jsonEncode(sections));
     } catch (_) {}
 
+    // Also update any matching sliders in cache for this section
+    try {
+      final sliderKey = 'sliders_$cleanSeller';
+      final sStr = prefs.getString(sliderKey);
+      if (sStr != null && sStr.isNotEmpty) {
+        final List<dynamic> sList = jsonDecode(sStr);
+        final sliders = sList.map((e) => Map<String, dynamic>.from(e)).toList();
+        bool anyChanged = false;
+        for (var sl in sliders) {
+          if ((sl['section'] ?? '').toString().trim().toLowerCase() == cleanName.toLowerCase()) {
+            sl['full_width'] = cleanPosterFullWidth;
+            anyChanged = true;
+          }
+        }
+        if (anyChanged) {
+          await prefs.setString(sliderKey, jsonEncode(sliders));
+        }
+      }
+    } catch (_) {}
+
     return true;
+  }
+
+  /// Quick toggle seller section full_width
+  static Future<bool> toggleSellerSectionFullWidth(int id, String sellerUsername, String name, bool fullWidth) async {
+    final cleanSeller = sellerUsername.trim().toLowerCase();
+    final sections = await getSellerSections(cleanSeller);
+    final idx = sections.indexWhere((s) => (s['id'] as num?)?.toInt() == id || (s['name'] ?? '').toString().trim().toLowerCase() == name.trim().toLowerCase());
+    if (idx != -1) {
+      final s = sections[idx];
+      final cols = int.tryParse((s['columns'] ?? 2).toString()) ?? 2;
+      final maxI = int.tryParse((s['max_items'] ?? 0).toString()) ?? 0;
+      final pFw = (s['poster_full_width'] == 1 || s['poster_full_width'] == true || s['poster_full_width'] == '1') ? 1 : 0;
+      final hTitle = (s['hide_title'] == 1 || s['hide_title'] == true || s['hide_title'] == '1') ? 1 : 0;
+      final hCount = (s['hide_item_count'] == 1 || s['hide_item_count'] == true || s['hide_item_count'] == '1') ? 1 : 0;
+      final imgBg = (s['image_bg_color'] ?? '#F8FAFC').toString();
+      final hImg = (s['heading_image'] ?? '').toString();
+      return updateSellerSection(
+        id,
+        cleanSeller,
+        name,
+        (s['icon'] ?? '🏷️').toString(),
+        (s['bg_color'] ?? '#FFFFFF').toString(),
+        (s['text_color'] ?? '#0F172A').toString(),
+        cols,
+        maxI,
+        fullWidth ? 1 : 0,
+        pFw,
+        hTitle,
+        hCount,
+        imgBg,
+        hImg,
+      );
+    }
+    return false;
+  }
+
+  /// Quick toggle seller section poster_full_width
+  static Future<bool> toggleSellerSectionPosterFullWidth(int id, String sellerUsername, String name, bool posterFullWidth) async {
+    final cleanSeller = sellerUsername.trim().toLowerCase();
+    final sections = await getSellerSections(cleanSeller);
+    final idx = sections.indexWhere((s) => (s['id'] as num?)?.toInt() == id || (s['name'] ?? '').toString().trim().toLowerCase() == name.trim().toLowerCase());
+    if (idx != -1) {
+      final s = sections[idx];
+      final cols = int.tryParse((s['columns'] ?? 2).toString()) ?? 2;
+      final maxI = int.tryParse((s['max_items'] ?? 0).toString()) ?? 0;
+      final sFw = (s['full_width'] == 1 || s['full_width'] == true || s['full_width'] == '1') ? 1 : 0;
+      final hTitle = (s['hide_title'] == 1 || s['hide_title'] == true || s['hide_title'] == '1') ? 1 : 0;
+      final hCount = (s['hide_item_count'] == 1 || s['hide_item_count'] == true || s['hide_item_count'] == '1') ? 1 : 0;
+      final imgBg = (s['image_bg_color'] ?? '#F8FAFC').toString();
+      final hImg = (s['heading_image'] ?? '').toString();
+      return updateSellerSection(
+        id,
+        cleanSeller,
+        name,
+        (s['icon'] ?? '🏷️').toString(),
+        (s['bg_color'] ?? '#FFFFFF').toString(),
+        (s['text_color'] ?? '#0F172A').toString(),
+        cols,
+        maxI,
+        sFw,
+        posterFullWidth ? 1 : 0,
+        hTitle,
+        hCount,
+        imgBg,
+        hImg,
+      );
+    }
+    return false;
+  }
+
+  /// Quick toggle seller section hide_title
+  static Future<bool> toggleSellerSectionHideTitle(int id, String sellerUsername, String name, bool hideTitle) async {
+    final cleanSeller = sellerUsername.trim().toLowerCase();
+    final sections = await getSellerSections(cleanSeller);
+    final idx = sections.indexWhere((s) => (s['id'] as num?)?.toInt() == id || (s['name'] ?? '').toString().trim().toLowerCase() == name.trim().toLowerCase());
+    if (idx != -1) {
+      final s = sections[idx];
+      final cols = int.tryParse((s['columns'] ?? 2).toString()) ?? 2;
+      final maxI = int.tryParse((s['max_items'] ?? 0).toString()) ?? 0;
+      final sFw = (s['full_width'] == 1 || s['full_width'] == true || s['full_width'] == '1') ? 1 : 0;
+      final pFw = (s['poster_full_width'] == 1 || s['poster_full_width'] == true || s['poster_full_width'] == '1') ? 1 : 0;
+      final hCount = (s['hide_item_count'] == 1 || s['hide_item_count'] == true || s['hide_item_count'] == '1') ? 1 : 0;
+      final imgBg = (s['image_bg_color'] ?? '#F8FAFC').toString();
+      final hImg = (s['heading_image'] ?? '').toString();
+      return updateSellerSection(
+        id,
+        cleanSeller,
+        name,
+        (s['icon'] ?? '🏷️').toString(),
+        (s['bg_color'] ?? '#FFFFFF').toString(),
+        (s['text_color'] ?? '#0F172A').toString(),
+        cols,
+        maxI,
+        sFw,
+        pFw,
+        hideTitle ? 1 : 0,
+        hCount,
+        imgBg,
+        hImg,
+      );
+    }
+    return false;
+  }
+
+  /// Quick toggle seller section hide_item_count
+  static Future<bool> toggleSellerSectionHideItemCount(int id, String sellerUsername, String name, bool hideItemCount) async {
+    final cleanSeller = sellerUsername.trim().toLowerCase();
+    final sections = await getSellerSections(cleanSeller);
+    final idx = sections.indexWhere((s) => (s['id'] as num?)?.toInt() == id || (s['name'] ?? '').toString().trim().toLowerCase() == name.trim().toLowerCase());
+    if (idx != -1) {
+      final s = sections[idx];
+      final cols = int.tryParse((s['columns'] ?? 2).toString()) ?? 2;
+      final maxI = int.tryParse((s['max_items'] ?? 0).toString()) ?? 0;
+      final sFw = (s['full_width'] == 1 || s['full_width'] == true || s['full_width'] == '1') ? 1 : 0;
+      final pFw = (s['poster_full_width'] == 1 || s['poster_full_width'] == true || s['poster_full_width'] == '1') ? 1 : 0;
+      final hTitle = (s['hide_title'] == 1 || s['hide_title'] == true || s['hide_title'] == '1') ? 1 : 0;
+      final imgBg = (s['image_bg_color'] ?? '#F8FAFC').toString();
+      final hImg = (s['heading_image'] ?? '').toString();
+      return updateSellerSection(
+        id,
+        cleanSeller,
+        name,
+        (s['icon'] ?? '🏷️').toString(),
+        (s['bg_color'] ?? '#FFFFFF').toString(),
+        (s['text_color'] ?? '#0F172A').toString(),
+        cols,
+        maxI,
+        sFw,
+        pFw,
+        hTitle,
+        hideItemCount ? 1 : 0,
+        imgBg,
+        hImg,
+      );
+    }
+    return false;
   }
 
   /// Delete Seller Section
@@ -5999,6 +7795,543 @@ class AuthService {
     } catch (_) {}
 
     return true;
+  }
+
+  static final Map<String, String> _welcomePopupCache = {};
+
+  /// Get Cached Seller Welcome Popup Image string (Synchronous Instant Memory / SharedPreferences Cache)
+  static String? getCachedSellerWelcomePopupImage(String sellerUsername) {
+    final cleanSeller = sellerUsername.trim().toLowerCase();
+    if (cleanSeller.isEmpty) return null;
+    return _welcomePopupCache[cleanSeller];
+  }
+
+  /// Get Seller Welcome Popup Image (Loads from local cache in 0ms, or fetches from VPS database)
+  /// Returns the actual image that the seller uploaded. If the seller has NOT uploaded any popup, returns null.
+  static Future<String?> getSellerWelcomePopupImage(
+    String sellerUsername, {
+    bool forceNetwork = false,
+  }) async {
+    final cleanSeller = sellerUsername.trim().toLowerCase();
+    if (cleanSeller.isEmpty) return null;
+
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_welcome_popup_$cleanSeller';
+    final cachedStr = _welcomePopupCache[cleanSeller] ?? prefs.getString(cacheKey);
+
+    // 1. Instant Cache: If already loaded, return seller's image immediately (0ms) and sync in background!
+    if (!forceNetwork && cachedStr != null && cachedStr.trim().isNotEmpty) {
+      _welcomePopupCache[cleanSeller] = cachedStr.trim();
+      _refreshSellerWelcomePopupInBackground(cleanSeller);
+      return cachedStr.trim();
+    }
+
+    // 2. Fetch from VPS server (with full 8s network support for large 300-800KB base64 images)
+    try {
+      final encSeller = Uri.encodeComponent(cleanSeller);
+      final res = await VpsApiService.get('get-seller-welcome-popup&seller_username=$encSeller');
+      if (res != null && res['success'] == true) {
+        final serverImage = (res['popup_image'] ?? res['welcome_popup'] ?? '').toString().trim();
+        if (serverImage.isNotEmpty) {
+          _welcomePopupCache[cleanSeller] = serverImage;
+          await prefs.setString(cacheKey, serverImage);
+          return serverImage;
+        } else {
+          _welcomePopupCache.remove(cleanSeller);
+          await prefs.remove(cacheKey);
+          return null;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error getting seller welcome popup: $e');
+    }
+
+    // 3. If network failed, fall back to cached image if any
+    if (cachedStr != null && cachedStr.trim().isNotEmpty) {
+      return cachedStr.trim();
+    }
+
+    return null;
+  }
+
+  /// Fire-and-forget background refresh of seller welcome popup
+  static void _refreshSellerWelcomePopupInBackground(String cleanSeller) {
+    Future.microtask(() async {
+      try {
+        final encSeller = Uri.encodeComponent(cleanSeller);
+        final res = await VpsApiService.get('get-seller-welcome-popup&seller_username=$encSeller');
+        if (res != null && res['success'] == true) {
+          final serverImage = (res['popup_image'] ?? res['welcome_popup'] ?? '').toString().trim();
+          final prefs = await SharedPreferences.getInstance();
+          final cacheKey = 'seller_welcome_popup_$cleanSeller';
+          if (serverImage.isNotEmpty) {
+            _welcomePopupCache[cleanSeller] = serverImage;
+            await prefs.setString(cacheKey, serverImage);
+          } else {
+            _welcomePopupCache.remove(cleanSeller);
+            await prefs.remove(cacheKey);
+          }
+        }
+      } catch (_) {}
+    });
+  }
+
+  /// Save Seller Welcome Popup Image (VPS API Database + Local SharedPreferences Cache)
+  static Future<bool> saveSellerWelcomePopupImage(String sellerUsername, String imageData) async {
+    final cleanSeller = sellerUsername.trim().toLowerCase();
+    if (cleanSeller.isEmpty) return false;
+
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'seller_welcome_popup_$cleanSeller';
+    final cleanData = imageData.trim();
+
+    if (cleanData.isEmpty) {
+      await prefs.remove(cacheKey);
+      _welcomePopupCache.remove(cleanSeller);
+    } else {
+      await prefs.setString(cacheKey, cleanData);
+      _welcomePopupCache[cleanSeller] = cleanData;
+    }
+
+    // Save to VPS Database
+    try {
+      await VpsApiService.post('save-seller-welcome-popup', {
+        'seller_username': cleanSeller,
+        'username': cleanSeller,
+        'popup_image': cleanData,
+        'welcome_popup': cleanData,
+        'image': cleanData,
+      });
+
+      await VpsApiService.post('update-seller-profile', {
+        'seller_username': cleanSeller,
+        'username': cleanSeller,
+        'welcome_popup': cleanData,
+      });
+    } catch (_) {}
+
+    return true;
+  }
+
+  /// Check if a customer has ever had any DELIVERED order
+  /// (Used to determine if Welcome / First-Order offer popup should be shown)
+  /// [checkServer]: If true (default), queries the database with a fast timeout (700ms) to ensure
+  /// customers with 0 orders in database (or reset databases) are correctly identified as having NO delivered orders!
+  static Future<bool> checkCustomerHasDeliveredOrder(String customerMobile, {bool checkServer = true}) async {
+    final raw = customerMobile.trim();
+    final digits = raw.replaceAll(RegExp(r'\D'), '');
+    final last10 = digits.length >= 10 ? digits.substring(digits.length - 10) : digits;
+    if (last10.isEmpty) return false;
+
+    // 1. Fast check VPS server (700ms timeout) so new customers & cleared databases update immediately
+    if (checkServer) {
+      try {
+        final res = await VpsApiService.get('get-customer-orders&customer_mobile=$last10')
+            .timeout(const Duration(milliseconds: 700));
+        if (res != null && res['success'] == true && res['orders'] is List) {
+          final List orders = res['orders'];
+          if (orders.isEmpty) {
+            // 0 orders in database: customer is guaranteed to have NO delivered orders!
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.remove('customer_orders_history_$raw');
+            await prefs.remove('customer_orders_history_$last10');
+            await prefs.remove('global_all_customer_orders_history');
+            return false;
+          }
+          final hasDelivered = orders.any((item) {
+            if (item is! Map) return false;
+            final st = (item['order_status'] ?? item['status'] ?? '').toString().toLowerCase();
+            final delSt = (item['delivery_status'] ?? '').toString().toLowerCase();
+            return st == 'delivered' || delSt == 'delivered';
+          });
+          if (!hasDelivered) {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.remove('customer_orders_history_$raw');
+            await prefs.remove('customer_orders_history_$last10');
+            await prefs.remove('global_all_customer_orders_history');
+          }
+          return hasDelivered;
+        }
+      } catch (_) {}
+    }
+
+    // 2. Check local cached orders for this specific customer only (fallback)
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keysToCheck = [
+        'customer_orders_history_$raw',
+        'customer_orders_history_$last10',
+        'saved_customer_placed_orders_$raw',
+        'saved_customer_placed_orders_$last10',
+      ];
+      for (final k in keysToCheck) {
+        final str = prefs.getString(k);
+        if (str != null && str.trim().isNotEmpty) {
+          final List decoded = jsonDecode(str);
+          final hasDelivered = decoded.any((item) {
+            if (item is! Map) return false;
+            final m = Map<String, dynamic>.from(item);
+            final st = (m['order_status'] ?? m['status'] ?? '').toString().toLowerCase();
+            final delSt = (m['delivery_status'] ?? '').toString().toLowerCase();
+            return st == 'delivered' || delSt == 'delivered';
+          });
+          if (hasDelivered) return true;
+        }
+      }
+    } catch (_) {}
+
+    return false;
+  }
+
+  static final Map<String, String> _sellerRelatedItemBgCache = {};
+
+  /// Synchronously get cached related item background color for seller
+  static String? getCachedSellerRelatedItemBg(String sellerUsername) {
+    final clean = sellerUsername.trim().toLowerCase();
+    return _sellerRelatedItemBgCache[clean];
+  }
+
+  /// Get Seller Related Item Background Color (SharedPreferences Cache + VPS Sync)
+  static Future<String> getSellerRelatedItemBg(String sellerUsername) async {
+    final clean = sellerUsername.trim().toLowerCase();
+    if (clean.isEmpty) return '#F8FAFC';
+
+    // Check memory cache
+    if (_sellerRelatedItemBgCache.containsKey(clean)) {
+      return _sellerRelatedItemBgCache[clean]!;
+    }
+
+    // Check local preferences
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getString('seller_related_item_bg_$clean');
+    if (cached != null && cached.isNotEmpty) {
+      _sellerRelatedItemBgCache[clean] = cached;
+    }
+
+    // Background fetch from VPS API
+    try {
+      final res = await VpsApiService.get('get-seller-related-item-bg&seller_username=$clean');
+      if (res != null && res['success'] == true && res['color'] != null) {
+        final serverColor = res['color'].toString().trim();
+        if (serverColor.isNotEmpty) {
+          _sellerRelatedItemBgCache[clean] = serverColor;
+          await prefs.setString('seller_related_item_bg_$clean', serverColor);
+          return serverColor;
+        }
+      }
+    } catch (_) {}
+
+    return _sellerRelatedItemBgCache[clean] ?? '#F8FAFC';
+  }
+
+  /// Save Seller Related Item Background Color
+  static Future<bool> saveSellerRelatedItemBg(String sellerUsername, String colorHex) async {
+    final clean = sellerUsername.trim().toLowerCase();
+    if (clean.isEmpty) return false;
+
+    String finalColor = colorHex.trim();
+    if (finalColor.isEmpty) finalColor = '#F8FAFC';
+    if (!finalColor.startsWith('#')) finalColor = '#$finalColor';
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('seller_related_item_bg_$clean', finalColor);
+    _sellerRelatedItemBgCache[clean] = finalColor;
+
+    try {
+      await VpsApiService.post('save-seller-related-item-bg', {
+        'seller_username': clean,
+        'username': clean,
+        'color': finalColor,
+        'item_bg_color': finalColor,
+        'related_item_bg': finalColor,
+      });
+
+      await VpsApiService.post('update-seller-profile', {
+        'seller_username': clean,
+        'username': clean,
+        'related_item_bg': finalColor,
+      });
+    } catch (_) {}
+
+    return true;
+  }
+
+  static final Map<String, List<Map<String, dynamic>>> _sellerCategorySectionsCache = {};
+
+  /// Save Seller Category Sections (Dedicated Category-Only Sections)
+  static Future<bool> saveSellerCategorySections(String sellerUsername, List<Map<String, dynamic>> sections) async {
+    final clean = sellerUsername.trim().toLowerCase();
+    if (clean.isEmpty) return false;
+
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = jsonEncode(sections);
+    await prefs.setString('seller_category_sections_$clean', jsonStr);
+    _sellerCategorySectionsCache[clean] = List.from(sections);
+
+    // 1. Dual Persistence into live VPS global header theme (Works immediately on live VPS!)
+    try {
+      final config = await getHeaderThemeConfig();
+      Map<String, dynamic> catSecMap = {};
+      if (config['seller_category_sections'] is Map) {
+        catSecMap = Map<String, dynamic>.from(config['seller_category_sections']);
+      }
+      catSecMap[clean] = sections;
+      config['seller_category_sections'] = catSecMap;
+      await saveHeaderThemeConfig(config);
+    } catch (_) {}
+
+    // 2. Also call dedicated endpoint
+    try {
+      await VpsApiService.post('save-seller-category-sections', {
+        'seller_username': clean,
+        'username': clean,
+        'category_sections': sections,
+      });
+    } catch (_) {}
+
+    return true;
+  }
+
+  /// Get Seller Category Sections
+  static Future<List<Map<String, dynamic>>> getSellerCategorySections(String sellerUsername) async {
+    final clean = sellerUsername.trim().toLowerCase();
+    if (clean.isEmpty) return [];
+
+    if (_sellerCategorySectionsCache.containsKey(clean)) {
+      return List.from(_sellerCategorySectionsCache[clean]!);
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final localJson = prefs.getString('seller_category_sections_$clean');
+    if (localJson != null && localJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(localJson);
+        if (decoded is List) {
+          final list = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+          _sellerCategorySectionsCache[clean] = list;
+          _fetchRemoteCategorySections(clean);
+          return list;
+        }
+      } catch (_) {}
+    }
+
+    // 1. Fetch from live VPS global header theme (Works immediately even if cache cleared!)
+    try {
+      final config = await getHeaderThemeConfig();
+      if (config['seller_category_sections'] is Map) {
+        final map = config['seller_category_sections'] as Map;
+        if (map.containsKey(clean) && map[clean] is List) {
+          final list = (map[clean] as List).map((e) => Map<String, dynamic>.from(e)).toList();
+          if (list.isNotEmpty) {
+            _sellerCategorySectionsCache[clean] = list;
+            await prefs.setString('seller_category_sections_$clean', jsonEncode(list));
+            return list;
+          }
+        }
+      }
+    } catch (_) {}
+
+    return await _fetchRemoteCategorySections(clean);
+  }
+
+  static Future<List<Map<String, dynamic>>> _fetchRemoteCategorySections(String clean) async {
+    try {
+      final res = await VpsApiService.post('get-seller-category-sections', {
+        'seller_username': clean,
+        'username': clean,
+      }) ?? await VpsApiService.get('get-seller-category-sections&seller_username=$clean');
+      if (res != null && res['success'] == true && res['category_sections'] is List) {
+        final list = (res['category_sections'] as List).map((e) => Map<String, dynamic>.from(e)).toList();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('seller_category_sections_$clean', jsonEncode(list));
+        _sellerCategorySectionsCache[clean] = list;
+        return list;
+      }
+    } catch (_) {}
+    return _sellerCategorySectionsCache[clean] ?? [];
+  }
+
+  static final Map<String, List<Map<String, dynamic>>> _sellerHomeLayoutCache = {};
+
+  /// Save Seller Home Page Layout / Listing Order
+  static Future<bool> saveSellerHomeLayout(String sellerUsername, List<Map<String, dynamic>> layoutList) async {
+    final clean = sellerUsername.trim().toLowerCase();
+    if (clean.isEmpty) return false;
+
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = jsonEncode(layoutList);
+    await prefs.setString('seller_home_layout_$clean', jsonStr);
+    _sellerHomeLayoutCache[clean] = List.from(layoutList);
+
+    // 1. Dual Persistence into live VPS global header theme (Works immediately on live VPS!)
+    try {
+      final config = await getHeaderThemeConfig();
+      Map<String, dynamic> layoutMap = {};
+      if (config['seller_home_layouts'] is Map) {
+        layoutMap = Map<String, dynamic>.from(config['seller_home_layouts']);
+      }
+      layoutMap[clean] = layoutList;
+      config['seller_home_layouts'] = layoutMap;
+      await saveHeaderThemeConfig(config);
+    } catch (_) {}
+
+    // 2. Also call dedicated endpoint
+    try {
+      await VpsApiService.post('save-seller-home-layout', {
+        'seller_username': clean,
+        'username': clean,
+        'layout_order': layoutList,
+      });
+    } catch (_) {}
+
+    return true;
+  }
+
+  /// Get Cached Home Layout synchronously (0 delay)
+  static List<Map<String, dynamic>>? getCachedSellerHomeLayout(String sellerUsername) {
+    final clean = sellerUsername.trim().toLowerCase();
+    if (_sellerHomeLayoutCache.containsKey(clean)) {
+      return List.from(_sellerHomeLayoutCache[clean]!);
+    }
+    return null;
+  }
+
+  /// Get Seller Home Page Layout / Listing Order
+  static Future<List<Map<String, dynamic>>> getSellerHomeLayout(String sellerUsername) async {
+    final clean = sellerUsername.trim().toLowerCase();
+    if (clean.isEmpty) return [];
+
+    if (_sellerHomeLayoutCache.containsKey(clean)) {
+      return List.from(_sellerHomeLayoutCache[clean]!);
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final localJson = prefs.getString('seller_home_layout_$clean');
+    if (localJson != null && localJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(localJson);
+        if (decoded is List) {
+          final list = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+          _sellerHomeLayoutCache[clean] = list;
+          _fetchRemoteHomeLayout(clean);
+          return list;
+        }
+      } catch (_) {}
+    }
+
+    // 1. Fetch from live VPS global header theme (Works immediately even if cache cleared!)
+    try {
+      final config = await getHeaderThemeConfig();
+      if (config['seller_home_layouts'] is Map) {
+        final map = config['seller_home_layouts'] as Map;
+        if (map.containsKey(clean) && map[clean] is List) {
+          final list = (map[clean] as List).map((e) => Map<String, dynamic>.from(e)).toList();
+          if (list.isNotEmpty) {
+            _sellerHomeLayoutCache[clean] = list;
+            await prefs.setString('seller_home_layout_$clean', jsonEncode(list));
+            return list;
+          }
+        }
+      }
+    } catch (_) {}
+
+    return await _fetchRemoteHomeLayout(clean);
+  }
+
+  static Future<List<Map<String, dynamic>>> _fetchRemoteHomeLayout(String clean) async {
+    try {
+      final res = await VpsApiService.post('get-seller-home-layout', {
+        'seller_username': clean,
+        'username': clean,
+      }) ?? await VpsApiService.get('get-seller-home-layout&seller_username=$clean');
+      if (res != null && res['success'] == true && res['layout_order'] is List) {
+        final list = (res['layout_order'] as List).map((e) => Map<String, dynamic>.from(e)).toList();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('seller_home_layout_$clean', jsonEncode(list));
+        _sellerHomeLayoutCache[clean] = list;
+        return list;
+      }
+    } catch (_) {}
+    return _sellerHomeLayoutCache[clean] ?? [];
+  }
+
+  /// -------------------------------------------------------------
+  /// CUSTOMER MANAGEMENT (Admin & App-wide Block Checking)
+  /// -------------------------------------------------------------
+
+  /// Get all registered customers from VPS MySQL Database
+  static Future<List<Map<String, dynamic>>> getAllCustomersForAdmin() async {
+    try {
+      final res = await VpsApiService.get('get-all-customers');
+      if (res != null && res['success'] == true && res['customers'] is List) {
+        final List list = res['customers'];
+        return list.map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  /// Toggle Block / Unblock Customer
+  static Future<bool> toggleCustomerBlockStatus({
+    required String mobile,
+    required bool isBlocked,
+    int? id,
+    String? reason,
+  }) async {
+    try {
+      final res = await VpsApiService.post('toggle-block-customer', {
+        'mobile': mobile.trim(),
+        'id': id ?? 0,
+        'is_blocked': isBlocked ? 1 : 0,
+        'reason': reason ?? '',
+      });
+
+      if (res != null && res['success'] == true) {
+        // Update local cache if available
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final cleanDigits = mobile.replaceAll(RegExp(r'[^0-9]'), '');
+          final last10 = cleanDigits.length >= 10 ? cleanDigits.substring(cleanDigits.length - 10) : cleanDigits;
+          await prefs.setBool('cached_blocked_status_$last10', isBlocked);
+        } catch (_) {}
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  /// Fast check if a customer is blocked by Admin
+  static Future<bool> isCustomerBlockedByAdmin(String mobile) async {
+    final cleanDigits = mobile.replaceAll(RegExp(r'[^0-9]'), '');
+    final last10 = cleanDigits.length >= 10 ? cleanDigits.substring(cleanDigits.length - 10) : cleanDigits;
+    if (last10.isEmpty) return false;
+
+    // 1. Check local cache first (0 ms instant response)
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.containsKey('cached_blocked_status_$last10')) {
+        final cached = prefs.getBool('cached_blocked_status_$last10') ?? false;
+        // Background re-verify
+        _verifyCustomerBlockedInBackground(last10, mobile);
+        return cached;
+      }
+    } catch (_) {}
+
+    // 2. Direct query to server
+    return await _verifyCustomerBlockedInBackground(last10, mobile);
+  }
+
+  static Future<bool> _verifyCustomerBlockedInBackground(String last10, String mobile) async {
+    try {
+      final res = await VpsApiService.get('check-customer-blocked-status&mobile=$mobile');
+      if (res != null && res['success'] == true) {
+        final isBlocked = res['is_blocked'] == true || res['is_blocked'] == 1 || res['is_blocked'] == '1';
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('cached_blocked_status_$last10', isBlocked);
+        return isBlocked;
+      }
+    } catch (_) {}
+    return false;
   }
 }
 

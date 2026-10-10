@@ -7,6 +7,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../services/auth_service.dart';
 import '../../services/apitxt_otp_service.dart';
 import '../../services/notification_service.dart';
+import '../../utils/app_toast.dart';
+import '../../widgets/receipt_scallop_divider.dart';
 import '../role_selection_screen.dart';
 
 class DeliveryBoyDashboardScreen extends StatefulWidget {
@@ -22,9 +24,205 @@ class DeliveryBoyDashboardScreen extends StatefulWidget {
 }
 
 class _DeliveryBoyDashboardScreenState extends State<DeliveryBoyDashboardScreen> {
-  bool _isOnline = true;
   List<Map<String, dynamic>> _groupedSellerOrders = [];
   bool _isLoading = true;
+  final TextEditingController _sellerSearchController = TextEditingController();
+  String _sellerSearchQuery = '';
+
+  @override
+  void dispose() {
+    _sellerSearchController.dispose();
+    super.dispose();
+  }
+
+  List<Map<String, dynamic>> _getFilteredSellerOrders() {
+    final query = _sellerSearchQuery.trim().toLowerCase();
+    if (query.isEmpty) return _groupedSellerOrders;
+
+    final cleanQueryDigits = query.replaceAll(RegExp(r'[^\d]'), '');
+
+    return _groupedSellerOrders.where((sellerGroup) {
+      final sellerName = (sellerGroup['seller_name'] ?? '').toString().toLowerCase().trim();
+      final sellerMobile = (sellerGroup['seller_mobile'] ?? '').toString().replaceAll(RegExp(r'[^\d]'), '');
+      final sellerUsername = (sellerGroup['seller_username'] ?? '').toString().toLowerCase().trim();
+
+      // 1. Match Seller Name, Username
+      if (sellerName.contains(query) || sellerUsername.contains(query)) {
+        return true;
+      }
+
+      // 2. Match Seller Mobile (digits)
+      if (cleanQueryDigits.isNotEmpty && sellerMobile.isNotEmpty && sellerMobile.contains(cleanQueryDigits)) {
+        return true;
+      }
+
+      // 3. Match Order ID or Customer Name / Mobile under this seller (strict, no raw json / no "order" keyword)
+      final orders = (sellerGroup['orders'] as List?) ?? [];
+      for (var o in orders) {
+        if (o is Map) {
+          final rawId = (o['order_id'] ?? o['_calculated_order_id'] ?? o['id'] ?? '').toString();
+          final digits = rawId.replaceAll(RegExp(r'[^\d]'), '');
+          final custMobile = (o['customer_mobile'] ?? '').toString().replaceAll(RegExp(r'[^\d]'), '');
+          final custName = (o['customer_name'] ?? o['name'] ?? o['receiver_name'] ?? '').toString().toLowerCase().trim();
+
+          // Match clean order ID (e.g. 1246, #1246, dm-1246)
+          if (cleanQueryDigits.isNotEmpty && digits.isNotEmpty && digits.contains(cleanQueryDigits)) {
+            return true;
+          }
+          if (query.length >= 2 && ('dm-$digits'.contains(query) || '#$digits'.contains(query))) {
+            return true;
+          }
+
+          // Match customer name
+          if (custName.isNotEmpty && custName.contains(query)) {
+            return true;
+          }
+
+          // Match customer mobile
+          if (cleanQueryDigits.isNotEmpty && custMobile.isNotEmpty && custMobile.contains(cleanQueryDigits)) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    }).toList();
+  }
+
+  Widget _buildSellerSearchBar() {
+    final bool isSearching = _sellerSearchQuery.trim().isNotEmpty;
+    return Container(
+      height: 34,
+      margin: const EdgeInsets.fromLTRB(14, 8, 14, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(
+          color: isSearching
+              ? const Color(0xFFEA580C).withValues(alpha: 0.6)
+              : const Color(0xFFFED7AA),
+          width: 1.1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFEA580C).withValues(alpha: 0.04),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.search_rounded,
+            size: 17,
+            color: Color(0xFFEA580C),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: _sellerSearchController,
+              textAlignVertical: TextAlignVertical.center,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF0F172A),
+              ),
+              decoration: const InputDecoration(
+                hintText: 'Search seller, order, customer, mobile...',
+                hintStyle: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.normal,
+                  color: Color(0xFF94A3B8),
+                ),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+              onChanged: (val) {
+                setState(() {
+                  _sellerSearchQuery = val;
+                });
+              },
+            ),
+          ),
+          if (isSearching)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                _sellerSearchController.clear();
+                setState(() {
+                  _sellerSearchQuery = '';
+                });
+              },
+              child: const Padding(
+                padding: EdgeInsets.only(left: 6),
+                child: Icon(
+                  Icons.close_rounded,
+                  size: 16,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoMatchingSellersState() {
+    return Center(
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircleAvatar(
+                radius: 36,
+                backgroundColor: Color(0xFFF1F5F9),
+                child: Icon(
+                  Icons.search_off_rounded,
+                  size: 36,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'No matching sellers found',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'No active sellers or orders matched "$_sellerSearchQuery". Try searching with another keyword or clear search.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+              ),
+              const SizedBox(height: 16),
+              TextButton.icon(
+                onPressed: () {
+                  _sellerSearchController.clear();
+                  setState(() {
+                    _sellerSearchQuery = '';
+                  });
+                },
+                icon: const Icon(Icons.clear_all_rounded, size: 18),
+                label: const Text('Clear Search', style: TextStyle(fontWeight: FontWeight.bold)),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFFEA580C),
+                  backgroundColor: const Color(0xFFFFF7ED),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -39,40 +237,27 @@ class _DeliveryBoyDashboardScreenState extends State<DeliveryBoyDashboardScreen>
     final cachedData = await AuthService.getCachedAllUndeliveredOrdersGroupedBySeller(
       deliveryBoyLocation: currentBoyLoc,
     );
-    if (cachedData.isNotEmpty && mounted) {
+    if (mounted) {
       setState(() {
         _groupedSellerOrders = cachedData;
         _isLoading = false;
       });
-    } else if (mounted && _groupedSellerOrders.isEmpty) {
-      setState(() => _isLoading = true);
     }
 
-    // 2. Background Revalidation from VPS Database
+    // 2. Fast Background Revalidation from VPS Database
     try {
-      final allBoys = await AuthService.getDeliveryBoys();
-      final myUser = (widget.deliveryBoy['username'] ?? '').toString().toLowerCase();
-      for (var b in allBoys) {
-        if ((b['username'] ?? '').toString().toLowerCase() == myUser) {
-          final loc = (b['location'] ?? '').toString().trim();
-          if (loc.isNotEmpty) {
-            currentBoyLoc = loc;
-            widget.deliveryBoy['location'] = loc;
-          }
-          break;
-        }
+      final groupedData = await AuthService.getAllUndeliveredOrdersGroupedBySeller(
+        deliveryBoyLocation: currentBoyLoc,
+      );
+
+      if (mounted) {
+        setState(() {
+          _groupedSellerOrders = groupedData;
+          _isLoading = false;
+        });
       }
-    } catch (_) {}
-
-    final groupedData = await AuthService.getAllUndeliveredOrdersGroupedBySeller(
-      deliveryBoyLocation: currentBoyLoc,
-    );
-
-    if (mounted) {
-      setState(() {
-        _groupedSellerOrders = groupedData;
-        _isLoading = false;
-      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -166,8 +351,10 @@ class _DeliveryBoyDashboardScreenState extends State<DeliveryBoyDashboardScreen>
     final mobile = widget.deliveryBoy['mobile'] ?? '';
     final vehicle = widget.deliveryBoy['vehicle'] ?? 'Bike';
 
+    final filteredSellers = _getFilteredSellerOrders();
+
     int totalUndeliveredCount = 0;
-    for (var group in _groupedSellerOrders) {
+    for (var group in filteredSellers) {
       final orders = (group['orders'] as List?) ?? [];
       totalUndeliveredCount += orders.length;
     }
@@ -214,77 +401,13 @@ class _DeliveryBoyDashboardScreenState extends State<DeliveryBoyDashboardScreen>
           ],
         ),
         actions: [
-          Row(
-            children: [
-              Text(
-                _isOnline ? 'ONLINE' : 'OFFLINE',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: _isOnline ? const Color(0xFF34D399) : Colors.grey,
-                ),
-              ),
-              Switch(
-                value: _isOnline,
-                activeTrackColor: const Color(0xFF34D399).withValues(alpha: 0.4),
-                activeColor: const Color(0xFF34D399),
-                onChanged: (val) => setState(() => _isOnline = val),
-              ),
-            ],
-          ),
           IconButton(
             icon: const Icon(Icons.logout_rounded, color: Colors.white, size: 20),
             onPressed: _handleLogout,
           ),
         ],
       ),
-      body: !_isOnline
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEF4444).withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.do_not_disturb_on_rounded,
-                        size: 60,
-                        color: Color(0xFFEF4444),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'You are Currently OFFLINE (Off Duty) ⏸️',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Turn ON the toggle switch at the top right to go ON-DUTY and view live seller delivery orders.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-                    ),
-                    const SizedBox(height: 20),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF10B981),
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      icon: const Icon(Icons.power_settings_new_rounded, color: Colors.white, size: 18),
-                      label: const Text('Go ONLINE Now 🟢', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      onPressed: () => setState(() => _isOnline = true),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          : RefreshIndicator(
+      body: RefreshIndicator(
               onRefresh: _loadDeliveryData,
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator(color: Color(0xFFEA580C)))
@@ -337,64 +460,70 @@ class _DeliveryBoyDashboardScreenState extends State<DeliveryBoyDashboardScreen>
                       ),
                     ),
                   )
-                : ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                : Column(
                     children: [
-                      // Executive Header Card
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
-                          ),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFFDBA74).withValues(alpha: 0.6), width: 1.2),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF0F172A).withValues(alpha: 0.2),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFEA580C).withValues(alpha: 0.2),
-                                shape: BoxShape.circle,
-                                border: Border.all(color: const Color(0xFFEA580C)),
-                              ),
-                              child: const Icon(Icons.storefront_rounded, color: Color(0xFFF97316), size: 22),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                      _buildSellerSearchBar(),
+                      Expanded(
+                        child: filteredSellers.isEmpty
+                            ? _buildNoMatchingSellersState()
+                            : ListView(
+                                padding: const EdgeInsets.fromLTRB(14, 4, 14, 14),
                                 children: [
-                                  Text(
-                                    '${_groupedSellerOrders.length} Active Seller${_groupedSellerOrders.length == 1 ? '' : 's'} Available',
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14.5),
+                                  // Executive Header Card
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+                                      ),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(color: const Color(0xFFFDBA74).withValues(alpha: 0.6), width: 1.2),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFF0F172A).withValues(alpha: 0.2),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(10),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFEA580C).withValues(alpha: 0.2),
+                                            shape: BoxShape.circle,
+                                            border: Border.all(color: const Color(0xFFEA580C)),
+                                          ),
+                                          child: const Icon(Icons.storefront_rounded, color: Color(0xFFF97316), size: 22),
+                                        ),
+                                        const SizedBox(width: 14),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                '${filteredSellers.length} Active Seller${filteredSellers.length == 1 ? '' : 's'} Available',
+                                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14.5),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                '$totalUndeliveredCount Customer Order${totalUndeliveredCount == 1 ? '' : 's'} Ready for Pick Up',
+                                                style: const TextStyle(color: Color(0xFFFDBA74), fontWeight: FontWeight.w600, fontSize: 11.5),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '$totalUndeliveredCount Customer Order${totalUndeliveredCount == 1 ? '' : 's'} Ready for Pick Up',
-                                    style: const TextStyle(color: Color(0xFFFDBA74), fontWeight: FontWeight.w600, fontSize: 11.5),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 14),
+                                  const SizedBox(height: 14),
 
-                      // Seller List Cards (Modern Sleek Compact Design)
-                      ..._groupedSellerOrders.map((sellerGroup) {
-                        final sellerName = sellerGroup['seller_name'] ?? 'Seller Store';
-                        final sellerMobile = sellerGroup['seller_mobile'] ?? '';
-                        final orders = (sellerGroup['orders'] as List?)?.map((e) => Map<String, dynamic>.from(e)).toList() ?? [];
+                                  // Seller List Cards (Modern Sleek Compact Design)
+                                  ...filteredSellers.map((sellerGroup) {
+                                    final sellerName = sellerGroup['seller_name'] ?? 'Seller Store';
+                                    final sellerMobile = sellerGroup['seller_mobile'] ?? '';
+                                    final orders = (sellerGroup['orders'] as List?)?.map((e) => Map<String, dynamic>.from(e)).toList() ?? [];
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),
@@ -540,6 +669,9 @@ class _DeliveryBoyDashboardScreenState extends State<DeliveryBoyDashboardScreen>
                       }),
                     ],
                   ),
+                ),
+              ],
+            ),
       ),
     ),
   );
@@ -568,12 +700,292 @@ class SellerCustomerDeliveriesScreen extends StatefulWidget {
 class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliveriesScreen> {
   late List<Map<String, dynamic>> _currentOrders;
   Map<String, String> _customerNamesMap = {};
+  final TextEditingController _orderSearchController = TextEditingController();
+  String _orderSearchQuery = '';
+
+  @override
+  void dispose() {
+    _orderSearchController.dispose();
+    super.dispose();
+  }
+
+  List<Map<String, dynamic>> _getFilteredOrders() {
+    final query = _orderSearchQuery.trim().toLowerCase();
+    if (query.isEmpty) return _currentOrders;
+
+    final cleanQueryDigits = query.replaceAll(RegExp(r'[^\d]'), '');
+
+    return _currentOrders.where((order) {
+      final msgId = (order['id'] ?? '').toString();
+      final rawOrderId = (order['order_id'] ?? order['_calculated_order_id'] ?? msgId).toString();
+      final digitsOnly = rawOrderId.replaceAll(RegExp(r'[^\d]'), '');
+      final formattedId = '#$digitsOnly'.toLowerCase();
+      final dmId = 'dm-$digitsOnly'.toLowerCase();
+
+      // 1. Match Order ID by digits or formatted prefix
+      if (cleanQueryDigits.isNotEmpty && digitsOnly.isNotEmpty && digitsOnly.contains(cleanQueryDigits)) {
+        return true;
+      }
+      if (query.length >= 2 && (formattedId.contains(query) || dmId.contains(query))) {
+        return true;
+      }
+
+      // 2. Match Customer Mobile (digits only)
+      final customerMobile = (order['customer_mobile'] ?? '').toString().replaceAll(RegExp(r'[^\d]'), '');
+      if (cleanQueryDigits.isNotEmpty && customerMobile.isNotEmpty && customerMobile.contains(cleanQueryDigits)) {
+        return true;
+      }
+
+      // 3. Match Customer Name (clean text only)
+      final rawCustomerName = (order['customer_name'] ?? order['name'] ?? order['receiver_name'] ?? '').toString().toLowerCase().trim();
+      final resolvedName = (_customerNamesMap[digitsOnly] ??
+          _customerNamesMap[rawOrderId] ??
+          _customerNamesMap[msgId] ??
+          _customerNamesMap[customerMobile] ??
+          '').toLowerCase().trim();
+
+      if (rawCustomerName.isNotEmpty && rawCustomerName.contains(query)) {
+        return true;
+      }
+      if (resolvedName.isNotEmpty && resolvedName.contains(query)) {
+        return true;
+      }
+
+      // 4. Match Delivery Address (clean readable address string)
+      String addressStr = '';
+      if (order['delivery_address'] is String) {
+        addressStr = order['delivery_address'].toString();
+      } else if (order['address'] is String) {
+        addressStr = order['address'].toString();
+      } else if (order['delivery_address'] is Map) {
+        addressStr = (order['delivery_address'] as Map).values.join(' ');
+      } else if (order['address'] is Map) {
+        addressStr = (order['address'] as Map).values.join(' ');
+      }
+      addressStr = addressStr.toLowerCase().trim();
+      if (addressStr.isNotEmpty && addressStr.contains(query)) {
+        return true;
+      }
+
+      // 5. Match Delivery Status (e.g. "out for delivery", "ready", "delivered")
+      final delStatus = (order['delivery_status'] ?? '').toString().toLowerCase().trim();
+      if (delStatus.isNotEmpty && delStatus.contains(query)) {
+        return true;
+      }
+
+      // 6. Match Item Names (clean product names only, NOT json keys/urls)
+      String itemNames = '';
+      if (order['items'] is List) {
+        itemNames = (order['items'] as List)
+            .map((it) => (it is Map ? (it['name'] ?? it['item_name'] ?? it['title'] ?? '') : '').toString())
+            .join(' ');
+      } else if (order['items_json'] != null) {
+        try {
+          final decoded = jsonDecode(order['items_json'].toString());
+          if (decoded is List) {
+            itemNames = decoded
+                .map((it) => (it is Map ? (it['name'] ?? it['item_name'] ?? it['title'] ?? '') : '').toString())
+                .join(' ');
+          }
+        } catch (_) {}
+      }
+      itemNames = itemNames.toLowerCase().trim();
+      if (itemNames.isNotEmpty && itemNames.contains(query)) {
+        return true;
+      }
+
+      return false;
+    }).toList();
+  }
+
+  Widget _buildOrdersSearchBar() {
+    final bool isSearching = _orderSearchQuery.trim().isNotEmpty;
+    return Container(
+      height: 34,
+      margin: const EdgeInsets.fromLTRB(14, 8, 14, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(
+          color: isSearching
+              ? const Color(0xFFEA580C).withValues(alpha: 0.6)
+              : const Color(0xFFFED7AA),
+          width: 1.1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFEA580C).withValues(alpha: 0.04),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.search_rounded,
+            size: 17,
+            color: Color(0xFFEA580C),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: _orderSearchController,
+              textAlignVertical: TextAlignVertical.center,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF0F172A),
+              ),
+              decoration: const InputDecoration(
+                hintText: 'Search order, customer, mobile, address...',
+                hintStyle: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.normal,
+                  color: Color(0xFF94A3B8),
+                ),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+              onChanged: (val) {
+                setState(() {
+                  _orderSearchQuery = val;
+                });
+              },
+            ),
+          ),
+          if (isSearching)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                _orderSearchController.clear();
+                setState(() {
+                  _orderSearchQuery = '';
+                });
+              },
+              child: const Padding(
+                padding: EdgeInsets.only(left: 6),
+                child: Icon(
+                  Icons.close_rounded,
+                  size: 16,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoMatchingOrdersState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircleAvatar(
+              radius: 36,
+              backgroundColor: Color(0xFFF1F5F9),
+              child: Icon(
+                Icons.search_off_rounded,
+                size: 36,
+                color: Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'No matching orders found',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'No customer orders matched "$_orderSearchQuery". Try searching with another keyword or clear search.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 16),
+            TextButton.icon(
+              onPressed: () {
+                _orderSearchController.clear();
+                setState(() {
+                  _orderSearchQuery = '';
+                });
+              },
+              icon: const Icon(Icons.clear_all_rounded, size: 18),
+              label: const Text('Clear Search', style: TextStyle(fontWeight: FontWeight.bold)),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFEA580C),
+                backgroundColor: const Color(0xFFFFF7ED),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   void initState() {
     super.initState();
     _currentOrders = List.from(widget.orders);
+    _syncOrdersFromLocalSaved();
     _loadCustomerNames();
+  }
+
+  void _syncOrdersFromLocalSaved() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final str = prefs.getString('saved_delivery_statuses');
+      final payStr = prefs.getString('saved_order_payments');
+      Map<String, dynamic> savedStatuses = {};
+      Map<String, dynamic> savedPayments = {};
+
+      if (str != null && str.isNotEmpty) {
+        savedStatuses = Map<String, dynamic>.from(jsonDecode(str));
+      }
+      if (payStr != null && payStr.isNotEmpty) {
+        savedPayments = Map<String, dynamic>.from(jsonDecode(payStr));
+      }
+
+      if (mounted) {
+        setState(() {
+          _currentOrders.removeWhere((o) {
+            final idStr = (o['id'] ?? '').toString();
+            if (savedStatuses.containsKey(idStr)) {
+              final status = (savedStatuses[idStr]['delivery_status'] ?? '').toString().toLowerCase();
+              if (status == 'delivered' || status == 'cancelled') {
+                return true;
+              }
+            }
+            final delSt = (o['delivery_status'] ?? '').toString().toLowerCase();
+            return delSt == 'delivered' || delSt == 'cancelled';
+          });
+
+          for (var o in _currentOrders) {
+            final idStr = (o['id'] ?? '').toString();
+            if (savedStatuses.containsKey(idStr)) {
+              final st = savedStatuses[idStr]['delivery_status'];
+              if (st != null && st.toString().isNotEmpty) {
+                o['delivery_status'] = st.toString();
+              }
+            }
+            if (savedPayments.containsKey(idStr)) {
+              o['payment_status'] = 'paid';
+              final utr = savedPayments[idStr]?.toString();
+              if (utr != null && utr.isNotEmpty) {
+                o['payment_utr'] = utr;
+              }
+            }
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   void _loadCustomerNames() async {
@@ -651,13 +1063,30 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
     }
   }
 
-  void _updateDeliveryStatus(Map<String, dynamic> order, String newStatus) async {
+  Future<void> _updateDeliveryStatus(Map<String, dynamic> order, String newStatus) async {
     final msgId = int.tryParse(order['id']?.toString() ?? '') ?? (order['id'] is num ? (order['id'] as num).toInt() : 0);
     if (msgId == 0) return;
+
+    // 1. Instantly update order object and UI state (0ms latency!)
+    order['delivery_status'] = newStatus;
+    if (mounted) {
+      setState(() {
+        if (newStatus == 'Delivered') {
+          _currentOrders.removeWhere((o) => (int.tryParse(o['id']?.toString() ?? '') ?? (o['id'] is num ? (o['id'] as num).toInt() : 0)) == msgId);
+        } else {
+          for (var o in _currentOrders) {
+            if ((int.tryParse(o['id']?.toString() ?? '') ?? (o['id'] is num ? (o['id'] as num).toInt() : 0)) == msgId) {
+              o['delivery_status'] = newStatus;
+            }
+          }
+        }
+      });
+    }
 
     final sellerUsername = (order['seller_username'] ?? '').toString();
     final customerMobile = (order['customer_mobile'] ?? '').toString();
 
+    // 2. Persist to local cache and VPS in background
     await AuthService.updateDeliveryStatusForOrder(
       sellerUsername: sellerUsername,
       customerMobile: customerMobile,
@@ -670,50 +1099,34 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
     final deliveryBoyName = widget.deliveryBoyUsername;
 
     if (newStatus == 'Out for Delivery') {
-      // Scenario 4: Delivery Boy picks up order -> Notify Customer & Seller
-      await NotificationService.notifyOrderPickedUp(
+      NotificationService.notifyOrderPickedUp(
         customerMobile: customerMobile,
         sellerUsername: sellerUsername,
         deliveryBoyName: deliveryBoyName,
         orderId: rawOrderId,
-      );
+      ).catchError((_) {});
     } else if (newStatus == 'Delivered') {
-      // Scenario 5: Delivery Boy marks order Delivered -> Notify Customer & Seller
-      await NotificationService.notifyOrderDelivered(
+      NotificationService.notifyOrderDelivered(
         customerMobile: customerMobile,
         sellerUsername: sellerUsername,
         deliveryBoyName: deliveryBoyName,
         orderId: rawOrderId,
-      );
+      ).catchError((_) {});
     }
 
-    setState(() {
-      if (newStatus == 'Delivered') {
-        _currentOrders.removeWhere((o) => (int.tryParse(o['id']?.toString() ?? '') ?? (o['id'] is num ? (o['id'] as num).toInt() : 0)) == msgId);
-      } else {
-        for (var o in _currentOrders) {
-          if ((int.tryParse(o['id']?.toString() ?? '') ?? (o['id'] is num ? (o['id'] as num).toInt() : 0)) == msgId) {
-            o['delivery_status'] = newStatus;
-          }
-        }
-      }
-    });
-
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(newStatus == 'Delivered'
-              ? 'Order Delivered Successfully! ✅'
-              : 'Status updated to $newStatus 🚀'),
-          backgroundColor: const Color(0xFF10B981),
-        ),
+      AppToast.show(
+        context,
+        newStatus == 'Delivered'
+            ? 'Order Delivered Successfully!'
+            : 'Status updated to $newStatus',
       );
     }
   }
 
-  void _collectCashPayment(Map<String, dynamic> order, double amount) async {
+  Future<bool> _collectCashPayment(Map<String, dynamic> order, double amount) async {
     final msgId = int.tryParse(order['id']?.toString() ?? '') ?? (order['id'] is num ? (order['id'] as num).toInt() : 0);
-    if (msgId == 0) return;
+    if (msgId == 0) return false;
 
     final sellerUsername = (order['seller_username'] ?? '').toString();
     final customerMobile = (order['customer_mobile'] ?? '').toString();
@@ -722,34 +1135,69 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+        contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
         title: const Row(
           children: [
-            Icon(Icons.payments_rounded, color: Color(0xFFF59E0B)),
-            SizedBox(width: 8),
-            Text('Confirm Cash Payment', style: TextStyle(color: Colors.white, fontSize: 16)),
+            Icon(Icons.payments_rounded, color: Color(0xFF10B981), size: 22),
+            SizedBox(width: 10),
+            Text(
+              'Confirm Cash Payment',
+              style: TextStyle(color: Color(0xFF0F172A), fontSize: 16.5, fontWeight: FontWeight.bold),
+            ),
           ],
         ),
         content: Text(
           'Did customer pay ₹ $amtStr in CASH?',
-          style: const TextStyle(color: Colors.white70, fontSize: 14),
+          style: const TextStyle(color: Color(0xFF475569), fontSize: 14.5, height: 1.3),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Yes, Cash Received 💵', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF64748B),
+                    side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.2),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text(
+                    'Receive',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
 
     if (confirm == true) {
+      // Instantly mark paid in-memory for 0ms reactivity
+      order['payment_status'] = 'paid';
+      order['payment_utr'] = 'CASH';
+      if (mounted) setState(() {});
+
       await AuthService.markOrderPaid(
         sellerUsername: sellerUsername,
         customerMobile: customerMobile,
@@ -758,25 +1206,17 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
         amount: amount,
       );
 
-      setState(() {
-        order['payment_status'] = 'paid';
-        order['payment_utr'] = 'CASH';
-      });
-
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cash Payment Recorded! Order marked PAID ✅'),
-            backgroundColor: Color(0xFF10B981),
-          ),
-        );
+        AppToast.show(context, 'Cash Payment Recorded! Order marked PAID');
       }
+      return true;
     }
+    return false;
   }
 
-  void _showUpiQrPaymentModal(Map<String, dynamic> order, double amount) async {
+  Future<bool> _showUpiQrPaymentModal(Map<String, dynamic> order, double amount) async {
     final msgId = int.tryParse(order['id']?.toString() ?? '') ?? (order['id'] is num ? (order['id'] as num).toInt() : 0);
-    if (msgId == 0) return;
+    if (msgId == 0) return false;
 
     final sellerUsername = (order['seller_username'] ?? '').toString();
     final customerMobile = (order['customer_mobile'] ?? '').toString();
@@ -813,9 +1253,9 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
     Timer? autoVerifyTimer;
     bool isPaymentVerified = false;
 
-    if (!mounted) return;
+    if (!mounted) return false;
 
-    showModalBottomSheet(
+    final modalResult = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: const Color(0xFF0F172A),
@@ -866,14 +1306,9 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
                     order['payment_utr'] = finalUtr;
                   });
 
-                  Navigator.pop(ctx);
+                  Navigator.pop(ctx, true);
 
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Razorpay Payment Verified! Order marked PAID ✅ (UTR: $finalUtr)'),
-                      backgroundColor: const Color(0xFF10B981),
-                    ),
-                  );
+                  AppToast.show(context, 'Razorpay Payment Verified! Order marked PAID (UTR: $finalUtr)');
                 }
               }
             });
@@ -971,7 +1406,7 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
                           ),
                         ),
                         Text(
-                          'Order #$cleanOrderId • Razorpay Secured 🔒',
+                          'Order #$cleanOrderId • Razorpay Secured',
                           style: const TextStyle(color: Color(0xFF0284C7), fontSize: 11.5, fontWeight: FontWeight.bold),
                         ),
                       ],
@@ -1036,13 +1471,8 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
                       });
 
                       if (mounted) {
-                        Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Payment Confirmed (UTR: $autoUtr)! Order marked PAID ✅'),
-                            backgroundColor: const Color(0xFF10B981),
-                          ),
-                        );
+                        Navigator.pop(ctx, true);
+                        AppToast.show(context, 'Payment Confirmed! Order marked PAID (UTR: $autoUtr)');
                       }
                     },
                     child: const Text(
@@ -1059,6 +1489,8 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
     ).whenComplete(() {
       autoVerifyTimer?.cancel();
     });
+
+    return modalResult == true || (order['payment_status'] ?? '').toString().toLowerCase() == 'paid';
   }
 
   void _openFullOrderDetailsPage(Map<String, dynamic> order) async {
@@ -1085,157 +1517,12 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
       ),
     );
     if (mounted) {
+      _syncOrdersFromLocalSaved();
       setState(() {});
     }
   }
 
-  void _showPaymentChoiceModal({
-    required Map<String, dynamic> order,
-    required double orderAmount,
-    required String amtStr,
-    required String customerMobile,
-    required int msgId,
-    required Function(String utr) onPaid,
-  }) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      backgroundColor: Colors.white,
-      builder: (choiceCtx) {
-        return Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Select Payment Method 💳',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-              ),
-              Text(
-                'Amount to Collect: ₹ $amtStr',
-                style: const TextStyle(fontSize: 13, color: Colors.black54),
-              ),
-              const SizedBox(height: 16),
 
-              // Option 1: CASH PAYMENT
-              ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                tileColor: const Color(0xFFF0FDF4),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  side: const BorderSide(color: Color(0xFF86EFAC), width: 1.2),
-                ),
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFF16A34A),
-                  child: Icon(Icons.money_rounded, color: Colors.white, size: 22),
-                ),
-                title: const Text('Cash Payment 💵', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF15803D), fontSize: 14.5)),
-                subtitle: const Text('Customer paid in cash', style: TextStyle(fontSize: 12, color: Color(0xFF166534))),
-                trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Color(0xFF16A34A)),
-                onTap: () async {
-                  Navigator.pop(choiceCtx);
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (confirmCtx) => AlertDialog(
-                      backgroundColor: const Color(0xFF1E293B),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      title: const Row(
-                        children: [
-                          Icon(Icons.payments_rounded, color: Color(0xFFF59E0B)),
-                          SizedBox(width: 8),
-                          Text('Confirm Cash Payment', style: TextStyle(color: Colors.white, fontSize: 16)),
-                        ],
-                      ),
-                      content: Text(
-                        'Did customer pay ₹ $amtStr in CASH?',
-                        style: const TextStyle(color: Colors.white70, fontSize: 14),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(confirmCtx, false),
-                          child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-                        ),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
-                          onPressed: () => Navigator.pop(confirmCtx, true),
-                          child: const Text('Yes, Cash Received 💵', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                    ),
-                  );
-
-                  if (confirm == true) {
-                    await AuthService.markOrderPaid(
-                      sellerUsername: (order['seller_username'] ?? '').toString(),
-                      customerMobile: customerMobile,
-                      messageId: msgId,
-                      utrNumber: 'CASH',
-                      amount: orderAmount,
-                    );
-
-                    order['payment_status'] = 'paid';
-                    order['payment_utr'] = 'CASH';
-
-                    onPaid('CASH');
-
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Cash Payment Recorded! Order marked PAID ✅'),
-                          backgroundColor: Color(0xFF10B981),
-                        ),
-                      );
-                    }
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
-
-              // Option 2: ONLINE QR CODE
-              ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                tileColor: const Color(0xFFF0F9FF),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  side: const BorderSide(color: Color(0xFF7DD3FC), width: 1.2),
-                ),
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFF0284C7),
-                  child: Icon(Icons.qr_code_2_rounded, color: Colors.white, size: 22),
-                ),
-                title: const Text('Online QR Code 📱', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0369A1), fontSize: 14.5)),
-                subtitle: const Text('Show UPI QR code for GPay/PhonePe/Paytm', style: TextStyle(fontSize: 12, color: Color(0xFF075985))),
-                trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Color(0xFF0284C7)),
-                onTap: () async {
-                  Navigator.pop(choiceCtx);
-                  _showUpiQrPaymentModal(order, orderAmount);
-                  final checkPaid = (order['payment_status'] ?? '').toString().toLowerCase() == 'paid';
-                  if (checkPaid) {
-                    onPaid((order['payment_utr'] ?? 'ONLINE').toString());
-                  }
-                },
-              ),
-              const SizedBox(height: 10),
-            ],
-          ),
-        );
-      },
-    );
-  }
 
   void _showCancelOrderDialog(Map<String, dynamic> order) {
     final msgId = int.tryParse(order['id']?.toString() ?? '') ?? (order['id'] is num ? (order['id'] as num).toInt() : 0);
@@ -1403,12 +1690,7 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
                             _currentOrders.removeWhere((o) => (int.tryParse(o['id']?.toString() ?? '') ?? (o['id'] is num ? (o['id'] as num).toInt() : 0)) == msgId);
                           });
 
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Order #$cleanOrderId Cancelled ❌ ($reason)'),
-                              backgroundColor: const Color(0xFFEF4444),
-                            ),
-                          );
+                          AppToast.show(context, 'Order #$cleanOrderId Cancelled ($reason)');
                         }
                       },
                     );
@@ -1590,9 +1872,7 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
                     onPressed: () async {
                       final resendResult = await ApitxtOtpService.resendOtp(customerMobile);
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(resendResult['message'] ?? 'OTP Resent to Customer SMS')),
-                        );
+                        AppToast.show(context, resendResult['message'] ?? 'OTP Resent to Customer SMS');
                       }
                     },
                     child: const Text('Resend Customer SMS', style: TextStyle(color: Color(0xFFEA580C), fontWeight: FontWeight.bold)),
@@ -1622,6 +1902,8 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
 
   @override
   Widget build(BuildContext context) {
+    final filteredOrders = _getFilteredOrders();
+
     return Scaffold(
       backgroundColor: const Color(0xFFFFF7ED), // Light Warm Orange Background
       appBar: AppBar(
@@ -1637,7 +1919,9 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
               overflow: TextOverflow.ellipsis,
             ),
             Text(
-              '${_currentOrders.length} Customer Deliveries Pending',
+              _orderSearchQuery.isNotEmpty
+                  ? '${filteredOrders.length} matching of ${_currentOrders.length} Pending'
+                  : '${_currentOrders.length} Customer Deliveries Pending',
               style: const TextStyle(fontSize: 11, color: Color(0xFFFDBA74), fontWeight: FontWeight.w600),
             ),
           ],
@@ -1675,11 +1959,17 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
                 ),
               ),
             )
-          : ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-              itemCount: _currentOrders.length,
-              itemBuilder: (ctx, idx) {
-                final order = _currentOrders[idx];
+          : Column(
+              children: [
+                _buildOrdersSearchBar(),
+                Expanded(
+                  child: filteredOrders.isEmpty
+                      ? _buildNoMatchingOrdersState()
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(14, 4, 14, 14),
+                          itemCount: filteredOrders.length,
+                          itemBuilder: (ctx, idx) {
+                            final order = filteredOrders[idx];
                 final msgId = int.tryParse(order['id']?.toString() ?? '') ?? (order['id'] is num ? (order['id'] as num).toInt() : 0);
                 final rawOrderId = (order['order_id'] ?? order['_calculated_order_id'] ?? msgId.toString()).toString();
                 final cleanOrderId = rawOrderId.replaceAll('#', '').replaceAll('Order', '').trim();
@@ -1755,33 +2045,18 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
                                 ),
                                 const SizedBox(height: 2),
                                 if (isOut)
-                                  Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Flexible(
-                                        child: Text(
-                                          'Out for Delivery',
-                                          style: const TextStyle(
-                                            fontSize: 10.5,
-                                            color: Color(0xFF2563EB),
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 3),
-                                      Image.asset(
-                                        'assets/images/Pickup_boy.png',
-                                        width: 14,
-                                        height: 14,
-                                        fit: BoxFit.contain,
-                                        errorBuilder: (ctx, err, stack) => const Text('🚚', style: TextStyle(fontSize: 10)),
-                                      ),
-                                    ],
+                                  const Text(
+                                    'Out for Delivery',
+                                    style: TextStyle(
+                                      fontSize: 10.5,
+                                      color: Color(0xFF2563EB),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   )
                                 else
                                   const Text(
-                                    'Ready for Pickup 📦',
+                                    'Ready for Pickup',
                                     style: TextStyle(
                                       fontSize: 10.5,
                                       color: Color(0xFFEA580C),
@@ -1823,7 +2098,7 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
                               ),
                               onPressed: () => _updateDeliveryStatus(order, 'Out for Delivery'),
                               child: const Text(
-                                'Pick Up 📦',
+                                'Pick Up',
                                 style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                               ),
                             )
@@ -1839,9 +2114,9 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
                                 elevation: ((order['payment_status'] ?? '').toString().toLowerCase() == 'paid') ? 1 : 0,
                               ),
                               onPressed: () => _openFullOrderDetailsPage(order),
-                              child: Text(
-                                ((order['payment_status'] ?? '').toString().toLowerCase() == 'paid') ? 'Delivered ✅' : 'Delivered 🔒',
-                                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                              child: const Text(
+                                'Delivered',
+                                style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                               ),
                             ),
                         ],
@@ -1851,6 +2126,9 @@ class _SellerCustomerDeliveriesScreenState extends State<SellerCustomerDeliverie
                 );
               },
             ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1862,9 +2140,9 @@ class DeliveryOrderDetailsScreen extends StatefulWidget {
   final String sellerMobile;
   final String deliveryBoyUsername;
   final Map<String, String> customerNameMap;
-  final Function(String status) onUpdateDeliveryStatus;
-  final Function(double amt) onCollectCashPayment;
-  final Function(double amt) onShowUpiQrPayment;
+  final Future<void> Function(String status) onUpdateDeliveryStatus;
+  final Future<bool> Function(double amt) onCollectCashPayment;
+  final Future<bool> Function(double amt)? onShowUpiQrPayment;
   final VoidCallback onCancelOrder;
   final Function(String title, Future<void> Function() onVerified) onRequireOtpAndProceed;
   final Function(String phone) onMakePhoneCall;
@@ -1878,7 +2156,7 @@ class DeliveryOrderDetailsScreen extends StatefulWidget {
     required this.customerNameMap,
     required this.onUpdateDeliveryStatus,
     required this.onCollectCashPayment,
-    required this.onShowUpiQrPayment,
+    this.onShowUpiQrPayment,
     required this.onCancelOrder,
     required this.onRequireOtpAndProceed,
     required this.onMakePhoneCall,
@@ -2063,7 +2341,7 @@ class _DeliveryOrderDetailsScreenState extends State<DeliveryOrderDetailsScreen>
               border: Border.all(color: isOut ? const Color(0xFF93C5FD) : const Color(0xFFFDBA74)),
             ),
             child: Text(
-              isOut ? 'Out for Delivery 🛵' : 'Ready Pickup 📦',
+              isOut ? 'Out for Delivery' : 'Ready Pickup',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
@@ -2077,21 +2355,96 @@ class _DeliveryOrderDetailsScreenState extends State<DeliveryOrderDetailsScreen>
         children: [
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Customer Profile Card
+                  // 1. Delivery in 15 minutes Indicator (Blinkit/Zepto Style)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(7),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFECFDF5),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.timer_rounded,
+                            size: 18,
+                            color: Color(0xFF059669),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Delivery in 15 minutes',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF0F172A),
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Store: ${widget.sellerName}',
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF64748B),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            '15 MINS',
+                            style: TextStyle(
+                              color: Color(0xFF2563EB),
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // 2. Customer Profile Card
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.03),
-                          blurRadius: 8,
+                          color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+                          blurRadius: 10,
                           offset: const Offset(0, 2),
                         ),
                       ],
@@ -2099,23 +2452,23 @@ class _DeliveryOrderDetailsScreenState extends State<DeliveryOrderDetailsScreen>
                     child: Row(
                       children: [
                         const CircleAvatar(
-                          radius: 26,
+                          radius: 24,
                           backgroundColor: Color(0xFF8B5CF6),
-                          child: Icon(Icons.person_rounded, color: Colors.white, size: 30),
+                          child: Icon(Icons.person_rounded, color: Colors.white, size: 26),
                         ),
-                        const SizedBox(width: 14),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 displayName,
-                                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                               ),
                               const SizedBox(height: 3),
                               Text(
                                 'Mobile: +91 $customerMobile',
-                                style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                                style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
                               ),
                             ],
                           ),
@@ -2128,8 +2481,8 @@ class _DeliveryOrderDetailsScreenState extends State<DeliveryOrderDetailsScreen>
                               customBorder: const CircleBorder(),
                               onTap: () => widget.onMakePhoneCall(customerMobile),
                               child: const Padding(
-                                padding: EdgeInsets.all(10),
-                                child: Icon(Icons.phone_rounded, color: Color(0xFF16A34A), size: 20),
+                                padding: EdgeInsets.all(9),
+                                child: Icon(Icons.phone_rounded, color: Color(0xFF16A34A), size: 18),
                               ),
                             ),
                           ),
@@ -2137,7 +2490,7 @@ class _DeliveryOrderDetailsScreenState extends State<DeliveryOrderDetailsScreen>
                     ),
                   ),
 
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
 
                   // Distance Badge
                   if (_orderDistance != null && _orderDistance!.isNotEmpty) ...[
@@ -2159,21 +2512,20 @@ class _DeliveryOrderDetailsScreenState extends State<DeliveryOrderDetailsScreen>
                         ],
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 12),
                   ],
 
-                  // Customer Delivery Address Section
+                  // 3. Customer Delivery Address Section (BORDERLESS & CLEAN)
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.03),
-                          blurRadius: 8,
+                          color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+                          blurRadius: 10,
                           offset: const Offset(0, 2),
                         ),
                       ],
@@ -2181,17 +2533,24 @@ class _DeliveryOrderDetailsScreenState extends State<DeliveryOrderDetailsScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Row(
+                        Row(
                           children: [
-                            Icon(Icons.location_on_rounded, color: Color(0xFFEF4444), size: 20),
-                            SizedBox(width: 6),
-                            Text(
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFFEE2E2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.location_on_rounded, color: Color(0xFFEF4444), size: 16),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
                               'Customer Delivery Address',
-                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                              style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 12),
                         if (_isLoadingAddress)
                           const Center(child: Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator(color: Color(0xFFEA580C))))
                         else if (_chosenAddressMap != null) ...[
@@ -2218,163 +2577,340 @@ class _DeliveryOrderDetailsScreenState extends State<DeliveryOrderDetailsScreen>
                                     if (pincode.isNotEmpty) 'PIN: $pincode',
                                   ].join(', ');
 
-                            return Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF8FAFC),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFCBD5E1)),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (receiver.isNotEmpty)
-                                    Text(receiver, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A))),
-                                  const SizedBox(height: 3),
-                                  Text(fullAddress, style: const TextStyle(fontSize: 13, color: Color(0xFF334155), height: 1.3)),
-                                  if (phone.isNotEmpty) ...[
-                                    const SizedBox(height: 6),
-                                    Text('Phone: +91 $phone', style: const TextStyle(fontSize: 12.5, color: Color(0xFF475569), fontWeight: FontWeight.w600)),
-                                  ],
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (receiver.isNotEmpty)
+                                  Text(
+                                    receiver,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: Color(0xFF0F172A)),
+                                  ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  fullAddress,
+                                  style: const TextStyle(fontSize: 13, color: Color(0xFF475569), height: 1.35),
+                                ),
+                                if (phone.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.phone_rounded, size: 13, color: Color(0xFF16A34A)),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        '+91 $phone',
+                                        style: const TextStyle(fontSize: 12.5, color: Color(0xFF15803D), fontWeight: FontWeight.w600),
+                                      ),
+                                    ],
+                                  ),
                                 ],
-                              ),
+                              ],
                             );
                           }),
                         ] else
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFE2E8F0)),
-                            ),
-                            child: const Text('No delivery address found for this order.', style: TextStyle(fontSize: 12.5, color: Colors.black54)),
+                          const Text(
+                            'No delivery address found for this order.',
+                            style: TextStyle(fontSize: 12.5, color: Colors.black54),
                           ),
                       ],
                     ),
                   ),
 
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
 
-                  // Order Items List Card (If items exist)
-                  if (parsedItems.isNotEmpty) ...[
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.03),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+                  // 4. Modern Bill Details Card (Styled like Seller & Customer screen)
+                  Container(
+                    width: double.infinity,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Card Header: Bill details title + Item count badge
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Icon(Icons.shopping_bag_rounded, color: Color(0xFFEA580C), size: 20),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Ordered Items (${parsedItems.length})',
-                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          ...parsedItems.map((item) {
-                            if (item is! Map) return const SizedBox.shrink();
-                            final name = (item['name'] ?? item['title'] ?? 'Item').toString();
-                            final price = double.tryParse(item['price']?.toString() ?? '') ?? double.tryParse(item['rate']?.toString() ?? '') ?? 0.0;
-                            final qty = int.tryParse(item['qty']?.toString() ?? '') ?? int.tryParse(item['quantity']?.toString() ?? '') ?? 1;
-                            final total = price * qty;
-                            final priceStr = (price % 1 == 0) ? price.toInt().toString() : price.toStringAsFixed(2);
-                            final totalStr = (total % 1 == 0) ? total.toInt().toString() : total.toStringAsFixed(2);
-
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              Row(
                                 children: [
-                                  Expanded(
-                                    child: Text(
-                                      '$name  x$qty',
-                                      style: const TextStyle(fontSize: 13, color: Color(0xFF1E293B), fontWeight: FontWeight.w600),
+                                  Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFFFFF7ED),
+                                      shape: BoxShape.circle,
                                     ),
+                                    child: const Icon(Icons.receipt_long_rounded, color: Color(0xFFEA580C), size: 16),
                                   ),
-                                  Text(
-                                    '₹ $totalStr',
-                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Bill details',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF0F172A),
+                                      letterSpacing: -0.2,
+                                    ),
                                   ),
                                 ],
                               ),
-                            );
-                          }),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                  ],
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEFF6FF),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  '${parsedItems.length} ITEM${parsedItems.length == 1 ? '' : 'S'}',
+                                  style: const TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF2563EB),
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
 
-                  // Action Buttons Row: [ Delivered ✅ ] | [ Cancel Order ❌ ]
+                        // Itemized Header Strip
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+                          color: const Color(0xFFF8FAFC),
+                          child: const Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'ITEM & QTY',
+                                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 10, color: Color(0xFF64748B), letterSpacing: 0.3),
+                                ),
+                              ),
+                              Text(
+                                'AMOUNT',
+                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 10, color: Color(0xFF64748B), letterSpacing: 0.3),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Products List
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          child: Column(
+                            children: [
+                              ...parsedItems.map((item) {
+                                if (item is! Map) return const SizedBox.shrink();
+                                final name = (item['name'] ?? item['title'] ?? 'Item').toString();
+                                final qty = item['qty'] ?? item['quantity'] ?? 1;
+                                final unit = (item['unit'] ?? '').toString();
+                                final price = double.tryParse(item['price']?.toString() ?? '') ?? double.tryParse(item['rate']?.toString() ?? '') ?? 0.0;
+                                final itemTotal = price * (double.tryParse(qty.toString()) ?? 1.0);
+                                final itemTotalStr = (itemTotal % 1 == 0) ? itemTotal.toInt().toString() : itemTotal.toStringAsFixed(2);
+                                final qtyDisplay = unit.isNotEmpty ? '$qty $unit' : 'x$qty';
+
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 6),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          '$name  $qtyDisplay',
+                                          style: const TextStyle(fontSize: 13, color: Color(0xFF334155), fontWeight: FontWeight.w600),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '₹$itemTotalStr',
+                                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
+                        ),
+
+                        const Divider(height: 1, indent: 16, endIndent: 16, color: Color(0xFFF1F5F9)),
+
+                        // Charges Breakdown Section
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('Item total', style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B))),
+                                  Text('₹$amtStr', style: const TextStyle(fontSize: 12.5, color: Color(0xFF1E293B), fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              const Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text('Delivery partner fee', style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B))),
+                                  Text('FREE', style: TextStyle(fontSize: 12.5, color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'Grand total',
+                                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                                  ),
+                                  Text(
+                                    '₹$amtStr',
+                                    style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Scallop receipt tear divider with moving blue beam
+                        const ReceiptScallopDivider(
+                          cardColor: Colors.white,
+                          stripColor: Color(0xFFEFF6FF),
+                          height: 14.0,
+                          scallopWidth: 12.0,
+                          scallopDepth: 6.5,
+                        ),
+
+                        // Bottom Light Blue Payment Mode Strip
+                        Container(
+                          width: double.infinity,
+                          color: const Color(0xFFEFF6FF),
+                          padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    isPaid ? Icons.check_circle_rounded : Icons.account_balance_wallet_rounded,
+                                    size: 16,
+                                    color: const Color(0xFF2563EB),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Text(
+                                    'Payment Mode',
+                                    style: TextStyle(
+                                      color: Color(0xFF1E40AF),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+                                decoration: BoxDecoration(
+                                  color: isPaid ? const Color(0xFFDCFCE7) : const Color(0xFFDBEAFE),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: isPaid ? const Color(0xFF86EFAC) : const Color(0xFF93C5FD),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      isPaid ? Icons.bolt_rounded : Icons.payments_rounded,
+                                      size: 14,
+                                      color: isPaid ? const Color(0xFF15803D) : const Color(0xFF1D4ED8),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      isPaid ? 'PAID ONLINE' : 'CASH ON DELIVERY',
+                                      style: TextStyle(
+                                        color: isPaid ? const Color(0xFF15803D) : const Color(0xFF1D4ED8),
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 11.5,
+                                        letterSpacing: 0.3,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // 5. Compact Action Buttons (Delivered & Cancel Order - Lock icon removed, smaller size)
                   Row(
                     children: [
                       Expanded(
                         child: ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: isPaid ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
-                            padding: const EdgeInsets.symmetric(vertical: 13),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            elevation: isPaid ? 2 : 0,
+                            backgroundColor: isPaid ? const Color(0xFF10B981) : const Color(0xFF64748B),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            elevation: isPaid ? 1 : 0,
                           ),
-                          icon: Icon(
-                            isPaid ? Icons.check_circle_rounded : Icons.lock_outline_rounded,
+                          icon: const Icon(
+                            Icons.check_circle_outline_rounded,
                             color: Colors.white,
-                            size: 20,
+                            size: 17,
                           ),
-                          label: Text(
-                            isPaid ? 'Delivered ✅' : 'Delivered 🔒',
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                          label: const Text(
+                            'Mark Delivered',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                           onPressed: isPaid
                               ? () {
                                   widget.onRequireOtpAndProceed(
                                     'Delivery',
                                     () async {
-                                      widget.onUpdateDeliveryStatus('Delivered');
-                                      if (mounted) Navigator.pop(context);
+                                      await widget.onUpdateDeliveryStatus('Delivered');
+                                      if (mounted) Navigator.pop(context, true);
                                     },
                                   );
                                 }
                               : () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('⚠️ Payment of ₹ $amtStr is pending! Please collect payment first before delivering.'),
-                                      backgroundColor: const Color(0xFFEA580C),
-                                      duration: const Duration(seconds: 3),
-                                    ),
-                                  );
+                                  AppToast.show(context, 'Payment of ₹ $amtStr is pending! Please collect payment first before delivering.');
                                 },
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10),
                       Expanded(
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFEF4444),
-                            padding: const EdgeInsets.symmetric(vertical: 13),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            elevation: 1,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFEF4444),
+                            side: const BorderSide(color: Color(0xFFFCA5A5), width: 1.1),
+                            backgroundColor: const Color(0xFFFEF2F2),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           ),
-                          icon: const Icon(Icons.cancel_rounded, color: Colors.white, size: 20),
-                          label: const Text('Cancel Order ❌', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                          icon: const Icon(Icons.cancel_outlined, color: Color(0xFFEF4444), size: 16),
+                          label: const Text(
+                            'Cancel Order',
+                            style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
                           onPressed: () {
                             widget.onCancelOrder();
                           },
@@ -2387,203 +2923,265 @@ class _DeliveryOrderDetailsScreenState extends State<DeliveryOrderDetailsScreen>
             ),
           ),
 
-          // Bottom Bar (Total Bill + Collect Payment / Paid Status)
+          // 6. Modern Sleek Bottom Bar (Redesigned structure without ugly box borders)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: const BoxDecoration(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
+            decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 10,
-                  offset: Offset(0, -2),
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 14,
+                  offset: const Offset(0, -3),
                 ),
               ],
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text(
-                          'TOTAL BILL',
-                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+            child: SafeArea(
+              top: false,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Left: Clean Total Bill Info (No box border)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            isPaid ? 'PAID ONLINE' : 'CASH TO COLLECT',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.5,
+                              color: isPaid ? const Color(0xFF16A34A) : const Color(0xFFEA580C),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            isPaid ? Icons.check_circle_rounded : Icons.payments_rounded,
+                            size: 11,
+                            color: isPaid ? const Color(0xFF16A34A) : const Color(0xFFEA580C),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '₹ $amtStr',
+                        style: const TextStyle(
+                          fontSize: 21,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0F172A),
+                          letterSpacing: -0.3,
                         ),
-                        const SizedBox(height: 1),
-                        Text(
-                          '₹ $amtStr',
-                          style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: !isOut
-                      ? ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFEA580C),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            elevation: 2,
-                          ),
-                          icon: const Icon(Icons.local_shipping_rounded, color: Colors.white, size: 20),
-                          label: const Text(
-                            'Pick Up 📦',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
-                          onPressed: () {
-                            widget.onUpdateDeliveryStatus('Out for Delivery');
-                            setState(() {
-                              order['delivery_status'] = 'Out for Delivery';
-                            });
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Order Picked Up! Status set to Out for Delivery 🚚'),
-                                backgroundColor: Color(0xFF10B981),
-                                duration: Duration(seconds: 2),
+
+                  // Right: Sleek Action Button
+                  if (!isOut)
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFEA580C),
+                        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 11),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 2,
+                        shadowColor: const Color(0xFFEA580C).withValues(alpha: 0.3),
+                      ),
+                      icon: const Icon(Icons.shopping_bag_outlined, color: Colors.white, size: 18),
+                      label: const Text(
+                        'Pick Up',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                      onPressed: () async {
+                        setState(() {
+                          order['delivery_status'] = 'Out for Delivery';
+                        });
+                        await widget.onUpdateDeliveryStatus('Out for Delivery');
+                        if (mounted) {
+                          setState(() {});
+                          AppToast.show(context, 'Order Picked Up! Status set to Out for Delivery');
+                        }
+                      },
+                    )
+                  else if (isPaid)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF86EFAC)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 16),
+                          const SizedBox(width: 6),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text(
+                                'PAID',
+                                style: TextStyle(color: Color(0xFF15803D), fontWeight: FontWeight.w900, fontSize: 13),
                               ),
-                            );
-                          },
-                        )
-                      : isPaid
-                          ? Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFDCFCE7),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFF86EFAC), width: 1.2),
-                              ),
+                              if (paymentUtr.isNotEmpty)
+                                Text(
+                                  'Ref: $paymentUtr',
+                                  style: const TextStyle(color: Color(0xFF166534), fontSize: 9.5),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0F172A),
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 2,
+                      ),
+                      icon: const Icon(Icons.payments_rounded, color: Colors.white, size: 18),
+                      label: const Text(
+                        'Collect Payment',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5),
+                      ),
+                      onPressed: () async {
+                        showModalBottomSheet(
+                          context: context,
+                          backgroundColor: Colors.white,
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                          ),
+                          builder: (sheetCtx) => SafeArea(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Row(
-                                    children: [
-                                      Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 18),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        'PAID ✅',
-                                        style: TextStyle(color: Color(0xFF15803D), fontWeight: FontWeight.w900, fontSize: 14),
+                                  Center(
+                                    child: Container(
+                                      width: 40,
+                                      height: 4,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFCBD5E1),
+                                        borderRadius: BorderRadius.circular(2),
                                       ),
-                                    ],
-                                  ),
-                                  if (paymentUtr.isNotEmpty)
-                                    Text(
-                                      'Ref: $paymentUtr',
-                                      style: const TextStyle(color: Color(0xFF166534), fontSize: 10.5),
-                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                ],
-                              ),
-                            )
-                          : ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF0F172A),
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                elevation: 2,
-                              ),
-                              icon: const Icon(Icons.payments_rounded, color: Colors.white, size: 20),
-                              label: const Text(
-                                'Collect Payment 💳',
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                              ),
-                              onPressed: () {
-                            showModalBottomSheet(
-                              context: context,
-                              shape: const RoundedRectangleBorder(
-                                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                              ),
-                              backgroundColor: Colors.white,
-                              builder: (choiceCtx) {
-                                return Padding(
-                                  padding: const EdgeInsets.all(20),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Center(
-                                        child: Container(
-                                          width: 40,
-                                          height: 4,
-                                          decoration: BoxDecoration(
-                                            color: Colors.grey.shade300,
-                                            borderRadius: BorderRadius.circular(2),
+                                      const Text(
+                                        'Select Payment Method',
+                                        style: TextStyle(
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF0F172A),
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFEFF6FF),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          '₹ $amtStr',
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF2563EB),
                                           ),
                                         ),
                                       ),
-                                      const SizedBox(height: 16),
-                                      const Text(
-                                        'Select Payment Method 💳',
-                                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                                      ),
-                                      Text(
-                                        'Amount to Collect: ₹ $amtStr',
-                                        style: const TextStyle(fontSize: 13, color: Colors.black54),
-                                      ),
-                                      const SizedBox(height: 16),
-                                      ListTile(
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                                        tileColor: const Color(0xFFF0FDF4),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(14),
-                                          side: const BorderSide(color: Color(0xFF86EFAC), width: 1.2),
-                                        ),
-                                        leading: const CircleAvatar(
-                                          backgroundColor: Color(0xFF16A34A),
-                                          child: Icon(Icons.money_rounded, color: Colors.white, size: 22),
-                                        ),
-                                        title: const Text('Cash Payment 💵', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF15803D), fontSize: 14.5)),
-                                        subtitle: const Text('Customer paid in cash', style: TextStyle(fontSize: 12, color: Color(0xFF166534))),
-                                        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Color(0xFF16A34A)),
-                                        onTap: () {
-                                          Navigator.pop(choiceCtx);
-                                          widget.onCollectCashPayment(orderAmount);
-                                          setState(() {});
-                                        },
-                                      ),
-                                      const SizedBox(height: 12),
-                                      ListTile(
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                                        tileColor: const Color(0xFFF0F9FF),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(14),
-                                          side: const BorderSide(color: Color(0xFF7DD3FC), width: 1.2),
-                                        ),
-                                        leading: const CircleAvatar(
-                                          backgroundColor: Color(0xFF0284C7),
-                                          child: Icon(Icons.qr_code_2_rounded, color: Colors.white, size: 22),
-                                        ),
-                                        title: const Text('Online QR Code 📱', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0369A1), fontSize: 14.5)),
-                                        subtitle: const Text('Show UPI QR code for GPay/PhonePe/Paytm', style: TextStyle(fontSize: 12, color: Color(0xFF075985))),
-                                        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Color(0xFF0284C7)),
-                                        onTap: () {
-                                          Navigator.pop(choiceCtx);
-                                          widget.onShowUpiQrPayment(orderAmount);
-                                          setState(() {});
-                                        },
-                                      ),
-                                      const SizedBox(height: 10),
                                     ],
                                   ),
-                                );
-                              },
-                            );
-                          },
-                        ),
-                ),
-              ],
+                                  const SizedBox(height: 18),
+                                  ListTile(
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      side: const BorderSide(color: Color(0xFFE2E8F0)),
+                                    ),
+                                    leading: Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFDCFCE7),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: const Icon(Icons.money_rounded, color: Color(0xFF16A34A), size: 22),
+                                    ),
+                                    title: const Text(
+                                      'Cash Payment',
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: Color(0xFF0F172A)),
+                                    ),
+                                    subtitle: const Text(
+                                      'Customer paid in cash',
+                                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                    ),
+                                    trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF94A3B8)),
+                                    onTap: () async {
+                                      Navigator.pop(sheetCtx);
+                                      final success = await widget.onCollectCashPayment(orderAmount);
+                                      if (success && mounted) {
+                                        setState(() {
+                                          order['payment_status'] = 'paid';
+                                          order['payment_utr'] = 'CASH';
+                                        });
+                                      }
+                                    },
+                                  ),
+                                  const SizedBox(height: 12),
+                                  ListTile(
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      side: const BorderSide(color: Color(0xFFE2E8F0)),
+                                    ),
+                                    leading: Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFE0F2FE),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: const Icon(Icons.qr_code_2_rounded, color: Color(0xFF0284C7), size: 22),
+                                    ),
+                                    title: const Text(
+                                      'Online QR Code',
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: Color(0xFF0F172A)),
+                                    ),
+                                    subtitle: const Text(
+                                      'Show UPI QR code for GPay / PhonePe / Paytm',
+                                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                    ),
+                                    trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF94A3B8)),
+                                    onTap: () async {
+                                      Navigator.pop(sheetCtx);
+                                      if (widget.onShowUpiQrPayment != null) {
+                                        final success = await widget.onShowUpiQrPayment!(orderAmount);
+                                        if (success && mounted) {
+                                          setState(() {
+                                            order['payment_status'] = 'paid';
+                                          });
+                                        }
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                ],
+              ),
             ),
           ),
         ],

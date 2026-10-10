@@ -10,6 +10,9 @@ import 'screens/customer/customer_main_nav_screen.dart';
 
 import 'services/notification_service.dart';
 import 'services/background_notification_service.dart';
+import 'services/network_service.dart';
+import 'widgets/global_internet_wrapper.dart';
+import 'utils/app_toast.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,19 +20,39 @@ void main() async {
   if (!kIsWeb) {
     await BackgroundNotificationService.initialize();
   }
+  await NetworkService.instance.initialize();
   final currentDeliveryBoy = await AuthService.getDeliveryBoySession();
   final currentUser = await AuthService.getCurrentUser();
-  runApp(DailyMartApp(initialUser: currentUser, initialDeliveryBoy: currentDeliveryBoy));
+  Map<String, String>? initialSeller;
+  if (currentUser != null && currentUser.role == UserRole.customer) {
+    initialSeller = await AuthService.getLastSelectedSeller();
+    if (initialSeller != null && (initialSeller['username'] ?? '').isNotEmpty) {
+      // Warm up welcome popup cache in 0ms
+      await AuthService.getSellerWelcomePopupImage(initialSeller['username']!);
+    }
+  }
+  runApp(DailyMartApp(
+    initialUser: currentUser,
+    initialDeliveryBoy: currentDeliveryBoy,
+    initialSeller: initialSeller,
+  ));
 }
 
 class DailyMartApp extends StatelessWidget {
   final UserModel? initialUser;
   final Map<String, dynamic>? initialDeliveryBoy;
-  const DailyMartApp({super.key, this.initialUser, this.initialDeliveryBoy});
+  final Map<String, String>? initialSeller;
+  const DailyMartApp({
+    super.key,
+    this.initialUser,
+    this.initialDeliveryBoy,
+    this.initialSeller,
+  });
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: AppToast.navigatorKey,
       title: 'Daily Mart',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -38,6 +61,9 @@ class DailyMartApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFFF1F5F9),
         useMaterial3: true,
       ),
+      builder: (context, child) {
+        return GlobalInternetWrapper(child: child ?? const SizedBox());
+      },
       home: _getHomeScreen(),
     );
   }
@@ -53,7 +79,10 @@ class DailyMartApp extends StatelessWidget {
         case UserRole.seller:
           return SellerMainNavScreen(seller: initialUser!);
         case UserRole.customer:
-          return CustomerMainNavScreen(customer: initialUser!);
+          return CustomerMainNavScreen(
+            customer: initialUser!,
+            initialSeller: initialSeller,
+          );
       }
     }
     return const RoleSelectionScreen();

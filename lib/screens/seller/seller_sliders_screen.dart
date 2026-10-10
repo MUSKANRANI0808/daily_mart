@@ -341,7 +341,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
             : null,
         borderRadius: borderRadius ?? BorderRadius.circular(16),
         image: decImg,
-        boxShadow: (bg == 'none' || bg == 'transparent' || bg.isEmpty || removeWhiteBg)
+        boxShadow: (bg == 'none' || bg == 'transparent' || bg.isEmpty || removeWhiteBg || borderRadius == BorderRadius.zero)
             ? []
             : [
                 BoxShadow(
@@ -486,6 +486,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
     double overlayDim = (existingSlider?['overlay_dim'] as num?)?.toDouble() ?? 0.0;
     bool removeWhiteBg = (existingSlider?['remove_white_bg'] == true || existingSlider?['remove_white_bg'] == 1);
     String imgFit = existingSlider?['img_fit']?.toString() ?? 'cover';
+    bool fullWidth = (existingSlider?['full_width'] == 1 || existingSlider?['full_width'] == true || existingSlider?['full_width'] == '1');
     bool isPickingImage = false;
     int selectedTab = 0; // 0: Text Content, 1: Style & Colors, 2: Background Image
 
@@ -819,6 +820,64 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                     ],
                                   ),
                                 ],
+                                const SizedBox(height: 12),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: fullWidth ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: fullWidth ? const Color(0xFF86EFAC) : const Color(0xFFCBD5E1)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Icon(
+                                                  fullWidth ? Icons.fullscreen_rounded : Icons.fullscreen_exit_rounded,
+                                                  size: 18,
+                                                  color: fullWidth ? const Color(0xFF16A34A) : const Color(0xFF64748B),
+                                                ),
+                                                const SizedBox(width: 6),
+                                                Text(
+                                                  'Full Width Poster (फुल विड्थ पोस्टर)',
+                                                  style: TextStyle(
+                                                    fontSize: 12.5,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: fullWidth ? const Color(0xFF166534) : const Color(0xFF1E293B),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              fullWidth
+                                                  ? 'ON: पोस्टर स्क्रीन के दोनों किनारों तक फैला रहेगा (Edge-to-Edge)'
+                                                  : 'OFF: पोस्टर चारों तरफ से नॉर्मल मार्जिन व गोल कोनों (Border Radius) के साथ रहेगा',
+                                              style: TextStyle(
+                                                fontSize: 10.5,
+                                                color: fullWidth ? const Color(0xFF15803D) : const Color(0xFF64748B),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Switch(
+                                        value: fullWidth,
+                                        activeTrackColor: const Color(0xFF86EFAC),
+                                        activeThumbColor: const Color(0xFF16A34A),
+                                        onChanged: (val) {
+                                          setDialogState(() {
+                                            fullWidth = val;
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
                                 const SizedBox(height: 12),
 
                                 const Text('Offer Tag Text (Optional)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
@@ -1413,6 +1472,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                 overlayDim: overlayDim,
                                 removeWhiteBg: removeWhiteBg,
                                 imgFit: imgFit,
+                                fullWidth: fullWidth,
                               );
                             } else {
                               success = await AuthService.addSellerSlider(
@@ -1430,6 +1490,7 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                 overlayDim: overlayDim,
                                 removeWhiteBg: removeWhiteBg,
                                 imgFit: imgFit,
+                                fullWidth: fullWidth,
                               );
                             }
 
@@ -1715,6 +1776,64 @@ class _SellerSlidersScreenState extends State<SellerSlidersScreen> {
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
+                                      // Quick Full Width Toggle Chip / Button
+                                      InkWell(
+                                        onTap: () async {
+                                          final curFW = (slider['full_width'] == 1 || slider['full_width'] == true || slider['full_width'] == '1');
+                                          final newFW = !curFW;
+                                          final success = await AuthService.toggleSellerSliderFullWidth(slider['id'], _sellerUsername, newFW);
+                                          if (success) {
+                                            await _loadSliders();
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(newFW ? 'Poster set to Full Width (किनारों तक)! ↔️' : 'Poster set to Normal Width! ▫️'),
+                                                  duration: const Duration(seconds: 2),
+                                                ),
+                                              );
+                                            }
+                                          }
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                          decoration: BoxDecoration(
+                                            color: (slider['full_width'] == 1 || slider['full_width'] == true || slider['full_width'] == '1')
+                                                ? const Color(0xFF10B981)
+                                                : Colors.black.withValues(alpha: 0.65),
+                                            borderRadius: BorderRadius.circular(14),
+                                            border: Border.all(
+                                              color: (slider['full_width'] == 1 || slider['full_width'] == true || slider['full_width'] == '1')
+                                                  ? const Color(0xFF34D399)
+                                                  : Colors.white24,
+                                              width: 1,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                (slider['full_width'] == 1 || slider['full_width'] == true || slider['full_width'] == '1')
+                                                    ? Icons.fullscreen_rounded
+                                                    : Icons.fullscreen_exit_rounded,
+                                                size: 15,
+                                                color: Colors.white,
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                (slider['full_width'] == 1 || slider['full_width'] == true || slider['full_width'] == '1')
+                                                    ? 'Full Width'
+                                                    : 'Normal Width',
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
                                       // Edit Button
                                       CircleAvatar(
                                         radius: 16,

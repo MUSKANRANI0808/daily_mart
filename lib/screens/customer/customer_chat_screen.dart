@@ -9,6 +9,7 @@ import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/notification_service.dart';
 import '../../widgets/order_card_widget.dart';
+import '../../utils/app_toast.dart';
 
 class CustomerChatScreen extends StatefulWidget {
   final UserModel customer;
@@ -218,13 +219,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
       );
       _loadMessages();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Payment Successful! ($paymentId) Order marked as PAID ✅'),
-            backgroundColor: const Color(0xFF10B981),
-            duration: const Duration(seconds: 4),
-          ),
-        );
+        AppToast.show(context, 'Payment Successful! ($paymentId) Order marked as PAID');
       }
     }
     _activePendingMsgId = 0;
@@ -235,13 +230,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
     _activePendingMsgId = 0;
     _activePendingAmount = 0.0;
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Payment Cancelled / Failed: ${response.message ?? "User Cancelled"}'),
-          backgroundColor: const Color(0xFFEF4444),
-          duration: const Duration(seconds: 4),
-        ),
-      );
+      AppToast.show(context, 'Payment Cancelled / Failed: ${response.message ?? "User Cancelled"}');
     }
   }
 
@@ -402,12 +391,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
     final orderStatus = (msg['order_status'] ?? '').toString().toLowerCase();
     final delStatus = (msg['delivery_status'] ?? '').toString().toLowerCase();
     if (orderStatus == 'ready' || orderStatus == 'delivered' || delStatus == 'delivered') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('This order is already processed and cannot be edited.'),
-          backgroundColor: Color(0xFFEF4444),
-        ),
-      );
+      AppToast.show(context, 'This order is already processed and cannot be edited.');
       return;
     }
 
@@ -444,9 +428,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
 
   void _sendMessage() async {
     if (_isBlocked) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You have been blocked by this seller.')),
-      );
+      AppToast.show(context, 'You have been blocked by this seller.');
       return;
     }
 
@@ -487,12 +469,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
           });
           _loadMessages();
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Order updated successfully! ✏️'),
-                backgroundColor: Color(0xFF10B981),
-              ),
-            );
+            AppToast.show(context, 'Order updated successfully!');
           }
           return;
         }
@@ -1076,12 +1053,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
 
     final orderStatus = (msgData['order_status'] ?? '').toString().toLowerCase();
     if (orderStatus == 'ready') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('This order is marked as Ready by seller and cannot be deleted.'),
-          backgroundColor: Color(0xFFEF4444),
-        ),
-      );
+      AppToast.show(context, 'This order is marked as Ready by seller and cannot be deleted.');
       return;
     }
 
@@ -1123,9 +1095,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
       orderAmt = double.tryParse(rawAmt.toString());
     }
     if (orderAmt == null || orderAmt <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Order amount is invalid.')),
-      );
+      AppToast.show(context, 'Order amount is invalid.');
       return;
     }
     final double validAmount = orderAmt;
@@ -1307,13 +1277,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                   _saveDraft();
                 });
                 Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Updated "$name ($newQtyStr $newUnit)" ✏️'),
-                    backgroundColor: const Color(0xFF8B5CF6),
-                    duration: const Duration(seconds: 1),
-                  ),
-                );
+                AppToast.show(context, 'Updated "$name ($newQtyStr $newUnit)"');
               },
             ),
           ],
@@ -1456,13 +1420,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                                     sellerUnits: sellerCustomUnits,
                                     onAdd: (name, unit, qtyStr, amount) {
                                       _addCustomItemToOrderText(name, unit, qtyStr, 0.0);
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text('Added "$name ($qtyStr $unit)" [Rate Pending] 🛒'),
-                                          duration: const Duration(seconds: 1),
-                                          backgroundColor: const Color(0xFFE11D48),
-                                        ),
-                                      );
+                                      AppToast.show(context, 'Added "$name ($qtyStr $unit)" [Rate Pending]');
                                     },
                                   ),
                                 ],
@@ -1493,13 +1451,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                               sellerUnits: sellerCustomUnits,
                               onAdd: (name, unit, qtyStr, amount) {
                                 _addCustomItemToOrderText(name, unit, qtyStr, amount);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Added "$name ($qtyStr $unit)" to order 🛒'),
-                                    duration: const Duration(seconds: 1),
-                                    backgroundColor: const Color(0xFF10B981),
-                                  ),
-                                );
+                                AppToast.show(context, 'Added "$name ($qtyStr $unit)" to order');
                               },
                             );
                           },
@@ -1977,12 +1929,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
                                             _selectedOrderItems.removeAt(idx);
                                             _saveDraft();
                                           });
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text('Removed "$removedName" from list'),
-                                              duration: const Duration(seconds: 1),
-                                            ),
-                                          );
+                                          AppToast.show(context, 'Removed "$removedName" from list');
                                         },
                                         child: Container(
                                           margin: const EdgeInsets.only(bottom: 6),
@@ -2449,26 +2396,14 @@ class _CustomerProductItemTileState extends State<_CustomerProductItemTile> {
               ElevatedButton(
                 onPressed: () {
                   if (_selectedUnit == null || _selectedUnit!.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please select Unit first! ⚠️'),
-                        backgroundColor: Color(0xFFEF4444),
-                        duration: Duration(milliseconds: 1500),
-                      ),
-                    );
+                    AppToast.show(context, 'Please select Unit first!');
                     return;
                   }
 
                   final qStr = _qtyController.text.trim();
                   final qVal = double.tryParse(qStr);
                   if (qVal == null || qVal <= 0) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please enter valid Quantity! ⚠️'),
-                        backgroundColor: Color(0xFFEF4444),
-                        duration: Duration(milliseconds: 1500),
-                      ),
-                    );
+                    AppToast.show(context, 'Please enter valid Quantity!');
                     return;
                   }
 
@@ -2697,26 +2632,14 @@ class _CustomUnlistedRedGlassTileState extends State<_CustomUnlistedRedGlassTile
               ElevatedButton(
                 onPressed: () {
                   if (_selectedUnit == null || _selectedUnit!.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please select Unit first! ⚠️'),
-                        backgroundColor: Color(0xFFE11D48),
-                        duration: Duration(milliseconds: 1500),
-                      ),
-                    );
+                    AppToast.show(context, 'Please select Unit first!');
                     return;
                   }
 
                   final qStr = _qtyController.text.trim();
                   final qVal = double.tryParse(qStr);
                   if (qVal == null || qVal <= 0) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please enter valid Quantity! ⚠️'),
-                        backgroundColor: Color(0xFFE11D48),
-                        duration: Duration(milliseconds: 1500),
-                      ),
-                    );
+                    AppToast.show(context, 'Please enter valid Quantity!');
                     return;
                   }
 

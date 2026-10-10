@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
+import '../../utils/app_toast.dart';
 
 /// Isolated Countdown Banner Widget to prevent full screen rebuilds & image blinking
 class SamplingCountdownBannerWidget extends StatefulWidget {
@@ -535,9 +536,7 @@ class _SellerSamplingScreenState extends State<SellerSamplingScreen> {
                                 final title = titleController.text.trim();
                                 final rate = rateController.text.trim();
                                 if (title.isEmpty || rate.isEmpty) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Please enter Title and Rate!')),
-                                  );
+                                  AppToast.show(context, 'Please enter Title and Rate!');
                                   return;
                                 }
 
@@ -554,12 +553,7 @@ class _SellerSamplingScreenState extends State<SellerSamplingScreen> {
                                 if (mounted) {
                                   Navigator.pop(ctx);
                                   _loadData();
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Sample Product posted to Catalog! 🚀'),
-                                      backgroundColor: Color(0xFF10B981),
-                                    ),
-                                  );
+                                  AppToast.show(context, 'Sample Product posted to Catalog!');
                                 }
                               },
                         child: isUploading
@@ -640,14 +634,7 @@ class _SellerSamplingScreenState extends State<SellerSamplingScreen> {
     }
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Order status updated to "$newStatus" ✨'),
-          backgroundColor: newStatus == 'Ready'
-              ? const Color(0xFF10B981)
-              : (newStatus == 'Cancelled' || newStatus == 'Cancel' ? Colors.red : const Color(0xFFF59E0B)),
-        ),
-      );
+      AppToast.show(context, 'Order status updated to "$newStatus"');
     }
   }
 

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../utils/header_theme_helper.dart';
+import '../customer/customer_main_nav_screen.dart';
 import '../customer/search_seller_screen.dart';
 import '../customer/seller_orders_screen.dart';
 import '../role_selection_screen.dart';
@@ -205,11 +206,14 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (ctx) => CustomerSellerOrdersScreen(
+          builder: (ctx) => CustomerMainNavScreen(
             customer: widget.customer,
-            sellerUsername: sUsername,
-            sellerName: sName,
-            sellerMobile: sMobile,
+            initialTab: 0,
+            initialSeller: {
+              'username': sUsername,
+              'name': sName,
+              'mobile': sMobile,
+            },
           ),
         ),
       );
@@ -699,11 +703,14 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                               await Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (ctx) => CustomerSellerOrdersScreen(
+                                  builder: (ctx) => CustomerMainNavScreen(
                                     customer: widget.customer,
-                                    sellerUsername: sUsername,
-                                    sellerName: sName,
-                                    sellerMobile: sMobile,
+                                    initialTab: 0,
+                                    initialSeller: {
+                                      'username': sUsername,
+                                      'name': sName,
+                                      'mobile': sMobile,
+                                    },
                                   ),
                                 ),
                               );

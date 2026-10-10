@@ -107,13 +107,15 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
 
     // 1. INSTANT LOCAL CACHE DISPLAY (0.01 Seconds - Zero Loading Delay!)
     final cachedProds = await AuthService.getCachedSellerProducts(username);
+    final cachedUnits = await AuthService.getCachedSellerUnits(username);
     final cachedCats = await AuthService.getCachedSellerCategories(username);
     final cachedSecs = await AuthService.getCachedSellerSections(username);
 
-    if (cachedProds.isNotEmpty || cachedCats.isNotEmpty || cachedSecs.isNotEmpty) {
+    if (cachedProds.isNotEmpty || cachedUnits.isNotEmpty || cachedCats.isNotEmpty || cachedSecs.isNotEmpty) {
       if (mounted) {
         setState(() {
           _allProducts = cachedProds;
+          _sellerUnits = cachedUnits;
           _sellerCategories = cachedCats;
           _sellerSections = cachedSecs;
           _isLoading = false;
@@ -126,11 +128,17 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
       });
     }
 
-    // 2. BACKGROUND VPS DATABASE REFRESH (Silent Sync)
-    final products = await AuthService.getSellerProducts(username);
-    final units = await AuthService.getSellerUnits(username);
-    final categories = await AuthService.getSellerCategories(username);
-    final sections = await AuthService.getSellerSections(username);
+    // 2. BACKGROUND VPS DATABASE REFRESH (Parallel Sync so units never wait on large product images)
+    final results = await Future.wait([
+      AuthService.getSellerProducts(username),
+      AuthService.getSellerUnits(username),
+      AuthService.getSellerCategories(username),
+      AuthService.getSellerSections(username),
+    ]);
+    final products = results[0];
+    final units = results[1];
+    final categories = results[2];
+    final sections = results[3];
 
     if (mounted) {
       setState(() {
@@ -649,6 +657,8 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     String secTextColor = '#0F172A';
     int secColumns = 2;
     int secMaxItems = 0; // 0 = All Items
+    bool secFullWidth = false;
+    bool secPosterFullWidth = false;
 
     showModalBottomSheet(
       context: context,
@@ -745,7 +755,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           if (sName.isEmpty) return;
                           secNameController.clear();
 
-                          await AuthService.addSellerSection(username, sName, secIcon, secBgColor, secTextColor, secColumns, secMaxItems);
+                          await AuthService.addSellerSection(username, sName, secIcon, secBgColor, secTextColor, secColumns, secMaxItems, secFullWidth ? 1 : 0, secPosterFullWidth ? 1 : 0);
                           final updatedSecs = await AuthService.getSellerSections(username);
 
                           setModalState(() {
@@ -755,6 +765,8 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                             secTextColor = '#0F172A';
                             secColumns = 2;
                             secMaxItems = 0;
+                            secFullWidth = false;
+                            secPosterFullWidth = false;
                           });
                           setState(() {
                             _sellerSections = updatedSecs;
@@ -1067,6 +1079,72 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                     ),
                   ),
 
+                  const SizedBox(height: 12),
+
+                  // 5. Section Full Width Switch
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text('Set Full Width (फुल विड्थ)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                              SizedBox(height: 2),
+                              Text('Right-Left margin hatakar poori screen par dikhega', style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: secFullWidth,
+                          activeColor: const Color(0xFF8B5CF6),
+                          onChanged: (val) {
+                            setModalState(() => secFullWidth = val);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // 6. Section Poster Full Width Switch
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text('Set Poster Full Width (पोस्टर फुल विड्थ)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                              SizedBox(height: 2),
+                              Text('Is section ke banners poori screen width me stretch honge', style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: secPosterFullWidth,
+                          activeColor: const Color(0xFF10B981),
+                          onChanged: (val) {
+                            setModalState(() => secPosterFullWidth = val);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+
                   const SizedBox(height: 16),
 
                   const Text('Your Saved Sections:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
@@ -1098,6 +1176,8 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                               final sTextHex = safeString(sMap['text_color'], '#0F172A');
                               final sCols = safeInt(sMap['columns'], 2);
                               final sMaxLimit = safeInt(sMap['max_items'], 0);
+                              final bool sFullWidth = (sMap['full_width'] == 1 || sMap['full_width'] == true || sMap['full_width'] == '1');
+                              final bool sPosterFullWidth = (sMap['poster_full_width'] == 1 || sMap['poster_full_width'] == true || sMap['poster_full_width'] == '1');
                               final sBgCol = hexToColor(sBgHex);
                               final sTextCol = hexToColor(sTextHex);
 
@@ -1195,6 +1275,38 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                                                   ),
                                                 ),
                                               ),
+                                              if (sFullWidth)
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFF8B5CF6),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: const Text(
+                                                    'Full Width ↔️',
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: Colors.white,
+                                                    ),
+                                                  ),
+                                                ),
+                                              if (sPosterFullWidth)
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFF10B981),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: const Text(
+                                                    'Poster Full 🖼️',
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: Colors.white,
+                                                    ),
+                                                  ),
+                                                ),
                                             ],
                                           ),
                                         ],
@@ -1278,6 +1390,8 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     String editTextColor = safeString(section['text_color'], '#0F172A');
     int editColumns = safeInt(section['columns'], 2);
     int editMaxItems = safeInt(section['max_items'], 0);
+    bool editFullWidth = (section['full_width'] == 1 || section['full_width'] == true || section['full_width'] == '1');
+    bool editPosterFullWidth = (section['poster_full_width'] == 1 || section['poster_full_width'] == true || section['poster_full_width'] == '1');
 
     showDialog(
       context: context,
@@ -1628,6 +1742,72 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                       }).toList(),
                     ),
                   ),
+
+                  const SizedBox(height: 12),
+
+                  // 5. Full Width Switch
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text('Set Full Width (फुल विड्थ)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                              SizedBox(height: 2),
+                              Text('Right-Left margin hatakar poori screen par dikhega', style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: editFullWidth,
+                          activeColor: const Color(0xFF8B5CF6),
+                          onChanged: (val) {
+                            setDlgState(() => editFullWidth = val);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // 6. Poster Full Width Switch
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text('Set Poster Full Width (पोस्टर फुल विड्थ)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                              SizedBox(height: 2),
+                              Text('Is section ke banners poori screen width me stretch honge', style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: editPosterFullWidth,
+                          activeColor: const Color(0xFF10B981),
+                          onChanged: (val) {
+                            setDlgState(() => editPosterFullWidth = val);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1645,7 +1825,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                   final newName = sNameCtrl.text.trim();
                   if (newName.isEmpty) return;
                   Navigator.pop(dlgCtx);
-                  await AuthService.updateSellerSection(sId, _sellerUsername, newName, editIcon, editBgColor, editTextColor, editColumns, editMaxItems);
+                  await AuthService.updateSellerSection(sId, _sellerUsername, newName, editIcon, editBgColor, editTextColor, editColumns, editMaxItems, editFullWidth ? 1 : 0, editPosterFullWidth ? 1 : 0);
                   onUpdated();
                 },
                 child: const Text('Save Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -1657,9 +1837,34 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
     );
   }
 
+  List<String> _collectAvailableUnitNames([String extraUnit = '']) {
+    final List<String> names = [];
+    final Set<String> seenLower = {};
+
+    void addUnit(String raw) {
+      final trimmed = raw.trim();
+      if (trimmed.isNotEmpty && !seenLower.contains(trimmed.toLowerCase())) {
+        seenLower.add(trimmed.toLowerCase());
+        names.add(trimmed);
+      }
+    }
+
+    for (final u in _sellerUnits) {
+      addUnit(safeString(u['unit_name'] ?? u['name']));
+    }
+    for (final p in _allProducts) {
+      addUnit(safeString(p['unit']));
+    }
+    if (extraUnit.trim().isNotEmpty) {
+      addUnit(extraUnit);
+    }
+    return names;
+  }
+
   /// Open Manage Custom Units Dialog
   void _showManageUnitsDialog({Function(String)? onUnitCreated}) {
     final unitController = TextEditingController();
+    bool didRefreshUnits = false;
 
     showModalBottomSheet(
       context: context,
@@ -1667,7 +1872,21 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
-          final username = widget.seller.username ?? '';
+          final username = _sellerUsername;
+
+          if (!didRefreshUnits) {
+            didRefreshUnits = true;
+            AuthService.getSellerUnits(username).then((freshUnits) {
+              if (mounted && freshUnits.isNotEmpty) {
+                setState(() {
+                  _sellerUnits = freshUnits;
+                });
+                try {
+                  setModalState(() {});
+                } catch (_) {}
+              }
+            });
+          }
 
           return Container(
             decoration: const BoxDecoration(
@@ -1894,7 +2113,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
             onPressed: () async {
               final newName = editController.text.trim();
               if (newName.isNotEmpty) {
-                final username = widget.seller.username ?? '';
+                final username = _sellerUsername;
                 Navigator.pop(ctx);
                 await AuthService.updateSellerUnit(unitId, username, newName);
                 final updatedUnits = await AuthService.getSellerUnits(username);
@@ -1930,12 +2149,13 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
       text: isEditing ? safeString(productToEdit['button_text'], 'Buy Now') : 'Buy Now',
     );
 
-    List<String> availableUnitNames = _sellerUnits.map((u) => safeString(u['unit_name'])).where((s) => s.isNotEmpty).toList();
+    final initialProdUnit = isEditing ? safeString(productToEdit['unit']).trim() : '';
+    List<String> availableUnitNames = _collectAvailableUnitNames(initialProdUnit);
     List<String> availableCategoryNames = _sellerCategories.map((c) => safeString(c['name'])).where((s) => s.isNotEmpty).toList();
     List<String> availableSectionNames = _sellerSections.map((s) => safeString(s['name'])).where((s) => s.isNotEmpty).toList();
 
-    String selectedUnit = isEditing
-        ? safeString(productToEdit['unit'])
+    String selectedUnit = isEditing && initialProdUnit.isNotEmpty
+        ? initialProdUnit
         : (availableUnitNames.isNotEmpty ? availableUnitNames.first : '');
 
     String selectedCategory = isEditing
@@ -1956,7 +2176,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
 
     String prodImageUrl = isEditing ? safeString(productToEdit['image_url'] ?? productToEdit['image'], '📦') : '📦';
 
-    if (selectedUnit.isNotEmpty && !availableUnitNames.contains(selectedUnit)) {
+    if (selectedUnit.isNotEmpty && !availableUnitNames.any((u) => u.toLowerCase() == selectedUnit.toLowerCase())) {
       availableUnitNames.insert(0, selectedUnit);
     }
     if (selectedCategory.isNotEmpty && !availableCategoryNames.contains(selectedCategory)) {
@@ -1966,12 +2186,65 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
       availableSectionNames.insert(0, selectedSection);
     }
 
+    final List<Map<String, TextEditingController>> variantControllers = [];
+    if (isEditing && productToEdit['variants'] != null) {
+      try {
+        List<dynamic> rawVars = [];
+        if (productToEdit['variants'] is String && (productToEdit['variants'] as String).trim().isNotEmpty) {
+          final decoded = jsonDecode(productToEdit['variants']);
+          if (decoded is List) rawVars = decoded;
+        } else if (productToEdit['variants'] is List) {
+          rawVars = productToEdit['variants'];
+        }
+        for (var v in rawVars) {
+          if (v is Map) {
+            final vName = safeString(v['name'] ?? v['variable_name']);
+            final vPRate = safeDouble(v['purchase_rate'] ?? v['p_rate'], 0.0);
+            final vSRate = safeDouble(v['rate'] ?? v['sale_rate'] ?? v['s_rate'], 0.0);
+            final vImgUrl = safeString(v['image_url'] ?? v['image']).trim();
+            if (vName.isNotEmpty) {
+              variantControllers.add({
+                'name': TextEditingController(text: vName),
+                'p_rate': TextEditingController(
+                  text: vPRate > 0 ? (vPRate.truncateToDouble() == vPRate ? vPRate.toInt().toString() : vPRate.toString()) : '',
+                ),
+                's_rate': TextEditingController(
+                  text: vSRate > 0 ? (vSRate.truncateToDouble() == vSRate ? vSRate.toInt().toString() : vSRate.toString()) : '',
+                ),
+                'image_url': TextEditingController(text: vImgUrl),
+              });
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    bool didFetchModalUnits = false;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
+          if (!didFetchModalUnits) {
+            didFetchModalUnits = true;
+            AuthService.getSellerUnits(_sellerUsername).then((freshUnits) {
+              if (mounted && freshUnits.isNotEmpty) {
+                setState(() {
+                  _sellerUnits = freshUnits;
+                });
+                try {
+                  setModalState(() {
+                    availableUnitNames = _collectAvailableUnitNames(selectedUnit);
+                    if (selectedUnit.isEmpty && availableUnitNames.isNotEmpty) {
+                      selectedUnit = availableUnitNames.first;
+                    }
+                  });
+                } catch (_) {}
+              }
+            });
+          }
           return Container(
             decoration: const BoxDecoration(
               color: Colors.white,
@@ -2159,13 +2432,112 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // Product Description Input
-                  const Text('Description (Optional)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                  // Product Description Input with WhatsApp-Style Formatting Toolbar
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Description (Optional)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                      Row(
+                        children: [
+                          // Bold Button
+                          InkWell(
+                            onTap: () {
+                              final text = descController.text;
+                              final selection = descController.selection;
+                              if (selection.isValid && selection.start != selection.end) {
+                                final selected = text.substring(selection.start, selection.end);
+                                final newText = text.replaceRange(selection.start, selection.end, '*$selected*');
+                                descController.text = newText;
+                                descController.selection = TextSelection(baseOffset: selection.start, extentOffset: selection.end + 2);
+                              } else {
+                                final pos = selection.isValid ? selection.baseOffset : text.length;
+                                final newText = text.replaceRange(pos, pos, '**');
+                                descController.text = newText;
+                                descController.selection = TextSelection.collapsed(offset: pos + 1);
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(6),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFFCBD5E1)),
+                              ),
+                              child: const Text('B', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Color(0xFF1E293B))),
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          // Italic Button
+                          InkWell(
+                            onTap: () {
+                              final text = descController.text;
+                              final selection = descController.selection;
+                              if (selection.isValid && selection.start != selection.end) {
+                                final selected = text.substring(selection.start, selection.end);
+                                final newText = text.replaceRange(selection.start, selection.end, '_${selected}_');
+                                descController.text = newText;
+                                descController.selection = TextSelection(baseOffset: selection.start, extentOffset: selection.end + 2);
+                              } else {
+                                final pos = selection.isValid ? selection.baseOffset : text.length;
+                                final newText = text.replaceRange(pos, pos, '__');
+                                descController.text = newText;
+                                descController.selection = TextSelection.collapsed(offset: pos + 1);
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(6),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFFCBD5E1)),
+                              ),
+                              child: const Text('I', style: TextStyle(fontStyle: FontStyle.italic, fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1E293B))),
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          // Strike Button
+                          InkWell(
+                            onTap: () {
+                              final text = descController.text;
+                              final selection = descController.selection;
+                              if (selection.isValid && selection.start != selection.end) {
+                                final selected = text.substring(selection.start, selection.end);
+                                final newText = text.replaceRange(selection.start, selection.end, '~$selected~');
+                                descController.text = newText;
+                                descController.selection = TextSelection(baseOffset: selection.start, extentOffset: selection.end + 2);
+                              } else {
+                                final pos = selection.isValid ? selection.baseOffset : text.length;
+                                final newText = text.replaceRange(pos, pos, '~~');
+                                descController.text = newText;
+                                descController.selection = TextSelection.collapsed(offset: pos + 1);
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(6),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFFCBD5E1)),
+                              ),
+                              child: const Text('S', style: TextStyle(decoration: TextDecoration.lineThrough, fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1E293B))),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 6),
                   TextField(
                     controller: descController,
+                    maxLines: null,
+                    minLines: 2,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
                     decoration: InputDecoration(
-                      hintText: 'e.g. Desi Chana, Best Quality',
+                      hintText: 'e.g. *Special Offer*, _Fresh Product_\nUse *bold*, _italic_, ~strike~',
                       isDense: true,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -2188,6 +2560,9 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                             onCategoryCreated: (newCat) {
                               setModalState(() {
                                 availableCategoryNames = _sellerCategories.map((c) => safeString(c['name'])).where((s) => s.isNotEmpty).toList();
+                                if (newCat.isNotEmpty && !availableCategoryNames.contains(newCat)) {
+                                  availableCategoryNames.insert(0, newCat);
+                                }
                                 selectedCategory = newCat;
                               });
                             },
@@ -2203,31 +2578,66 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
 
-                  availableCategoryNames.isEmpty
-                      ? const SizedBox.shrink()
-                      : Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
-                          children: availableCategoryNames.map((cName) {
-                            final isSel = selectedCategory == cName;
-                            return ChoiceChip(
-                              label: Text(cName),
-                              selected: isSel,
-                              selectedColor: const Color(0xFF0284C7),
-                              backgroundColor: const Color(0xFFF1F5F9),
-                              labelStyle: TextStyle(
-                                color: isSel ? Colors.white : const Color(0xFF334155),
-                                fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
-                                fontSize: 12,
-                              ),
-                              onSelected: (val) {
-                                setModalState(() => selectedCategory = val ? cName : '');
-                              },
-                            );
-                          }).toList(),
+                  Builder(
+                    builder: (context) {
+                      final uniqueCats = <String>[];
+                      for (final c in availableCategoryNames) {
+                        final trimmed = c.trim();
+                        if (trimmed.isNotEmpty && !uniqueCats.contains(trimmed)) {
+                          uniqueCats.add(trimmed);
+                        }
+                      }
+                      final currentValue = uniqueCats.contains(selectedCategory.trim())
+                          ? selectedCategory.trim()
+                          : '';
+
+                      return DropdownButtonFormField<String>(
+                        key: ValueKey('cat_${currentValue}_${uniqueCats.length}'),
+                        initialValue: currentValue,
+                        isExpanded: true,
+                        dropdownColor: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B), size: 22),
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.category_outlined, color: Color(0xFF0284C7), size: 20),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Color(0xFF0284C7), width: 1.5),
+                          ),
+                          filled: true,
+                          fillColor: const Color(0xFFF8FAFC),
                         ),
+                        items: [
+                          const DropdownMenuItem<String>(
+                            value: '',
+                            child: Text(
+                              '-- Select Category (None) --',
+                              style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8), fontWeight: FontWeight.normal),
+                            ),
+                          ),
+                          ...uniqueCats.map((cName) => DropdownMenuItem<String>(
+                            value: cName,
+                            child: Text(
+                              cName,
+                              style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A), fontWeight: FontWeight.w500),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          )),
+                        ],
+                        onChanged: (val) {
+                          setModalState(() {
+                            selectedCategory = val ?? '';
+                          });
+                        },
+                      );
+                    },
+                  ),
                   const SizedBox(height: 14),
 
                   // Store Section Selection Header + Shortcut Button
@@ -2241,6 +2651,9 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                             onSectionCreated: (newSec) {
                               setModalState(() {
                                 availableSectionNames = _sellerSections.map((s) => safeString(s['name'])).where((s) => s.isNotEmpty).toList();
+                                if (newSec.isNotEmpty && !availableSectionNames.contains(newSec)) {
+                                  availableSectionNames.insert(0, newSec);
+                                }
                                 selectedSection = newSec;
                               });
                             },
@@ -2256,58 +2669,66 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
 
-                  availableSectionNames.isEmpty
-                      ? InkWell(
-                          onTap: () {
-                            _showManageSectionsDialog(
-                              onSectionCreated: (newSec) {
-                                setModalState(() {
-                                  availableSectionNames = _sellerSections.map((s) => safeString(s['name'])).where((s) => s.isNotEmpty).toList();
-                                  selectedSection = newSec;
-                                });
-                              },
-                            );
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF3E8FF),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFFD8B4FE)),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.add_rounded, size: 16, color: Color(0xFF7E22CE)),
-                                SizedBox(width: 4),
-                                Text('No section created yet. Click to create!', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7E22CE))),
-                              ],
+                  Builder(
+                    builder: (context) {
+                      final uniqueSecs = <String>[];
+                      for (final s in availableSectionNames) {
+                        final trimmed = s.trim();
+                        if (trimmed.isNotEmpty && !uniqueSecs.contains(trimmed)) {
+                          uniqueSecs.add(trimmed);
+                        }
+                      }
+                      final currentValue = uniqueSecs.contains(selectedSection.trim())
+                          ? selectedSection.trim()
+                          : '';
+
+                      return DropdownButtonFormField<String>(
+                        key: ValueKey('sec_${currentValue}_${uniqueSecs.length}'),
+                        initialValue: currentValue,
+                        isExpanded: true,
+                        dropdownColor: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B), size: 22),
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.grid_view_rounded, color: Color(0xFF8B5CF6), size: 20),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 1.5),
+                          ),
+                          filled: true,
+                          fillColor: const Color(0xFFF8FAFC),
+                        ),
+                        items: [
+                          const DropdownMenuItem<String>(
+                            value: '',
+                            child: Text(
+                              '-- Select Section (None) --',
+                              style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8), fontWeight: FontWeight.normal),
                             ),
                           ),
-                        )
-                      : Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
-                          children: availableSectionNames.map((sName) {
-                            final isSel = selectedSection == sName;
-                            return ChoiceChip(
-                              label: Text(sName),
-                              selected: isSel,
-                              selectedColor: const Color(0xFF8B5CF6),
-                              backgroundColor: const Color(0xFFF1F5F9),
-                              labelStyle: TextStyle(
-                                color: isSel ? Colors.white : const Color(0xFF334155),
-                                fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
-                                fontSize: 12,
-                              ),
-                              onSelected: (val) {
-                                setModalState(() => selectedSection = val ? sName : '');
-                              },
-                            );
-                          }).toList(),
-                        ),
+                          ...uniqueSecs.map((sName) => DropdownMenuItem<String>(
+                            value: sName,
+                            child: Text(
+                              sName,
+                              style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A), fontWeight: FontWeight.w500),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          )),
+                        ],
+                        onChanged: (val) {
+                          setModalState(() {
+                            selectedSection = val ?? '';
+                          });
+                        },
+                      );
+                    },
+                  ),
                   const SizedBox(height: 14),
 
                   // Unit Selection Header + Shortcut "+ Add Unit" Button
@@ -2320,7 +2741,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           _showManageUnitsDialog(
                             onUnitCreated: (newUnit) {
                               setModalState(() {
-                                availableUnitNames = _sellerUnits.map((u) => safeString(u['unit_name'])).where((s) => s.isNotEmpty).toList();
+                                availableUnitNames = _collectAvailableUnitNames(newUnit);
                                 selectedUnit = newUnit;
                               });
                             },
@@ -2336,10 +2757,15 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
 
-                  availableUnitNames.isEmpty
-                      ? Container(
+                  Builder(
+                    builder: (context) {
+                      final uniqueUnits = _collectAvailableUnitNames(selectedUnit);
+                      availableUnitNames = uniqueUnits;
+
+                      if (uniqueUnits.isEmpty) {
+                        return Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFEF2F2),
@@ -2355,29 +2781,61 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                               ),
                             ],
                           ),
-                        )
-                      : Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
-                          children: availableUnitNames.map((u) {
-                            final isSel = selectedUnit == u;
-                            return ChoiceChip(
-                              label: Text(u),
-                              selected: isSel,
-                              selectedColor: const Color(0xFF8B5CF6),
-                              backgroundColor: const Color(0xFFF1F5F9),
-                              labelStyle: TextStyle(
-                                color: isSel ? Colors.white : const Color(0xFF334155),
-                                fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
-                                fontSize: 12,
-                              ),
-                              onSelected: (val) {
-                                if (val) setModalState(() => selectedUnit = u);
-                              },
-                            );
-                          }).toList(),
+                        );
+                      }
+
+                      String currentUnitVal = '';
+                      for (final u in uniqueUnits) {
+                        if (u.toLowerCase() == selectedUnit.trim().toLowerCase()) {
+                          currentUnitVal = u;
+                          break;
+                        }
+                      }
+                      if (currentUnitVal.isEmpty) {
+                        currentUnitVal = uniqueUnits.first;
+                        selectedUnit = currentUnitVal;
+                      }
+
+                      return DropdownButtonFormField<String>(
+                        key: ValueKey('unit_${currentUnitVal}_${uniqueUnits.length}'),
+                        initialValue: currentUnitVal,
+                        isExpanded: true,
+                        dropdownColor: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B), size: 22),
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.straighten_rounded, color: Color(0xFF8B5CF6), size: 20),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 1.5),
+                          ),
+                          filled: true,
+                          fillColor: const Color(0xFFF8FAFC),
                         ),
-                  
+                        items: uniqueUnits.map((uName) => DropdownMenuItem<String>(
+                          value: uName,
+                          child: Text(
+                            uName,
+                            style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A), fontWeight: FontWeight.w500),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        )).toList(),
+                        onChanged: (val) {
+                          if (val != null && val.isNotEmpty) {
+                            setModalState(() {
+                              selectedUnit = val;
+                            });
+                          }
+                        },
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 14),
+
                   // Quantity, Purchase Rate (P. Rate) & Rate / Price Row
                   Row(
                     children: [
@@ -2512,10 +2970,14 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Text(
-                                        isProfit ? 'Profit Margin / Unit:' : 'Loss / Unit:',
-                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: textClr),
+                                      Flexible(
+                                        child: Text(
+                                          isProfit ? 'Profit Margin / Unit:' : 'Loss / Unit:',
+                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: textClr),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
+                                      const SizedBox(width: 6),
                                       Text(
                                         '₹${margin.abs().toStringAsFixed(2)} (${marginPercent.abs().toStringAsFixed(1)}%)',
                                         style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.5, color: textClr),
@@ -2536,6 +2998,433 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                         ),
                       );
                     },
+                  ),
+
+                  // Product Variables / Multi-Variant Section
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 14),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.layers_rounded, color: Color(0xFF8B5CF6), size: 18),
+                                  const SizedBox(width: 6),
+                                  const Flexible(
+                                    child: Text(
+                                      'Product Variables',
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (variantControllers.isNotEmpty) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF8B5CF6),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Text(
+                                        '${variantControllers.length}',
+                                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Colors.white),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            InkWell(
+                              onTap: () {
+                                setModalState(() {
+                                  variantControllers.add({
+                                    'name': TextEditingController(),
+                                    'p_rate': TextEditingController(),
+                                    's_rate': TextEditingController(),
+                                    'image_url': TextEditingController(),
+                                  });
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF8B5CF6),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.add_rounded, color: Colors.white, size: 15),
+                                    SizedBox(width: 3),
+                                    Text(
+                                      'Add Variable',
+                                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Colors.white),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Add multiple variables (e.g. 250g, 500g, 1Kg) with Image, P. Rate and S. Rate',
+                          style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                        ),
+                        if (variantControllers.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          ...List.generate(variantControllers.length, (vIdx) {
+                            final vc = variantControllers[vIdx];
+                            final vNameCtrl = vc['name']!;
+                            final vPRateCtrl = vc['p_rate']!;
+                            final vSRateCtrl = vc['s_rate']!;
+                            final vImgCtrl = vc.putIfAbsent('image_url', () => TextEditingController());
+                            final String vImgVal = vImgCtrl.text.trim();
+                            final double vP = double.tryParse(vPRateCtrl.text.trim()) ?? 0.0;
+                            final double vS = double.tryParse(vSRateCtrl.text.trim()) ?? 0.0;
+                            final double vMargin = vS - vP;
+                            final bool vIsProfit = vMargin >= 0;
+
+                            Widget buildVariantThumb() {
+                              if (vImgVal.startsWith('data:image')) {
+                                try {
+                                  return Image.memory(
+                                    base64Decode(vImgVal.split(',').last),
+                                    fit: BoxFit.cover,
+                                    width: 38,
+                                    height: 38,
+                                    errorBuilder: (_, __, ___) => const Icon(Icons.add_a_photo_rounded, size: 17, color: Color(0xFF8B5CF6)),
+                                  );
+                                } catch (_) {}
+                              } else if (vImgVal.startsWith('http://') || vImgVal.startsWith('https://')) {
+                                return Image.network(
+                                  vImgVal,
+                                  fit: BoxFit.cover,
+                                  width: 38,
+                                  height: 38,
+                                  errorBuilder: (_, __, ___) => const Icon(Icons.add_a_photo_rounded, size: 17, color: Color(0xFF8B5CF6)),
+                                );
+                              }
+                              return const Icon(Icons.add_a_photo_rounded, size: 17, color: Color(0xFF8B5CF6));
+                            }
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.02),
+                                    blurRadius: 3,
+                                    offset: const Offset(0, 1),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Wrap(
+                                          spacing: 6,
+                                          runSpacing: 4,
+                                          crossAxisAlignment: WrapCrossAlignment.center,
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFEDE9FE),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                'Variable #${vIdx + 1}',
+                                                style: const TextStyle(
+                                                  fontSize: 10.5,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Color(0xFF7E22CE),
+                                                ),
+                                              ),
+                                            ),
+                                            if (vP > 0 && vS > 0)
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: vIsProfit ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(
+                                                    color: vIsProfit ? const Color(0xFFA7F3D0) : const Color(0xFFFCA5A5),
+                                                  ),
+                                                ),
+                                                child: Text(
+                                                  '${vIsProfit ? "Margin: +₹" : "Loss: -₹"}${vMargin.abs().toStringAsFixed(vMargin.truncateToDouble() == vMargin ? 0 : 2)}',
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: vIsProfit ? const Color(0xFF047857) : const Color(0xFFDC2626),
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      InkWell(
+                                        onTap: () {
+                                          setModalState(() {
+                                            variantControllers.removeAt(vIdx);
+                                          });
+                                        },
+                                        borderRadius: BorderRadius.circular(6),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFEF2F2),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: const Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 14),
+                                              SizedBox(width: 2),
+                                              Text(
+                                                'Remove',
+                                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFFEF4444)),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      // Variable Image Picker (Before Variable Name)
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                        children: [
+                                          const Text(
+                                            'Image',
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10.5, color: Color(0xFF7E22CE)),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Stack(
+                                            clipBehavior: Clip.none,
+                                            children: [
+                                              InkWell(
+                                                onTap: () async {
+                                                  try {
+                                                    final picker = ImagePicker();
+                                                    final picked = await picker.pickImage(
+                                                      source: ImageSource.gallery,
+                                                      imageQuality: 40,
+                                                      maxWidth: 320,
+                                                      maxHeight: 320,
+                                                    );
+                                                    if (picked != null) {
+                                                      final bytes = await picked.readAsBytes();
+                                                      final base64Str = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+                                                      setModalState(() {
+                                                        vImgCtrl.text = base64Str;
+                                                      });
+                                                    }
+                                                  } catch (_) {}
+                                                },
+                                                borderRadius: BorderRadius.circular(8),
+                                                child: Container(
+                                                  width: 38,
+                                                  height: 38,
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFFF5F3FF),
+                                                    borderRadius: BorderRadius.circular(8),
+                                                    border: Border.all(
+                                                      color: vImgVal.isNotEmpty ? const Color(0xFF7E22CE) : const Color(0xFFC4B5FD),
+                                                      width: vImgVal.isNotEmpty ? 1.5 : 1.0,
+                                                    ),
+                                                  ),
+                                                  child: ClipRRect(
+                                                    borderRadius: BorderRadius.circular(7),
+                                                    child: Center(child: buildVariantThumb()),
+                                                  ),
+                                                ),
+                                              ),
+                                              if (vImgVal.isNotEmpty)
+                                                Positioned(
+                                                  top: -5,
+                                                  right: -5,
+                                                  child: GestureDetector(
+                                                    onTap: () {
+                                                      setModalState(() {
+                                                        vImgCtrl.clear();
+                                                      });
+                                                    },
+                                                    child: Container(
+                                                      width: 16,
+                                                      height: 16,
+                                                      decoration: const BoxDecoration(
+                                                        color: Color(0xFFEF4444),
+                                                        shape: BoxShape.circle,
+                                                      ),
+                                                      child: const Icon(Icons.close_rounded, size: 11, color: Colors.white),
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(width: 8),
+                                      // Variable Name
+                                      Expanded(
+                                        flex: 4,
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'Variable Name *',
+                                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF0F172A)),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            TextField(
+                                              controller: vNameCtrl,
+                                              onChanged: (_) => setModalState(() {}),
+                                              decoration: InputDecoration(
+                                                hintText: 'e.g. 500g, 1Kg',
+                                                hintStyle: const TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8)),
+                                                isDense: true,
+                                                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+                                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                                focusedBorder: OutlineInputBorder(
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 1.5),
+                                                ),
+                                              ),
+                                              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      // P. Rate (Purchase Rate)
+                                      Expanded(
+                                        flex: 3,
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'P. Rate (₹)',
+                                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF0284C7)),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            TextField(
+                                              controller: vPRateCtrl,
+                                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                              onChanged: (_) => setModalState(() {}),
+                                              decoration: InputDecoration(
+                                                prefixText: '₹',
+                                                prefixStyle: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0284C7), fontSize: 12),
+                                                hintText: '0',
+                                                hintStyle: const TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8)),
+                                                isDense: true,
+                                                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+                                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                                focusedBorder: OutlineInputBorder(
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  borderSide: const BorderSide(color: Color(0xFF0284C7), width: 1.5),
+                                                ),
+                                              ),
+                                              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF0284C7)),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      // S. Rate (Sale Rate)
+                                      Expanded(
+                                        flex: 3,
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'S. Rate (₹) *',
+                                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF059669)),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            TextField(
+                                              controller: vSRateCtrl,
+                                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                              onChanged: (_) => setModalState(() {}),
+                                              decoration: InputDecoration(
+                                                prefixText: '₹',
+                                                prefixStyle: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF059669), fontSize: 12),
+                                                hintText: '0',
+                                                hintStyle: const TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8)),
+                                                isDense: true,
+                                                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+                                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                                focusedBorder: OutlineInputBorder(
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  borderSide: const BorderSide(color: Color(0xFF10B981), width: 1.5),
+                                                ),
+                                              ),
+                                              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF059669)),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                setModalState(() {
+                                  variantControllers.add({
+                                    'name': TextEditingController(),
+                                    'p_rate': TextEditingController(),
+                                    's_rate': TextEditingController(),
+                                    'image_url': TextEditingController(),
+                                  });
+                                });
+                              },
+                              icon: const Icon(Icons.add_circle_outline_rounded, size: 16, color: Color(0xFF8B5CF6)),
+                              label: const Text(
+                                '+ Add Another Variable',
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF8B5CF6)),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Color(0xFF8B5CF6), width: 1.2),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                backgroundColor: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
 
                   // Custom Action Button Text (e.g. Buy Now, Shop Now, Order Now)
@@ -2564,9 +3453,9 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                       final pName = nameController.text.trim();
                       final pDesc = descController.text.trim();
                       final pQty = int.tryParse(qtyController.text.trim()) ?? 1;
-                      final pPurRate = double.tryParse(purchaseRateController.text.trim()) ?? 0.0;
+                      double pPurRate = double.tryParse(purchaseRateController.text.trim()) ?? 0.0;
                       final pRateStr = rateController.text.trim();
-                      final pRate = double.tryParse(pRateStr) ?? 0.0;
+                      double pRate = double.tryParse(pRateStr) ?? 0.0;
                       final pBtnText = buttonTextController.text.trim().isNotEmpty ? buttonTextController.text.trim() : 'Buy Now';
 
                       if (pName.isEmpty) {
@@ -2583,10 +3472,44 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                         return;
                       }
 
+                      final List<Map<String, dynamic>> validVariants = [];
+                      for (int i = 0; i < variantControllers.length; i++) {
+                        final vc = variantControllers[i];
+                        final vName = vc['name']!.text.trim();
+                        final vPRate = double.tryParse(vc['p_rate']!.text.trim()) ?? 0.0;
+                        final vSRate = double.tryParse(vc['s_rate']!.text.trim()) ?? 0.0;
+                        final vImg = vc['image_url']?.text.trim() ?? '';
+                        if (vName.isEmpty && vPRate <= 0 && vSRate <= 0 && vImg.isEmpty) {
+                          continue;
+                        }
+                        if (vName.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Please enter Variable Name for Variable #${i + 1}.')),
+                          );
+                          return;
+                        }
+                        validVariants.add({
+                          'name': vName,
+                          'purchase_rate': vPRate,
+                          'rate': vSRate,
+                          'image_url': vImg,
+                        });
+                      }
+
+                      // Sync base rate & purchaseRate from first variable if base rate is not entered
+                      if (validVariants.isNotEmpty) {
+                        if (pRate <= 0) {
+                          pRate = (validVariants.first['rate'] as num?)?.toDouble() ?? 0.0;
+                        }
+                        if (pPurRate <= 0) {
+                          pPurRate = (validVariants.first['purchase_rate'] as num?)?.toDouble() ?? 0.0;
+                        }
+                      }
+
                       Navigator.pop(ctx);
                       setState(() => _isLoading = true);
 
-                      final username = widget.seller.username ?? '';
+                      final username = _sellerUsername;
                       if (isEditing) {
                         final pId = safeInt(productToEdit['id']);
                         await AuthService.updateSellerProduct(
@@ -2602,6 +3525,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           purchaseRate: pPurRate,
                           imageUrl: prodImageUrl,
                           buttonText: pBtnText,
+                          variants: validVariants,
                         );
                       } else {
                         await AuthService.addSellerProduct(
@@ -2616,6 +3540,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                           purchaseRate: pPurRate,
                           imageUrl: prodImageUrl,
                           buttonText: pBtnText,
+                          variants: validVariants,
                         );
                       }
 
@@ -3195,37 +4120,42 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                 ? const Center(child: CircularProgressIndicator(color: Color(0xFF8B5CF6)))
                 : _filteredProducts.isEmpty
                     ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24.0),
+                        child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 14.0),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               const CircleAvatar(
-                                radius: 36,
+                                radius: 30,
                                 backgroundColor: Color(0xFFEDE9FE),
-                                child: Icon(Icons.inventory_2_outlined, size: 36, color: Color(0xFF8B5CF6)),
+                                child: Icon(Icons.inventory_2_outlined, size: 30, color: Color(0xFF8B5CF6)),
                               ),
-                              const SizedBox(height: 14),
+                              const SizedBox(height: 12),
                               const Text(
                                 'No Products Found',
-                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                                style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                               ),
-                              const SizedBox(height: 6),
+                              const SizedBox(height: 5),
                               Text(
                                 _searchQuery.isNotEmpty
                                     ? 'No product matches "$_searchQuery". Try searching something else.'
                                     : 'Start adding items to your store catalog so customers can select products in 1-click!',
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                                style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
                               ),
-                              const SizedBox(height: 16),
+                              const SizedBox(height: 14),
                               ElevatedButton.icon(
                                 onPressed: () => _showAddEditProductDialog(),
-                                icon: const Icon(Icons.add_rounded, color: Colors.white),
-                                label: const Text('Add Your First Product', style: TextStyle(fontWeight: FontWeight.bold)),
+                                icon: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                                label: Text(
+                                  _searchQuery.isNotEmpty ? 'Add "$_searchQuery" as Product' : 'Add Your First Product',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF8B5CF6),
-                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                 ),
                               ),
@@ -3245,6 +4175,7 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                               final rate = safeDouble(p['rate'], 0.0);
                               final pSec = _getDisplaySectionName(p['section']);
                               final pCat = _getDisplayCategoryName(p['category']);
+                              final List<dynamic> pVariants = (p['variants'] is List) ? (p['variants'] as List) : const [];
 
                               final imgUrl = safeString(p['image_url']).trim();
                               final imgVal = safeString(p['image']).trim();
@@ -3333,6 +4264,21 @@ class _SellerProductsScreenState extends State<SellerProductsScreen> {
                                                     ),
                                                   ),
                                                 ),
+                                              if (pVariants.isNotEmpty) ...[
+                                                if (pSec.isNotEmpty || pCat.isNotEmpty) const SizedBox(width: 4),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFFECFDF5),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                    border: Border.all(color: const Color(0xFFA7F3D0)),
+                                                  ),
+                                                  child: Text(
+                                                    '⚡ ${pVariants.length} Var${pVariants.length > 1 ? "s" : ""}',
+                                                    style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF047857)),
+                                                  ),
+                                                ),
+                                              ],
                                             ],
                                           ),
                                         ],

@@ -1,8 +1,22 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class CartService {
-  static String _getKey(String sellerUsername) => 'draft_cart_${sellerUsername.trim()}';
+  static String _getKey(String sellerUsername) => 'draft_cart_${sellerUsername.trim().toLowerCase()}';
+
+  // Fast In-Memory cache & instant reactive notifier (0ms delay)
+  static final Map<String, List<Map<String, dynamic>>> _memoryCart = {};
+  static final ValueNotifier<int> cartUpdateNotifier = ValueNotifier<int>(0);
+
+  /// Synchronously get cached cart items if available (0ms instant access)
+  static List<Map<String, dynamic>> getCachedCartItems(String sellerUsername) {
+    final key = sellerUsername.trim().toLowerCase();
+    if (_memoryCart.containsKey(key)) {
+      return List<Map<String, dynamic>>.from(_memoryCart[key]!);
+    }
+    return [];
+  }
 
   /// Calculate amount based on unit conversion
   static double calculateAmount({
@@ -40,14 +54,25 @@ class CartService {
   static Future<List<Map<String, dynamic>>> getCartItems(String sellerUsername) async {
     final cleanSeller = sellerUsername.trim();
     if (cleanSeller.isEmpty) return [];
+    final key = cleanSeller.toLowerCase();
+    if (_memoryCart.containsKey(key)) {
+      return List<Map<String, dynamic>>.from(_memoryCart[key]!);
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
-      final jsonStr = prefs.getString(_getKey(cleanSeller));
+      String? jsonStr = prefs.getString(_getKey(cleanSeller));
+      if (jsonStr == null || jsonStr.isEmpty) {
+        // Fallback for case-sensitive legacy key
+        jsonStr = prefs.getString('draft_cart_$cleanSeller');
+      }
       if (jsonStr != null && jsonStr.isNotEmpty) {
         final List<dynamic> list = jsonDecode(jsonStr);
-        return list.map((e) => Map<String, dynamic>.from(e)).toList();
+        final loaded = list.map((e) => Map<String, dynamic>.from(e)).toList();
+        _memoryCart[key] = List<Map<String, dynamic>>.from(loaded);
+        return loaded;
       }
     } catch (_) {}
+    _memoryCart[key] = [];
     return [];
   }
 
@@ -55,9 +80,20 @@ class CartService {
   static Future<bool> saveCartItems(String sellerUsername, List<Map<String, dynamic>> items) async {
     final cleanSeller = sellerUsername.trim();
     if (cleanSeller.isEmpty) return false;
+    final key = cleanSeller.toLowerCase();
+
+    // 1. Instantly update in-memory cache & notify UI listeners (0ms delay!)
+    _memoryCart[key] = List<Map<String, dynamic>>.from(items);
+    cartUpdateNotifier.value++;
+
+    // 2. Persist to SharedPreferences
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_getKey(cleanSeller), jsonEncode(items));
+      final jsonStr = jsonEncode(items);
+      await prefs.setString(_getKey(cleanSeller), jsonStr);
+      if (cleanSeller != cleanSeller.toLowerCase()) {
+        await prefs.setString('draft_cart_$cleanSeller', jsonStr);
+      }
       return true;
     } catch (_) {
       return false;

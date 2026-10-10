@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
+import '../utils/app_toast.dart';
 
 class OrderCardWidget extends StatefulWidget {
   final Map<String, dynamic> messageData;
@@ -1073,13 +1074,7 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
 
     if (isPickedUpOrBeyond) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('⚠️ Delivery Boy order Pick Up kar chuka hai! Ab bill edit / change nahi ho sakta 🔒'),
-            backgroundColor: Color(0xFFEF4444),
-            duration: Duration(seconds: 3),
-          ),
-        );
+        AppToast.show(context, 'Delivery Boy order Pick Up kar chuka hai! Ab bill edit / change nahi ho sakta');
       }
       return;
     }
@@ -1115,23 +1110,13 @@ class _OrderCardWidgetState extends State<OrderCardWidget> {
         }
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Bill photo saved successfully! 📄✅'),
-              backgroundColor: Color(0xFF10B981),
-            ),
-          );
+          AppToast.show(context, 'Bill photo saved successfully!');
         }
       }
     } catch (e) {
       debugPrint('Error capturing bill image: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not open camera: $e'),
-            backgroundColor: const Color(0xFFEF4444),
-          ),
-        );
+        AppToast.show(context, 'Could not open camera: $e');
       }
     }
   }

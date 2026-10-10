@@ -8,6 +8,7 @@ import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/notification_service.dart';
 import '../../widgets/order_card_widget.dart';
+import '../../utils/app_toast.dart';
 
 class SellerChatScreen extends StatefulWidget {
   final UserModel seller;
@@ -164,12 +165,7 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
         _isBlocked = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Customer unblocked successfully! 🟢'),
-            backgroundColor: Color(0xFF10B981),
-          ),
-        );
+        AppToast.show(context, 'Customer unblocked successfully!');
       }
     } else {
       final confirm = await showDialog<bool>(
@@ -210,12 +206,7 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
           _isBlocked = true;
         });
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Customer blocked! 🚫'),
-              backgroundColor: Color(0xFFEF4444),
-            ),
-          );
+          AppToast.show(context, 'Customer blocked!');
         }
       }
     }
@@ -388,9 +379,7 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
                           await launchUrl(url);
                         } else {
                           if (ctx.mounted) {
-                            ScaffoldMessenger.of(ctx).showSnackBar(
-                              const SnackBar(content: Text('Could not open SMS app.')),
-                            );
+                            AppToast.show(ctx, 'Could not open SMS app.');
                           }
                         }
                       },
@@ -412,9 +401,7 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
                           await launchUrl(url);
                         } else {
                           if (ctx.mounted) {
-                            ScaffoldMessenger.of(ctx).showSnackBar(
-                              const SnackBar(content: Text('Could not initiate phone call.')),
-                            );
+                            AppToast.show(ctx, 'Could not initiate phone call.');
                           }
                         }
                       },
@@ -578,9 +565,7 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
                             InkWell(
                               onTap: () {
                                 Clipboard.setData(ClipboardData(text: '$receiver\n$fullAddress\nPhone: +91 $phone'));
-                                ScaffoldMessenger.of(ctx).showSnackBar(
-                                  const SnackBar(content: Text('Address copied to clipboard! 📋'), backgroundColor: Color(0xFF10B981)),
-                                );
+                                AppToast.show(ctx, 'Address copied to clipboard!');
                               },
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -623,13 +608,7 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
     final delStat = (msgData['delivery_status'] ?? '').toString().toLowerCase();
     if (delStat == 'picked up' || delStat == 'out for delivery' || delStat == 'delivered') {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('⚠️ Delivery Boy order Pick Up kar chuka hai! Ab status nahi badla ja sakta.'),
-            backgroundColor: Color(0xFFEF4444),
-            duration: Duration(seconds: 3),
-          ),
-        );
+        AppToast.show(context, 'Delivery Boy order Pick Up kar chuka hai! Ab status nahi badla ja sakta.');
       }
       return;
     }
@@ -749,13 +728,7 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
       // 1. Check if items are checked (Yes/No)
       if (hasUncheckedItem) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('⚠️ Pehle saare items ko Yes (✓) ya No (✕) check karein, tabhi Order Ready ho sakta hai!'),
-              backgroundColor: Color(0xFFEF4444),
-              duration: Duration(seconds: 3),
-            ),
-          );
+          AppToast.show(context, 'Pehle saare items ko Yes (✓) ya No (✕) check karein, tabhi Order Ready ho sakta hai!');
         }
         return;
       }
@@ -798,13 +771,7 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
 
       if (orderAmt <= 0) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('⚠️ Pehle Order Total Amount (₹) enter karein, tabhi Order Ready ho sakta hai!'),
-              backgroundColor: Color(0xFFEF4444),
-              duration: Duration(seconds: 3),
-            ),
-          );
+          AppToast.show(context, 'Pehle Order Total Amount (₹) enter karein, tabhi Order Ready ho sakta hai!');
         }
         return;
       }
@@ -813,13 +780,7 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
       final String billImg = (msgData['bill_image'] ?? '').toString();
       if (billImg.trim().isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('⚠️ Pehle Paper Bill Photo (📷+) attach karein, tabhi Order Ready ho sakta hai!'),
-              backgroundColor: Color(0xFFEF4444),
-              duration: Duration(seconds: 3),
-            ),
-          );
+          AppToast.show(context, 'Pehle Paper Bill Photo attach karein, tabhi Order Ready ho sakta hai!');
         }
         return;
       }
@@ -863,13 +824,7 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
     final delStat = (msgData['delivery_status'] ?? '').toString().toLowerCase();
     if (delStat == 'picked up' || delStat == 'out for delivery' || delStat == 'delivered') {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('⚠️ Delivery Boy order Pick Up kar chuka hai! Ab items update nahi honge.'),
-            backgroundColor: Color(0xFFEF4444),
-            duration: Duration(seconds: 3),
-          ),
-        );
+        AppToast.show(context, '⚠️ Delivery Boy order Pick Up kar chuka hai! Ab items update nahi honge.');
       }
       return;
     }
@@ -1014,13 +969,7 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
 
     if (isPickedUpOrBeyond) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('⚠️ Delivery Boy order Pick Up kar chuka hai! Ab bill / amount edit nahi ho sakta 🔒'),
-            backgroundColor: Color(0xFFEF4444),
-            duration: Duration(seconds: 3),
-          ),
-        );
+        AppToast.show(context, 'Delivery Boy order Pick Up kar chuka hai! Ab bill / amount edit nahi ho sakta');
       }
       return;
     }
