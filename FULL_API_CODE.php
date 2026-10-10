@@ -871,6 +871,23 @@ if ($action == 'get-header-theme') {
     if (!$chkCreated || $chkCreated->num_rows == 0) {
         @$conn->query("ALTER TABLE customers ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
     }
+    $chkCod = $conn->query("SHOW COLUMNS FROM customers LIKE 'is_cod_blocked'");
+    if (!$chkCod || $chkCod->num_rows == 0) {
+        @$conn->query("ALTER TABLE customers ADD COLUMN is_cod_blocked TINYINT(1) DEFAULT 0");
+    }
+
+    // Pre-aggregate order counts by customer_mobile in 1 single fast query
+    $orderCounts = array();
+    $ordRes = @$conn->query("SELECT customer_mobile, COUNT(*) as total FROM messages WHERE (items_json IS NOT NULL OR order_id IS NOT NULL OR message LIKE '%ORDER%') GROUP BY customer_mobile");
+    if ($ordRes && $ordRes !== true) {
+        while ($ordRow = $ordRes->fetch_assoc()) {
+            $mDigits = preg_replace('/[^0-9]/', '', $ordRow['customer_mobile'] ?? '');
+            $mLast10 = (strlen($mDigits) >= 10) ? substr($mDigits, -10) : $mDigits;
+            if (!empty($mLast10)) {
+                $orderCounts[$mLast10] = ($orderCounts[$mLast10] ?? 0) + (int)$ordRow['total'];
+            }
+        }
+    }
 
     $res = $conn->query("SELECT * FROM customers ORDER BY id DESC");
     $customers = array();
@@ -880,18 +897,10 @@ if ($action == 'get-header-theme') {
             $digits = preg_replace('/[^0-9]/', '', $cMobile);
             $last10 = (strlen($digits) >= 10) ? substr($digits, -10) : $digits;
 
-            // Count total orders for this customer from messages table
-            $orderCount = 0;
-            if (!empty($last10)) {
-                $ordRes = $conn->query("SELECT COUNT(*) as total FROM messages WHERE (customer_mobile = '$cMobile' OR customer_mobile LIKE '%$last10%') AND (items_json IS NOT NULL OR order_id IS NOT NULL OR message LIKE '%ORDER%')");
-                if ($ordRes && $ordRow = $ordRes->fetch_assoc()) {
-                    $orderCount = (int)$ordRow['total'];
-                }
-            }
-
             $row['id'] = (int)$row['id'];
             $row['is_blocked'] = isset($row['is_blocked']) ? (int)$row['is_blocked'] : 0;
-            $row['total_orders'] = $orderCount;
+            $row['is_cod_blocked'] = isset($row['is_cod_blocked']) ? (int)$row['is_cod_blocked'] : 0;
+            $row['total_orders'] = isset($orderCounts[$last10]) ? (int)$orderCounts[$last10] : 0;
             $customers[] = $row;
         }
     }
@@ -941,16 +950,21 @@ if ($action == 'get-header-theme') {
 
     $chkBlocked = $conn->query("SHOW COLUMNS FROM customers LIKE 'is_blocked'");
     if (!$chkBlocked || $chkBlocked->num_rows == 0) {
-        echo json_encode(["success" => true, "is_blocked" => false]);
-        exit();
+        @$conn->query("ALTER TABLE customers ADD COLUMN is_blocked TINYINT(1) DEFAULT 0");
+    }
+    $chkCod = $conn->query("SHOW COLUMNS FROM customers LIKE 'is_cod_blocked'");
+    if (!$chkCod || $chkCod->num_rows == 0) {
+        @$conn->query("ALTER TABLE customers ADD COLUMN is_cod_blocked TINYINT(1) DEFAULT 0");
     }
 
     $isBlocked = false;
+    $isCodBlocked = false;
     $reason = '';
     if (!empty($last10)) {
-        $res = $conn->query("SELECT is_blocked, blocked_reason FROM customers WHERE mobile = '$mobile' OR mobile LIKE '%$last10%' ORDER BY id DESC LIMIT 1");
+        $res = $conn->query("SELECT is_blocked, blocked_reason, is_cod_blocked FROM customers WHERE mobile = '$mobile' OR mobile LIKE '%$last10%' ORDER BY id DESC LIMIT 1");
         if ($res && $row = $res->fetch_assoc()) {
             $isBlocked = ((int)($row['is_blocked'] ?? 0)) === 1;
+            $isCodBlocked = ((int)($row['is_cod_blocked'] ?? 0)) === 1;
             $reason = trim($row['blocked_reason'] ?? '');
         }
     }
@@ -958,8 +972,99 @@ if ($action == 'get-header-theme') {
     echo json_encode([
         "success" => true,
         "is_blocked" => $isBlocked,
+        "is_cod_blocked" => $isCodBlocked,
         "reason" => $reason
     ]);
+    exit();
+} elseif ($action == 'toggle-customer-cod') {
+    $mobile = isset($input['mobile']) ? trim($input['mobile']) : (isset($_POST['mobile']) ? trim($_POST['mobile']) : (isset($_GET['mobile']) ? trim($_GET['mobile']) : ''));
+    $id = isset($input['id']) ? (int)$input['id'] : (isset($_POST['id']) ? (int)$_POST['id'] : 0);
+    $is_cod_blocked = isset($input['is_cod_blocked']) ? (int)$input['is_cod_blocked'] : (isset($_POST['is_cod_blocked']) ? (int)$_POST['is_cod_blocked'] : 1);
+
+    if (empty($mobile) && $id <= 0) {
+        echo json_encode(["success" => false, "message" => "Customer mobile or id required"]);
+        exit();
+    }
+
+    $chkCod = $conn->query("SHOW COLUMNS FROM customers LIKE 'is_cod_blocked'");
+    if (!$chkCod || $chkCod->num_rows == 0) {
+        @$conn->query("ALTER TABLE customers ADD COLUMN is_cod_blocked TINYINT(1) DEFAULT 0");
+    }
+
+    if ($id > 0) {
+        $conn->query("UPDATE customers SET is_cod_blocked = $is_cod_blocked WHERE id = $id");
+    }
+    if (!empty($mobile)) {
+        $digits = preg_replace('/[^0-9]/', '', $mobile);
+        $last10 = (strlen($digits) >= 10) ? substr($digits, -10) : $digits;
+        $conn->query("UPDATE customers SET is_cod_blocked = $is_cod_blocked WHERE mobile = '$mobile' OR mobile LIKE '%$last10%'");
+    }
+
+    echo json_encode([
+        "success" => true,
+        "message" => $is_cod_blocked == 1 ? "Cash on Delivery has been blocked" : "Cash on Delivery has been enabled",
+        "is_cod_blocked" => $is_cod_blocked
+    ]);
+    exit();
+} elseif ($action == 'edit-customer' || $action == 'update-customer') {
+    $id = isset($input['id']) ? (int)$input['id'] : (isset($_POST['id']) ? (int)$_POST['id'] : 0);
+    $name = isset($input['name']) ? trim($input['name']) : (isset($_POST['name']) ? trim($_POST['name']) : '');
+    $mobile = isset($input['mobile']) ? trim($input['mobile']) : (isset($_POST['mobile']) ? trim($_POST['mobile']) : '');
+    $address = isset($input['address']) ? trim($input['address']) : (isset($_POST['address']) ? trim($_POST['address']) : '');
+
+    if ($id <= 0 && empty($mobile)) {
+        echo json_encode(["success" => false, "message" => "Customer ID or mobile is required"]);
+        exit();
+    }
+
+    $updates = [];
+    if (!empty($name)) {
+        $updates[] = "name = '" . $conn->real_escape_string($name) . "'";
+    }
+    if (!empty($mobile)) {
+        $updates[] = "mobile = '" . $conn->real_escape_string($mobile) . "'";
+    }
+    if (!empty($address)) {
+        $updates[] = "address_json = '" . $conn->real_escape_string($address) . "'";
+    }
+
+    if (empty($updates)) {
+        echo json_encode(["success" => false, "message" => "No fields to update"]);
+        exit();
+    }
+
+    $sqlWhere = $id > 0 ? "id = $id" : "mobile = '" . $conn->real_escape_string($mobile) . "'";
+    $res = $conn->query("UPDATE customers SET " . implode(", ", $updates) . " WHERE $sqlWhere");
+
+    if ($res) {
+        echo json_encode(["success" => true, "message" => "Customer updated successfully"]);
+    } else {
+        echo json_encode(["success" => false, "message" => "Database error: " . $conn->error]);
+    }
+    exit();
+} elseif ($action == 'delete-customer') {
+    $id = isset($input['id']) ? (int)$input['id'] : (isset($_POST['id']) ? (int)$_POST['id'] : 0);
+    $mobile = isset($input['mobile']) ? trim($input['mobile']) : (isset($_POST['mobile']) ? trim($_POST['mobile']) : '');
+
+    if ($id <= 0 && empty($mobile)) {
+        echo json_encode(["success" => false, "message" => "Customer ID or mobile required"]);
+        exit();
+    }
+
+    $deleted = false;
+    if ($id > 0) {
+        $deleted = $conn->query("DELETE FROM customers WHERE id = $id");
+    } elseif (!empty($mobile)) {
+        $digits = preg_replace('/[^0-9]/', '', $mobile);
+        $last10 = (strlen($digits) >= 10) ? substr($digits, -10) : $digits;
+        $deleted = $conn->query("DELETE FROM customers WHERE mobile = '" . $conn->real_escape_string($mobile) . "' OR mobile LIKE '%$last10%'");
+    }
+
+    if ($deleted) {
+        echo json_encode(["success" => true, "message" => "Customer deleted successfully"]);
+    } else {
+        echo json_encode(["success" => false, "message" => "Database error: " . $conn->error]);
+    }
     exit();
 } elseif ($action == 'search-seller') {
     $rawTerm = isset($_GET['mobile']) ? trim($_GET['mobile']) : (isset($input['mobile']) ? trim($input['mobile']) : '');

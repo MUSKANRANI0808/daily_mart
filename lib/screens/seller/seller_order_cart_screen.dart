@@ -1286,6 +1286,8 @@ class SellerOrderCartScreenState extends State<SellerOrderCartScreen> {
     required String orderId,
     required UserModel customer,
   }) async {
+    final bool isCodBlocked = await AuthService.isCustomerCodBlocked(custMobile);
+    if (!mounted) return null;
     String selectedMode = 'online'; // Default to Pay Online ('online' or 'cod')
     bool isProcessingPayment = false;
 
@@ -1392,66 +1394,67 @@ class SellerOrderCartScreenState extends State<SellerOrderCartScreen> {
                   ),
                   const SizedBox(height: 10),
 
-                  // Option 1: Cash on Delivery (COD)
-                  InkWell(
-                    onTap: isProcessingPayment
-                        ? null
-                        : () => setSheetState(() => selectedMode = 'cod'),
-                    borderRadius: BorderRadius.circular(14),
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: selectedMode == 'cod' ? const Color(0xFFECFDF5) : Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: selectedMode == 'cod' ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
-                          width: selectedMode == 'cod' ? 2 : 1,
+                  // Option 1: Cash on Delivery (COD) - only shown if NOT blocked!
+                  if (!isCodBlocked) ...[
+                    InkWell(
+                      onTap: isProcessingPayment
+                          ? null
+                          : () => setSheetState(() => selectedMode = 'cod'),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: selectedMode == 'cod' ? const Color(0xFFECFDF5) : Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: selectedMode == 'cod' ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
+                            width: selectedMode == 'cod' ? 2 : 1,
+                          ),
                         ),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 22,
-                            height: 22,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: selectedMode == 'cod' ? const Color(0xFF10B981) : Colors.transparent,
-                              border: Border.all(
-                                color: selectedMode == 'cod' ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
-                                width: 2,
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 22,
+                              height: 22,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: selectedMode == 'cod' ? const Color(0xFF10B981) : Colors.transparent,
+                                border: Border.all(
+                                  color: selectedMode == 'cod' ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
+                                  width: 2,
+                                ),
+                              ),
+                              child: selectedMode == 'cod'
+                                  ? const Icon(Icons.check, size: 14, color: Colors.white)
+                                  : null,
+                            ),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        'Cash on Delivery (COD)',
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Color(0xFF0F172A)),
+                                      ),
+                                    ],
+                                  ),
+                                  SizedBox(height: 3),
+                                  Text(
+                                    'Pay cash or scan QR when delivery agent arrives at your doorstep',
+                                    style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                                  ),
+                                ],
                               ),
                             ),
-                            child: selectedMode == 'cod'
-                                ? const Icon(Icons.check, size: 14, color: Colors.white)
-                                : null,
-                          ),
-                          const SizedBox(width: 12),
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      'Cash on Delivery (COD)',
-                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Color(0xFF0F172A)),
-                                    ),
-                                  ],
-                                ),
-                                SizedBox(height: 3),
-                                Text(
-                                  'Pay cash or scan QR when delivery agent arrives at your doorstep',
-                                  style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-
-                  const SizedBox(height: 12),
+                    const SizedBox(height: 12),
+                  ],
 
                   // Option 2: Online Payment (UPI / Cards / Wallets)
                   InkWell(

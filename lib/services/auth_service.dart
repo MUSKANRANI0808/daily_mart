@@ -8259,12 +8259,32 @@ class AuthService {
   /// CUSTOMER MANAGEMENT (Admin & App-wide Block Checking)
   /// -------------------------------------------------------------
 
-  /// Get all registered customers from VPS MySQL Database
+  /// Get all registered customers from VPS MySQL Database with instant local cache fallback
   static Future<List<Map<String, dynamic>>> getAllCustomersForAdmin() async {
     try {
       final res = await VpsApiService.get('get-all-customers');
       if (res != null && res['success'] == true && res['customers'] is List) {
         final List list = res['customers'];
+        final results = list.map((e) => Map<String, dynamic>.from(e)).toList();
+        // Save to local cache for 0ms instant loading
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('cached_admin_customers_list', jsonEncode(results));
+        } catch (_) {}
+        return results;
+      }
+    } catch (_) {}
+    // If network fails, return cached customers instantly
+    return await getCachedAllCustomersForAdmin();
+  }
+
+  /// Get cached customers list (0 ms instant response without network delay)
+  static Future<List<Map<String, dynamic>>> getCachedAllCustomersForAdmin() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final str = prefs.getString('cached_admin_customers_list');
+      if (str != null && str.isNotEmpty) {
+        final List list = jsonDecode(str);
         return list.map((e) => Map<String, dynamic>.from(e)).toList();
       }
     } catch (_) {}
@@ -8326,13 +8346,111 @@ class AuthService {
       final res = await VpsApiService.get('check-customer-blocked-status&mobile=$mobile');
       if (res != null && res['success'] == true) {
         final isBlocked = res['is_blocked'] == true || res['is_blocked'] == 1 || res['is_blocked'] == '1';
+        final isCodBlocked = res['is_cod_blocked'] == true || res['is_cod_blocked'] == 1 || res['is_cod_blocked'] == '1';
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('cached_blocked_status_$last10', isBlocked);
+        await prefs.setBool('cached_cod_blocked_status_$last10', isCodBlocked);
         return isBlocked;
       }
     } catch (_) {}
     return false;
   }
+
+  /// Toggle Cash On Delivery (COD) Permission for Customer
+  static Future<bool> toggleCustomerCodStatus({
+    required String mobile,
+    required bool isCodBlocked,
+    int? id,
+  }) async {
+    try {
+      final res = await VpsApiService.post('toggle-customer-cod', {
+        'mobile': mobile.trim(),
+        'id': id ?? 0,
+        'is_cod_blocked': isCodBlocked ? 1 : 0,
+      });
+
+      if (res != null && res['success'] == true) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final cleanDigits = mobile.replaceAll(RegExp(r'[^0-9]'), '');
+          final last10 = cleanDigits.length >= 10 ? cleanDigits.substring(cleanDigits.length - 10) : cleanDigits;
+          await prefs.setBool('cached_cod_blocked_status_$last10', isCodBlocked);
+        } catch (_) {}
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  /// Fast check if Cash on Delivery is blocked for this Customer
+  static Future<bool> isCustomerCodBlocked(String mobile) async {
+    final cleanDigits = mobile.replaceAll(RegExp(r'[^0-9]'), '');
+    final last10 = cleanDigits.length >= 10 ? cleanDigits.substring(cleanDigits.length - 10) : cleanDigits;
+    if (last10.isEmpty) return false;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.containsKey('cached_cod_blocked_status_$last10')) {
+        final cached = prefs.getBool('cached_cod_blocked_status_$last10') ?? false;
+        _verifyCustomerCodBlockedInBackground(last10, mobile);
+        return cached;
+      }
+    } catch (_) {}
+
+    return await _verifyCustomerCodBlockedInBackground(last10, mobile);
+  }
+
+  static Future<bool> _verifyCustomerCodBlockedInBackground(String last10, String mobile) async {
+    try {
+      final res = await VpsApiService.get('check-customer-blocked-status&mobile=$mobile');
+      if (res != null && res['success'] == true) {
+        final isCodBlocked = res['is_cod_blocked'] == true || res['is_cod_blocked'] == 1 || res['is_cod_blocked'] == '1';
+        final isBlocked = res['is_blocked'] == true || res['is_blocked'] == 1 || res['is_blocked'] == '1';
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('cached_cod_blocked_status_$last10', isCodBlocked);
+        await prefs.setBool('cached_blocked_status_$last10', isBlocked);
+        return isCodBlocked;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  /// Edit / Update Customer Details in VPS Database
+  static Future<bool> editCustomer({
+    required int id,
+    required String name,
+    required String mobile,
+    String? address,
+  }) async {
+    try {
+      final res = await VpsApiService.post('edit-customer', {
+        'id': id,
+        'name': name.trim(),
+        'mobile': mobile.trim(),
+        if (address != null && address.trim().isNotEmpty) 'address': address.trim(),
+      });
+      return res != null && res['success'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Delete Customer permanently from Database
+  static Future<bool> deleteCustomer({
+    required int id,
+    required String mobile,
+  }) async {
+    try {
+      final res = await VpsApiService.post('delete-customer', {
+        'id': id,
+        'mobile': mobile.trim(),
+      });
+      return res != null && res['success'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
 }
+
 
 

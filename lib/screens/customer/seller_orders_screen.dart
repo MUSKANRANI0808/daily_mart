@@ -828,6 +828,38 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
         _actionButtonsConfig = cachedButtons;
       }
 
+      // 0. Instant Cache Hydration: Render immediately from local cache (0 ms perceived latency)
+      if (!isPullToRefresh && _products.isEmpty) {
+        try {
+          final cachedProds = await AuthService.getCachedSellerProducts(widget.sellerUsername);
+          final cachedCats = await AuthService.getCachedSellerCategories(widget.sellerUsername);
+          final cachedSecs = await AuthService.getCachedSellerSections(widget.sellerUsername);
+          final cachedLayout = AuthService.getCachedSellerHomeLayout(widget.sellerUsername);
+          final initialCartItems = await CartService.getCartItems(widget.sellerUsername);
+          if (cachedProds.isNotEmpty && mounted) {
+            final List<Map<String, dynamic>> parsedRawCats = [];
+            final List<String> parsedCats = [];
+            for (var c in cachedCats) {
+              parsedRawCats.add(Map<String, dynamic>.from(c));
+              final name = (c['name'] ?? c['category_name'] ?? '').toString().trim();
+              if (name.isNotEmpty && !parsedCats.contains(name)) parsedCats.add(name);
+            }
+            setState(() {
+              _products = cachedProds;
+              _rawCategories = parsedRawCats;
+              _categories = parsedCats;
+              _sellerSections = cachedSecs;
+              if (cachedLayout != null && cachedLayout.isNotEmpty) {
+                _homeLayoutOrder = cachedLayout;
+              }
+              _cartBadgeCount = CartService.getTotalCount(initialCartItems);
+              _cartTotalAmount = CartService.getTotalAmount(initialCartItems);
+              _isLoading = false;
+            });
+          }
+        } catch (_) {}
+      }
+
       final headerTheme = await AuthService.getHeaderThemeConfig();
       final sellerStyle = await AuthService.getSellerSearchBarStyle(widget.sellerUsername);
       _headerThemeConfig = Map<String, dynamic>.from(headerTheme);
@@ -932,10 +964,10 @@ class _CustomerSellerOrdersScreenState extends State<CustomerSellerOrdersScreen>
         }
       } catch (_) {}
 
-      // Keep skeleton effect visible for ~1.3 - 1.5 seconds on initial open
-      if (!isPullToRefresh) {
+      // Only show minimal skeleton on first-time customer entry when no cache is loaded yet
+      if (!isPullToRefresh && !widget.isSellerView && _products.isEmpty) {
         final elapsed = DateTime.now().difference(startTime).inMilliseconds;
-        const minSkeletonMs = 1300;
+        const minSkeletonMs = 700;
         if (elapsed < minSkeletonMs) {
           await Future.delayed(Duration(milliseconds: minSkeletonMs - elapsed));
         }

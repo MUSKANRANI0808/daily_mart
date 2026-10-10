@@ -92,6 +92,7 @@ class ProductDetailBottomSheet extends StatefulWidget {
 }
 
 class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> with SingleTickerProviderStateMixin {
+  final ScrollController _scrollController = ScrollController();
   late Map<String, dynamic> _currentProduct;
   late TextEditingController _qtyController;
   late String _defaultBaseUnit;
@@ -280,6 +281,7 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> wit
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _pulseController.dispose();
     _qtyController.dispose();
     super.dispose();
@@ -460,6 +462,7 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> wit
           // Scrollable Body Content
           Flexible(
             child: SingleChildScrollView(
+              controller: _scrollController,
               physics: const BouncingScrollPhysics(),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1268,6 +1271,15 @@ class _ProductDetailBottomSheetState extends State<ProductDetailBottomSheet> wit
       onTap: () {
         setState(() {
           _initProductData(relProd);
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              0.0,
+              duration: const Duration(milliseconds: 350),
+              curve: Curves.easeOutCubic,
+            );
+          }
         });
       },
       borderRadius: BorderRadius.circular(12),
